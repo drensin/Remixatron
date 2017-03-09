@@ -40,7 +40,7 @@ Creates an infinite remix of an audio file by finding musically similar beats an
        clusters: 14  
      samplerate: 44100  
      
-.........................................................[07]....................................................
+    .........................................................[07]....................................................
 
 The dots represent the beats of the song. The number is a countdown of how many beats until the playback will attempt to jump to a random place in the song that is musically similar. The **position** of the countdown is the part of the song that is now playing. In the above example, the song is playing at (roughly) its midpoint and will attempt a musically sensible jump in 7 beats.
 
