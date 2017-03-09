@@ -27,7 +27,7 @@ Creates an infinite remix of an audio file by finding musically similar beats an
                           optimal cluster value.)  
       -start START        start on beat N. Deafult: 1  
   
-**Example**  
+**Example:**  
   
 > **rensin@dev-instance:~/src/Remixatron$** python infinite_jukebox.py i_cant_go_for_that.mp3 
 > 
