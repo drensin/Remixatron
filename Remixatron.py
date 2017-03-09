@@ -279,7 +279,6 @@ class InfiniteJukebox(object):
         self.__report_progress( .5, "clustering..." )
 
         if self.clusters == 0:
-#            self.clusters = int(round(self.tempo / 7))
             self.clusters, seg_ids = self.__compute_best_cluster(evecs, Cnorm)
     
         else:
@@ -405,7 +404,9 @@ class InfiniteJukebox(object):
                 # same segment, (b) be not closer than 64 beats to the current beat, and (c) be after the computed loop_bounds_begin.
                 # If we can't find such an animal, then just return the beat at loop_bounds_begin
                 
-                beat['next'] = next( (b['id'] for b in beats if b['segment'] == beat['segment'] and b['id'] <= (beat['id'] - 64) and b['id'] >= loop_bounds_begin), loop_bounds_begin )
+                beat['next'] = next( (b['id'] for b in beats if b['segment'] == beat['segment'] and 
+                                      b['id'] <= (beat['id'] - 64) and 
+                                      b['id'] >= loop_bounds_begin), loop_bounds_begin )
             else:
                 beat['next'] = beats.index(beat) + 1
 
@@ -453,9 +454,9 @@ class InfiniteJukebox(object):
                 jump_candidates = [bx['id'] for bx in beats[loop_bounds_begin:] if 
                                    (bx['segment'] == beats[beat['next']]['segment']) and 
                                    (bx['is'] == beats[beat['next']]['is']) and 
-                                   (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and 
-                                   (bx['id'] not in recent) and 
-                                   (abs(bx['id'] - beat['id']) >= 16)]
+                                   (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
+                                   (bx['id'] != beat['next']) and
+                                   (bx['id'] not in recent)]
 
                 # if we can't find one that meets those conditions, just target the next ordinal beat. This is
                 # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
