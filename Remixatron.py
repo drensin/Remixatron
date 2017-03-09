@@ -1,6 +1,6 @@
 """ Remixatron - Classes for remixing audio files.
 
-(c) 2017 - Dave Rensin - dave@rensin.com
+(c) 2017 - Dave Rensin - dave@rensin.com 
 
 This module contains classes for remixing audio files. It started
 as an attempt to re-create the amazing Infinite Jukebox (http://www.infinitejuke.com)
