@@ -8,8 +8,10 @@ work.
 
 import argparse
 import curses
+import numpy as np
 import os
 import pygame
+import soundfile as sf
 import sys
 import time
 
@@ -35,6 +37,12 @@ def process_args():
 
     parser.add_argument("-start", type=int, default=1,
                         help="start on beat N. Deafult: 1")
+    
+    parser.add_argument("-save", type=str,
+                        help="Save the remix to a file, rather than play it.")
+
+    parser.add_argument("-duration", type=int, default=180,
+                        help="length (in seconds) to save. Must use with -save. Deafult: 180")
     
     return parser.parse_args()
 
@@ -138,6 +146,15 @@ if __name__ == "__main__":
         # and wait for the playback to complete. Playback happens on another thread
         # in the pygame library, so we have to wait for the beat's duration.
 
+        if args.save:
+            avg_beat_duration = 60 / jukebox.tempo
+            num_beats_to_save = int(args.duration / avg_beat_duration)
+
+            output_bytes = np.concatenate([jukebox.beats[v['beat']]['buffer'] for v in jukebox.play_vector[0:num_beats_to_save]])
+            
+            sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, subtype='PCM_24')
+            sys.exit()
+        
         for v in jukebox.play_vector:
 
             beat_to_play = jukebox.beats[ v['beat'] ]
@@ -148,7 +165,7 @@ if __name__ == "__main__":
             how_long_this_took = display_playback_progress(v)
 
             pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 1000 ) )   
-
+                
     except KeyboardInterrupt:
         print
         print 'exiting...'
