@@ -1,4 +1,6 @@
 # Remixatron
+(c) 2017 - Dave Rensin - dave@rensin.com
+
 
 usage: infinite_jukebox.py [-h] [-clusters CLUSTERS] [-start START] filename
 
