@@ -29,8 +29,8 @@ Creates an infinite remix of an audio file by finding musically similar beats an
   
 **Example**  
   
-**rensin@dev-instance:~/src/Remixatron$** python infinite_jukebox.py i_cant_go_for_that.mp3 
-
+> **rensin@dev-instance:~/src/Remixatron$** python infinite_jukebox.py i_cant_go_for_that.mp3 
+> 
 >  [##########] ready                                                                                                
 >     
 >     filename: i_cant_go_for_that.mp3
