@@ -446,8 +446,8 @@ class InfiniteJukebox(object):
             if ( will_jump ):
 
                 # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
-                # segment position as the next ordinal beat, (c) haven't recently been used as a jump point,
-                # and (d) are at least 16 beats from the current beat.
+                # segment position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
+                # (d) but AREN'T the next beat, and (e) haven't been jumped to recently.
                 #
                 # THAT collection of beats contains our jump candidates
 
