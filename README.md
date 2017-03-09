@@ -37,8 +37,7 @@ Creates an infinite remix of an audio file by finding musically similar beats an
 >      duration: 224.095782 seconds  
 >         beats: 396  
 >         tempo: 109.956782 beats per minute  
->      clusters: 14  
->    samplerate: 44100  
+>      clusters: 14  samplerate: 44100  
 >         
 > .........................................................[07]....................................................
 
