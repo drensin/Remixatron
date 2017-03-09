@@ -6,12 +6,12 @@ Creates an infinite remix of an audio file by finding musically similar beats an
   
     positional arguments:  
       filename            the name of the audio file to play. Most common audio  
-                      types should work. (mp3, wav, ogg, etc..)  
+                          types should work. (mp3, wav, ogg, etc..)  
   
     optional arguments:  
       -h, --help          show this help message and exit  
       -clusters CLUSTERS  set the number of clusters into which we want to bucket  
-                      the audio. Deafult: 0 (automatically try to find the  
-                      optimal cluster value.)  
+                          the audio. Deafult: 0 (automatically try to find the  
+                          optimal cluster value.)  
       -start START        start on beat N. Deafult: 1  
   
