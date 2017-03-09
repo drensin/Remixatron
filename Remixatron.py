@@ -4,7 +4,7 @@
 
 This module contains classes for remixing audio files. It started
 as an attempt to re-create the amazing Infinite Jukebox (http://www.infinitejuke.com)
-created by Paul Lemere of Echo Nest.
+created by Paul Lamere of Echo Nest.
 
 The InfiniteJukebox class can do it's processing in a background thread and 
 reports progress via the progress_callback arg. To run in a thread, pass async=True

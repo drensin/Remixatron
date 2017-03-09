@@ -1,7 +1,7 @@
 """infinite_jukebox.py - (c) 2017 - Dave Rensin - dave@rensin.com
 
 An attempt to re-create the amazing Infinite Jukebox (http://www.infinitejuke.com)
-created by Paul Lemere of Echo Nest. Uses the Remixatron module to do most of the 
+created by Paul Lamere of Echo Nest. Uses the Remixatron module to do most of the 
 work.
 
 """
@@ -20,7 +20,7 @@ def process_args():
     
     """ Process the command line args """
     
-    description = """Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project creaeted by Paul Lemere (paul@echonest.com)"""
+    description = """Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project creaeted by Paul Lamere (paul@spotify.com)"""
     
     epilog = """    
     """

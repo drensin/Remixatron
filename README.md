@@ -14,7 +14,7 @@ pip install --user librosa
 
 python infinite_jukebox.py [-h] [-clusters CLUSTERS] [-start START] filename
 
-Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project created by Paul Lemere (paul@echonest.com)  
+Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project created by Paul Lamere (paul@spotify.com)  
   
     positional arguments:  
       filename            the name of the audio file to play. Most common audio  
