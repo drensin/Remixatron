@@ -53,3 +53,18 @@ Simple Non-async example:
       jukebox = InfiniteJukebox(filename='some_file.mp3', progress_callback=MyCallback, async=False)
 
       <blocks until completion... some work here...>
+      
+Example: Playing the first 32 beats of a song:  
+
+    from Remixatron import InfiniteJukebox
+    from pygame import mixer
+    import time
+    
+    jukebox = InfiniteJukebox('some_file.mp3')
+    pygame.mixer.init(frequency=jukebox.sample_rate)
+    channel = pygame.mixer.Channel(0)
+    
+    for beat in jukebox.beats[0:32]:
+        snd = pygame.Sound(buffer=beat['buffer'])
+        channel.queue(snd)
+        time.sleep(beat['duration'])
