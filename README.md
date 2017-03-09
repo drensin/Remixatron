@@ -14,7 +14,7 @@ pip install --user librosa
 
 python infinite_jukebox.py [-h] [-clusters CLUSTERS] [-start START] filename
 
-Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project creaeted by Paul Lemere (paul@echonest.com)  
+Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project created by Paul Lemere (paul@echonest.com)  
   
     positional arguments:  
       filename            the name of the audio file to play. Most common audio  
@@ -27,13 +27,30 @@ Creates an infinite remix of an audio file by finding musically similar beats an
                           optimal cluster value.)  
       -start START        start on beat N. Deafult: 1  
   
-  ***
+**Example**  
+  
+**rensin@dev-instance:~/src/Remixatron$** python infinite_jukebox.py i_cant_go_for_that.mp3 
+
+>  [##########] ready                                                                                                
+>     
+>     filename: i_cant_go_for_that.mp3
+>     duration: 224.095782 seconds
+>        beats: 396
+>        tempo: 109.956782 beats per minute
+>     clusters: 14
+>   samplerate: 44100
+>     
+> .........................................................[07]....................................................
+
+The dots represent the beats of the song. The number is a countdown of how many beats until the playback will attempt to jump to a random place in the song that is musically similar. The **position** of the countdown is the part of the song that is now playing. In the above example, the song is playing at (roughly) its midpoint and will attempt a musically sensible jump in 7 beats.
+
+***
   
 # Some notes about the code  
 
 The core work is done in the InfiniteJukebox class in the Remixatron module. *infinite_jukebox.py* is just a simple demonstration on how to use that class.  
 
-The InfiniteJukebox class can do it's processing in a background thread and reports progress via the progress_callback arg. To run in a thread, pass *async=True* to the constructor. In that case, it exposes an Event named *play_ready* -- which will be signaled when the processing is complete. The default mode is to run synchronously.  
+The InfiniteJukebox class can do its processing in a background thread and reports progress via the progress_callback arg. To run in a thread, pass *async=True* to the constructor. In that case, it exposes an Event named *play_ready* -- which will be signaled when the processing is complete. The default mode is to run synchronously.  
 
 Simple async example:
 
