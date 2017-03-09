@@ -29,18 +29,18 @@ Creates an infinite remix of an audio file by finding musically similar beats an
   
 **Example:**  
   
->**rensin@dev-instance:~/src/Remixatron$** python infinite_jukebox.py i_cant_go_for_that.mp3 
-> 
-> [##########] ready                                                                                                
->     
->    filename: i_cant_go_for_that.mp3  
->    duration: 224.095782 seconds  
->       beats: 396  
->       tempo: 109.956782 beats per minute  
->    clusters: 14  
->  samplerate: 44100  
->
->.........................................................[07]....................................................
+    **rensin@dev-instance:~/src/Remixatron$** python infinite_jukebox.py i_cant_go_for_that.mp3 
+
+    [##########] ready                                                                                                
+  
+       filename: i_cant_go_for_that.mp3  
+       duration: 224.095782 seconds  
+          beats: 396  
+          tempo: 109.956782 beats per minute  
+       clusters: 14  
+     samplerate: 44100  
+     
+.........................................................[07]....................................................
 
 The dots represent the beats of the song. The number is a countdown of how many beats until the playback will attempt to jump to a random place in the song that is musically similar. The **position** of the countdown is the part of the song that is now playing. In the above example, the song is playing at (roughly) its midpoint and will attempt a musically sensible jump in 7 beats.
 
