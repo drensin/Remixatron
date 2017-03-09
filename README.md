@@ -33,12 +33,12 @@ Creates an infinite remix of an audio file by finding musically similar beats an
 > 
 >  [##########] ready                                                                                                
 >     
->      filename: i_cant_go_for_that.mp3
->      duration: 224.095782 seconds
->         beats: 396
->         tempo: 109.956782 beats per minute
->      clusters: 14
->    samplerate: 44100
+>      filename: i_cant_go_for_that.mp3  
+>      duration: 224.095782 seconds  
+>         beats: 396  
+>         tempo: 109.956782 beats per minute  
+>      clusters: 14  
+>    samplerate: 44100  
 >         
 > .........................................................[07]....................................................
 
