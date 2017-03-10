@@ -33,7 +33,9 @@ Creates an infinite remix of an audio file by finding musically similar beats an
                           Deafult: 180
   
 **Example:**  
-  
+
+Play a song infinitely.
+
     $ python infinite_jukebox.py i_cant_go_for_that.mp3 
 
     [##########] ready                                                                                                
@@ -49,7 +51,9 @@ Creates an infinite remix of an audio file by finding musically similar beats an
 
 The dots represent the beats of the song. The number is a countdown of how many beats until the playback will attempt to jump to a random place in the song that is musically similar. The **position** of the countdown is the part of the song that is now playing. In the above example, the song is playing at (roughly) 70% and will attempt a musically sensible jump in 7 beats.
 
-**Example - Save a 4 minute remix:**
+**Example:**
+
+Create a 4 minute remix named *myRemix.wav*
 
     $ python infinite_jukebox.py i_cant_go_for_that.mp3 -save myRemix -duration 240 
 
@@ -62,7 +66,7 @@ The dots represent the beats of the song. The number is a countdown of how many 
        clusters: 14  
      samplerate: 44100  
 
-This will create a 4 minute remix named *myRemix.wav*
+
 ***
   
 # Some notes about the code  
