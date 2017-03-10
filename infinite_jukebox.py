@@ -135,26 +135,35 @@ if __name__ == "__main__":
         # show more info about what was found
         show_verbose_info()
             
+        # if we're just saving the remix to a file, then just 
+        # find the necessarry beats and do that
+        
+        if args.save:
+            avg_beat_duration = 60 / jukebox.tempo
+            num_beats_to_save = int(args.duration / avg_beat_duration)            
+            
+            # this list comprehension returns all the 'buffer' arrays from the beats
+            # associated with the [0..num_beats_to_save] entries in the play vector
+            
+            main_bytes = [jukebox.beats[v['beat']]['buffer'] for v in jukebox.play_vector[0:num_beats_to_save]]
+
+            output_bytes = np.concatenate( main_bytes )
+            
+            sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, subtype='PCM_24')
+            
+            sys.exit()
+
         # important to make sure the mixer is setup with the
         # same sample rate as the audio. Otherwise the playback will
         # sound too slow/fast/awful
 
         mixer.init(frequency=jukebox.sample_rate)
         channel = mixer.Channel(0)
-
+        
         # go through the playback list, start playing each beat, display the progress 
         # and wait for the playback to complete. Playback happens on another thread
         # in the pygame library, so we have to wait for the beat's duration.
 
-        if args.save:
-            avg_beat_duration = 60 / jukebox.tempo
-            num_beats_to_save = int(args.duration / avg_beat_duration)
-
-            output_bytes = np.concatenate([jukebox.beats[v['beat']]['buffer'] for v in jukebox.play_vector[0:num_beats_to_save]])
-            
-            sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, subtype='PCM_24')
-            sys.exit()
-        
         for v in jukebox.play_vector:
 
             beat_to_play = jukebox.beats[ v['beat'] ]

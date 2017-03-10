@@ -347,6 +347,8 @@ class InfiniteJukebox(object):
 
             final_beat['stop_index'] = int(math.ceil((final_beat['start'] + final_beat['duration']) * bytes_per_second))
 
+            final_beat['buffer'] = self.raw_audio[ final_beat['start_index'] : final_beat['stop_index'] ]
+            
             info.append(final_beat)
 
         self.__report_progress( .7, "truncating to fade point..." )
@@ -361,7 +363,8 @@ class InfiniteJukebox(object):
 
         # truncate the beats to [start:fade]
         beats = info[self.__start_beat:info.index(fade)]
-
+        self.fade = info[info.index(fade):]
+        
         # truncate the beats so that they are a multiple of 4. The vast majority of songs will
         # have 4 beats per measure and doing this will make looping from the end of the song
         # into some other place sound more natural
@@ -388,7 +391,7 @@ class InfiniteJukebox(object):
 
         for beat in beats:
             beat['id'] = beats.index(beat)
-            beat['buffer'] = self.raw_audio[ beat['start_index'] : beat['stop_index'] ]
+#            beat['buffer'] = self.raw_audio[ beat['start_index'] : beat['stop_index'] ]
 
             if beat['segment'] != last_segment:
                 segment_beat = 0
