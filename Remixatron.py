@@ -459,7 +459,7 @@ class InfiniteJukebox(object):
                                    (bx['is'] == beats[beat['next']]['is']) and 
                                    (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
                                    (bx['id'] != beat['next']) and
-                                   (abs(bx['id'] - beat['id']) >= 32) and
+                                   (abs(bx['id'] - beat['id']) >= 16) and
                                    (bx['id'] not in recent)]
 
                 # if we can't find one that meets those conditions, just target the next ordinal beat. This is
