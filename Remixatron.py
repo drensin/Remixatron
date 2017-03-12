@@ -381,7 +381,7 @@ class InfiniteJukebox(object):
         # assume that the fade point of the song is the beat that (a) is after 90% of the song and (b) has
         # an amplitude of <= 50% of the mean. For songs that have 'button' endings, just return the last
         # beat
-        fade = next( (b for b in info[int(len(info) * .9):] if b['amplitude'] <= (.5 * avg_amplitude)), info[-1] )
+        fade = next( (b for b in info[int(len(info) * .9):] if b['amplitude'] <= (.7 * avg_amplitude)), info[-1] )
 
         # truncate the beats to [start:fade]
         beats = info[self.__start_beat:info.index(fade)]
