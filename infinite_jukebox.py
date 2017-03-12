@@ -84,11 +84,9 @@ def display_playback_progress(v):
     curses.setupterm()
     term_width = curses.tigetnum('cols')
 
-#    v_idx = max(0, jukebox.play_vector.index(v) - 1)
-    v_idx = jukebox.play_vector.index(v)
-    beat = jukebox.play_vector[v_idx]['beat']
-    min_sequence = jukebox.play_vector[v_idx]['seq_len']
-    current_sequence = jukebox.play_vector[v_idx]['seq_pos']
+    beat = v['beat']
+    min_sequence = v['seq_len']
+    current_sequence = v['seq_pos']
 
     pct = float(beat) / len(jukebox.beats)
     term_pos = int( pct * term_width )
@@ -117,8 +115,26 @@ def show_verbose_info():
     """
     
     print info % (os.path.basename(args.filename), jukebox.duration, 
-                  len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.sample_rate)    
-
+                  len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.sample_rate)
+    
+    segment_map = ''
+    cluster_map = ''
+    
+    segment_chars = '#-'
+    cluster_chars = 'AbcDeFGhIjkLMnoPQrsTuVwXyZ`~!@#$%^&*()_+-=[{}|\]<,.>?/'
+    
+    for b in jukebox.beats:
+        segment_map += segment_chars[ b['segment'] % 2 ]
+        cluster_map += cluster_chars[ b['cluster'] ] 
+        
+    print
+    print "Segmemt Map:"
+    print segment_map
+    print
+    print "Cluster Map:"
+    print cluster_map
+    print
+    
 if __name__ == "__main__":
 
     """ Main logic """

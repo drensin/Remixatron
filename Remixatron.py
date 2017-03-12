@@ -86,9 +86,11 @@ class InfiniteJukebox(object):
                   start: the time (in seconds) in the song where this beat occurs
                duration: the duration (in seconds) of the beat
                  buffer: an array of audio bytes for this beat. it is just raw_audio[start:start+duration]
-                segment: the cluster that this beat most closely belongs. Beats in the same segment
+                cluster: the cluster that this beat most closely belongs. Beats in the same cluster
                          have similar harmonic (timbre) and chromatic (pitch) characteristics. They
                          will "sound similar"
+                segment: the segment to which this beat belongs. A 'segment' is a contiguous block of
+                         beats that belong to the same cluster.
               amplitude: the loudness of the beat
               
                          An example of playing the first 32 beats of a song:
@@ -329,12 +331,22 @@ class InfiniteJukebox(object):
 
         bytes_per_second = int(round(len(self.raw_audio) / self.duration))
         
+        last_cluster = -1
+        current_segment = -1
+        
         for i in range(0, len(beat_tuples)):
             final_beat = {}
             final_beat['start'] = float(beat_tuples[i][1])
-            final_beat['segment'] = int(beat_tuples[i][2])
+            final_beat['cluster'] = int(beat_tuples[i][2])
             final_beat['amplitude'] = float(beat_tuples[i][3])
+            
+            if final_beat['cluster'] != last_cluster:
+                current_segment += 1
+                
+            final_beat['segment'] = current_segment
 
+            last_cluster = final_beat['cluster']
+            
             if i == len(beat_tuples) - 1:
                 final_beat['duration'] = self.duration - final_beat['start']
             else:
@@ -373,8 +385,8 @@ class InfiniteJukebox(object):
             beats = beats[:(len(beats) % 4) * -1]
 
         # nearly all songs have an intro that should be discarded during the jump calculations because
-        # landing there will sound stilted. This line finds the first beat of the 2nd segment in the song
-        loop_bounds_begin = beats.index(next(b for b in beats if b['segment'] != beats[0]['segment']))
+        # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
+        loop_bounds_begin = beats.index(next(b for b in beats if b['cluster'] != beats[0]['cluster']))
         
         # if start_beat has been passed in, then use the max(start_beat, loop_bounds_begin) as the earliest
         # allowed jump point in the song
@@ -384,30 +396,29 @@ class InfiniteJukebox(object):
         # This makes playback code easier. Also compute a coherent 'next'
         # beats to play
 
-        last_segment = -1
-        segment_beat = 0
+        last_cluster = -1
+        cluster_beat = 0
 
         self.__report_progress( .8, "computing final beat array..." )
 
         for beat in beats:
             beat['id'] = beats.index(beat)
-#            beat['buffer'] = self.raw_audio[ beat['start_index'] : beat['stop_index'] ]
 
-            if beat['segment'] != last_segment:
-                segment_beat = 0
-                last_segment = beat['segment']
+            if beat['cluster'] != last_cluster:
+                cluster_beat = 0
+                last_cluster = beat['cluster']
 
-            beat['is'] = segment_beat
+            beat['is'] = cluster_beat
     
-            segment_beat += 1
+            cluster_beat += 1
 
             if beat == beats[-1]:
                 
                 # if we're at the last beat, then we want to find a reasonable 'next' beat to play. It should (a) share the
-                # same segment, (b) be not closer than 64 beats to the current beat, and (c) be after the computed loop_bounds_begin.
+                # same cluster, (b) be not closer than 64 beats to the current beat, and (c) be after the computed loop_bounds_begin.
                 # If we can't find such an animal, then just return the beat at loop_bounds_begin
                 
-                beat['next'] = next( (b['id'] for b in beats if b['segment'] == beat['segment'] and 
+                beat['next'] = next( (b['id'] for b in beats if b['cluster'] == beat['cluster'] and 
                                       b['id'] <= (beat['id'] - 64) and 
                                       b['id'] >= loop_bounds_begin), loop_bounds_begin )
             else:
@@ -430,11 +441,10 @@ class InfiniteJukebox(object):
 
         play_vector.append( {'beat':0, 'seq_len':min_sequence, 'seq_pos':current_sequence} )
 
-        # we want to keep a list of the 5 most recent jump points
+        # we want to keep a list of recent jump segments
         # so we don't accidentally wind up in a local loop
-        
-        recent = collections.deque(maxlen=5)
-        recent.append(0)
+
+        recent = collections.deque(maxlen=2)
 
         for i in range(0, 1024 * 1024):
 
@@ -449,18 +459,18 @@ class InfiniteJukebox(object):
             if ( will_jump ):
 
                 # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
-                # segment position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
-                # (d) but AREN'T the next beat, and (e) haven't been jumped to recently.
+                # cluster position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
+                # (d) but AREN'T the next beat, and (e) don't belong is a segment that has been jumped to recently.
                 #
                 # THAT collection of beats contains our jump candidates
 
                 jump_candidates = [bx['id'] for bx in beats[loop_bounds_begin:] if 
-                                   (bx['segment'] == beats[beat['next']]['segment']) and 
+                                   (bx['cluster'] == beats[beat['next']]['cluster']) and 
                                    (bx['is'] == beats[beat['next']]['is']) and 
                                    (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
                                    (bx['id'] != beat['next']) and
                                    (abs(bx['id'] - beat['id']) >= 16) and
-                                   (bx['id'] not in recent)]
+                                   (bx['segment'] not in recent)]
 
                 # if we can't find one that meets those conditions, just target the next ordinal beat. This is
                 # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
@@ -470,11 +480,12 @@ class InfiniteJukebox(object):
                     beat = beats[ beat['next'] ]
                 else:
                     beat = beats[ random.choice(jump_candidates) ]
-                    recent.append(beat['id'])
+                    recent.append(beat['segment'])
+#                    recent.append(beat['id'])
 
                 current_sequence = 0
-#                min_sequence = random.randrange(8,32,4)
-                min_sequence = random.randrange(8,32)
+                min_sequence = random.randrange(8,32,4)
+#                min_sequence = random.randrange(8,32)
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    
@@ -505,7 +516,7 @@ class InfiniteJukebox(object):
             of a hack right now..
             
             PARAMETERS:
-                evecs: Eigen-vectors computed from the segmentation algorithm
+                evecs: Eigen-vectors computed from the clusteration algorithm
                 Cnorm: Cumulative normalization of evecs. Easier to pass it in than
                        compute it from scratch here.
                 
@@ -513,8 +524,8 @@ class InfiniteJukebox(object):
                 
                  Cluster: buckets of musical similarity
                 Segments: contiguous blocks of beats belonging to the same cluster
-                 Orphans: clusters that only belong to one segment
-                    Stub: a segment with less than N beats. Stubs are a sign of 
+                 Orphans: clusters that only belong to one cluster
+                    Stub: a cluster with less than N beats. Stubs are a sign of 
                           overfitting
                  
             SUMMARY:
@@ -524,7 +535,7 @@ class InfiniteJukebox(object):
                 right cluster size (2..48) that will give us the highest possiblity 
                 of smoothly jumping around but without being too promiscuous. The way 
                 we do that is to find the highest cluster value (2..48) that has an 
-                average orphan count <= the global average orphan count AND has no stub segments.
+                average orphan count <= the global average orphan count AND has no stub clusters.
                 
                 Basically, we're looking for the highest possible cluster # that doesn't 
                 obviously overfit.
@@ -546,7 +557,7 @@ class InfiniteJukebox(object):
             
             # create an array of dictionary entries containing (a) the cluster label, 
             # (b) the number of total beats that belong to that cluster, and 
-            # (c) the number of segments in which that cluster appears.
+            # (c) the number of clusters in which that cluster appears.
             
             lst = []
             
@@ -563,17 +574,17 @@ class InfiniteJukebox(object):
                     
                 lst[l]['beats'] += 1
             
-            entry['segment_map'] = lst
+            entry['cluster_map'] = lst
             
-            # get a list of clusters that only appear in 1 segment. Those are orphans.
-            entry['orphans'] = [l['label'] for l in entry['segment_map'] if l['segs'] == 1]
+            # get a list of clusters that only appear in 1 cluster. Those are orphans.
+            entry['orphans'] = [l['label'] for l in entry['cluster_map'] if l['segs'] == 1]
             
             # across all the clusters, get the avg number of orphans per cluster
-            # ie: the % of clusters that appear in only 1 segment
+            # ie: the % of clusters that appear in only 1 cluster
             entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
             
-            # get the list of segments that have less than 6 beats. Those are stubs
-            entry['stubs'] = len( [l for l in entry['segment_map'] if l['beats'] < 6] )
+            # get the list of clusters that have less than 6 beats. Those are stubs
+            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
 
             self._clusters_list.append(entry)
 
