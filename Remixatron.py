@@ -1,4 +1,4 @@
-""" Remixatron - Classes for remixing audio files.
+""" Classes for remixing audio files.
 
 (c) 2017 - Dave Rensin - dave@rensin.com 
 
@@ -49,7 +49,7 @@ import sklearn.cluster
 
 class InfiniteJukebox(object):
     
-    """ InfiniteJukebox - class to "infinitely" remix a song.
+    """ Class to "infinitely" remix a song.
 
     This class will take an audio file (wav, mp3, ogg, etc) and
     (a) decompose it into individual beats, (b) find the tempo
