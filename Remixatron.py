@@ -82,32 +82,37 @@ class InfiniteJukebox(object):
           beats: a dictionary containing the individual beats of the song in normal order. Each
                  beat will have the following keys:
                
-                     id: the ordinal position of the beat in the song
-                  start: the time (in seconds) in the song where this beat occurs
-               duration: the duration (in seconds) of the beat
-                 buffer: an array of audio bytes for this beat. it is just raw_audio[start:start+duration]
-                cluster: the cluster that this beat most closely belongs. Beats in the same cluster
-                         have similar harmonic (timbre) and chromatic (pitch) characteristics. They
-                         will "sound similar"
-                segment: the segment to which this beat belongs. A 'segment' is a contiguous block of
-                         beats that belong to the same cluster.
-              amplitude: the loudness of the beat
+                         id: the ordinal position of the beat in the song
+                      start: the time (in seconds) in the song where this beat occurs
+                   duration: the duration (in seconds) of the beat
+                     buffer: an array of audio bytes for this beat. it is just raw_audio[start:start+duration]
+                    cluster: the cluster that this beat most closely belongs. Beats in the same cluster
+                             have similar harmonic (timbre) and chromatic (pitch) characteristics. They
+                             will "sound similar"
+                    segment: the segment to which this beat belongs. A 'segment' is a contiguous block of
+                             beats that belong to the same cluster.
+                  amplitude: the loudness of the beat
+                       next: the next beat to play after this one, if playing sequentially
+            jump_candidates: a list of the other beats in the song to which it is reasonable to jump. Those beats
+                             (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same segment position
+                             as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat, 
+                             (d) but AREN'T the next beat.
               
-                         An example of playing the first 32 beats of a song:
+                 An example of playing the first 32 beats of a song:
 
-                            from Remixatron import InfiniteJukebox
-                            from pygame import mixer
-                            import time
+                    from Remixatron import InfiniteJukebox
+                    from pygame import mixer
+                    import time
 
-                            jukebox = InfiniteJukebox('some_file.mp3')
+                    jukebox = InfiniteJukebox('some_file.mp3')
 
-                            pygame.mixer.init(frequency=jukebox.sample_rate)
-                            channel = pygame.mixer.Channel(0)
+                    pygame.mixer.init(frequency=jukebox.sample_rate)
+                    channel = pygame.mixer.Channel(0)
 
-                            for beat in jukebox.beats[0:32]:
-                                snd = pygame.Sound(buffer=beat['buffer'])
-                                channel.queue(snd)
-                                time.sleep(beat['duration'])
+                    for beat in jukebox.beats[0:32]:
+                        snd = pygame.Sound(buffer=beat['buffer'])
+                        channel.queue(snd)
+                        time.sleep(beat['duration'])
                     
     play_vector: a beat play list of 1024^2 items. This represents a pre-computed
                  remix of this song that will last beat['duration'] * 1024 * 1024
@@ -333,6 +338,7 @@ class InfiniteJukebox(object):
         
         last_cluster = -1
         current_segment = -1
+        segment_beat = 0
         
         for i in range(0, len(beat_tuples)):
             final_beat = {}
@@ -342,9 +348,13 @@ class InfiniteJukebox(object):
             
             if final_beat['cluster'] != last_cluster:
                 current_segment += 1
+                segment_beat = 0
+            else:
+                segment_beat += 1
                 
             final_beat['segment'] = current_segment
-
+            final_beat['is'] = segment_beat
+            
             last_cluster = final_beat['cluster']
             
             if i == len(beat_tuples) - 1:
@@ -396,22 +406,12 @@ class InfiniteJukebox(object):
         # This makes playback code easier. Also compute a coherent 'next'
         # beats to play
 
-        last_cluster = -1
-        cluster_beat = 0
-
         self.__report_progress( .8, "computing final beat array..." )
 
         for beat in beats:
             beat['id'] = beats.index(beat)
 
-            if beat['cluster'] != last_cluster:
-                cluster_beat = 0
-                last_cluster = beat['cluster']
-
-            beat['is'] = cluster_beat
-    
-            cluster_beat += 1
-
+        for beat in beats:
             if beat == beats[-1]:
                 
                 # if we're at the last beat, then we want to find a reasonable 'next' beat to play. It should (a) share the
@@ -424,6 +424,20 @@ class InfiniteJukebox(object):
             else:
                 beat['next'] = beats.index(beat) + 1
 
+            # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
+            # cluster position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
+            # (d) but AREN'T the next beat.
+            #
+            # THAT collection of beats contains our jump candidates
+
+            jump_candidates = [bx['id'] for bx in beats[loop_bounds_begin:] if 
+                               (bx['cluster'] == beats[beat['next']]['cluster']) and 
+                               (bx['is'] == beats[beat['next']]['is']) and 
+                               (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
+                               (bx['id'] != beat['next']) and
+                               (abs(bx['id'] - beat['id']) >= 16)]
+            
+            beat['jump_candidates'] = jump_candidates
 
         #
         # This section of the code computes the play_vector -- a 1024*1024 beat length
@@ -458,34 +472,21 @@ class InfiniteJukebox(object):
 
             if ( will_jump ):
 
-                # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
-                # cluster position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
-                # (d) but AREN'T the next beat, and (e) don't belong is a segment that has been jumped to recently.
-                #
-                # THAT collection of beats contains our jump candidates
-
-                jump_candidates = [bx['id'] for bx in beats[loop_bounds_begin:] if 
-                                   (bx['cluster'] == beats[beat['next']]['cluster']) and 
-                                   (bx['is'] == beats[beat['next']]['is']) and 
-                                   (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
-                                   (bx['id'] != beat['next']) and
-                                   (abs(bx['id'] - beat['id']) >= 16) and
-                                   (bx['segment'] not in recent)]
-
-                # if we can't find one that meets those conditions, just target the next ordinal beat. This is
+                # if there aren't any good jump candidates then just target the next ordinal beat. This is
                 # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
-                # the computed candidates
+                # the candidates
 
-                if len(jump_candidates) == 0:
+                # randomly pick from the beat jump candidates that aren't in recently jumped segments
+                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
+
+                if len(non_recent_candidates) == 0:
                     beat = beats[ beat['next'] ]
                 else:
-                    beat = beats[ random.choice(jump_candidates) ]
+                    beat = beats[ random.choice(non_recent_candidates) ]
                     recent.append(beat['segment'])
-#                    recent.append(beat['id'])
 
                 current_sequence = 0
                 min_sequence = random.randrange(8,32,4)
-#                min_sequence = random.randrange(8,32)
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    
