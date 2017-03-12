@@ -445,7 +445,7 @@ class InfiniteJukebox(object):
         #
         
         random.seed()
-        min_sequence = random.randrange(32,48,8)
+        min_sequence = random.randrange(32,49,8)
         current_sequence = 0
         beat = beats[0]
         
@@ -458,7 +458,7 @@ class InfiniteJukebox(object):
         # we want to keep a list of recent jump segments
         # so we don't accidentally wind up in a local loop
 
-        recent = collections.deque(maxlen=2)
+        recent = collections.deque(maxlen=5)
 
         for i in range(0, 1024 * 1024):
 
@@ -472,12 +472,12 @@ class InfiniteJukebox(object):
 
             if ( will_jump ):
 
+                # randomly pick from the beat jump candidates that aren't in recently jumped segments
+                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
+
                 # if there aren't any good jump candidates then just target the next ordinal beat. This is
                 # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
                 # the candidates
-
-                # randomly pick from the beat jump candidates that aren't in recently jumped segments
-                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
                 if len(non_recent_candidates) == 0:
                     beat = beats[ beat['next'] ]
@@ -486,7 +486,7 @@ class InfiniteJukebox(object):
                     recent.append(beat['segment'])
 
                 current_sequence = 0
-                min_sequence = random.randrange(8,32,4)
+                min_sequence = random.randrange(8,33,4)
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    
