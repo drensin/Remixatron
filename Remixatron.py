@@ -455,10 +455,22 @@ class InfiniteJukebox(object):
 
         play_vector.append( {'beat':0, 'seq_len':min_sequence, 'seq_pos':current_sequence} )
 
+        self.segments = max([b['segment'] for b in beats])
+        
         # we want to keep a list of recent jump segments
         # so we don't accidentally wind up in a local loop
-
-        recent = collections.deque(maxlen=5)
+        #
+        # the number of segments in a song will vary so
+        # we want to set the number of recents to keep 
+        # at 10% of the total number of segments. Eg:
+        # if there are 34 segments, then the depth will
+        # be set at 3.
+        #
+        # On the off chance that the # of segments < 10
+        # we set a floor queue depth of 1
+            
+        recent_depth = max( int(self.segments * .1), 1 )
+        recent = collections.deque(maxlen=recent_depth)
 
         for i in range(0, 1024 * 1024):
 
@@ -497,7 +509,6 @@ class InfiniteJukebox(object):
 
         self.beats = beats
         self.play_vector = play_vector
-        self.segments = max([b['segment'] for b in beats])
         
         if self.play_ready:
             self.play_ready.set()
