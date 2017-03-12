@@ -111,11 +111,13 @@ def show_verbose_info():
        beats: %d
        tempo: %f beats per minute
     clusters: %d
+    segments: %d
   samplerate: %d
     """
     
     print info % (os.path.basename(args.filename), jukebox.duration, 
-                  len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.sample_rate)
+                  len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.segments,
+                  jukebox.sample_rate)
     
     segment_map = ''
     cluster_map = ''

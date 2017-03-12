@@ -379,7 +379,7 @@ class InfiniteJukebox(object):
         avg_amplitude = np.mean([b['amplitude'] for b in info])
         
         # assume that the fade point of the song is the beat that (a) is after 90% of the song and (b) has
-        # an amplitude of <= 50% of the mean. For songs that have 'button' endings, just return the last
+        # an amplitude of <= 70% of the mean. For songs that have 'button' endings, just return the last
         # beat
         fade = next( (b for b in info[int(len(info) * .9):] if b['amplitude'] <= (.7 * avg_amplitude)), info[-1] )
 
@@ -497,6 +497,7 @@ class InfiniteJukebox(object):
 
         self.beats = beats
         self.play_vector = play_vector
+        self.segments = max([b['segment'] for b in beats])
         
         if self.play_ready:
             self.play_ready.set()
