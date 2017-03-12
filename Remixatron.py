@@ -369,6 +369,7 @@ class InfiniteJukebox(object):
 
             final_beat['stop_index'] = int(math.ceil((final_beat['start'] + final_beat['duration']) * bytes_per_second))
 
+            # save pointers to the raw bytes for each beat with each beat.
             final_beat['buffer'] = self.raw_audio[ final_beat['start_index'] : final_beat['stop_index'] ]
             
             info.append(final_beat)
@@ -402,15 +403,15 @@ class InfiniteJukebox(object):
         # allowed jump point in the song
         loop_bounds_begin = max(loop_bounds_begin, self.__start_beat)
 
-        # save pointers to the raw bytes for each beat with each beat.
-        # This makes playback code easier. Also compute a coherent 'next'
-        # beats to play
-
         self.__report_progress( .8, "computing final beat array..." )
 
+        # assign final beat ids        
         for beat in beats:
             beat['id'] = beats.index(beat)
 
+        # compute a coherent 'next' beat to play. This is always just the next ordinal beat
+        # unless we're at the end of the song. Then it gets a little trickier.
+        
         for beat in beats:
             if beat == beats[-1]:
                 
@@ -457,17 +458,13 @@ class InfiniteJukebox(object):
 
         self.segments = max([b['segment'] for b in beats])
         
-        # we want to keep a list of recent jump segments
-        # so we don't accidentally wind up in a local loop
+        # we want to keep a list of recent jump segments so we don't accidentally wind up in a local loop
         #
-        # the number of segments in a song will vary so
-        # we want to set the number of recents to keep 
-        # at 10% of the total number of segments. Eg:
-        # if there are 34 segments, then the depth will
+        # the number of segments in a song will vary so we want to set the number of recents to keep 
+        # at 10% of the total number of segments. Eg: if there are 34 segments, then the depth will
         # be set at 3.
         #
-        # On the off chance that the # of segments < 10
-        # we set a floor queue depth of 1
+        # On the off chance that the # of segments < 10 we set a floor queue depth of 1
             
         recent_depth = max( int(self.segments * .1), 1 )
         recent = collections.deque(maxlen=recent_depth)
@@ -479,7 +476,7 @@ class InfiniteJukebox(object):
             will_jump = current_sequence >= min_sequence
 
             # if it's time to jump, then assign the next beat, and create
-            # a new play sequence between 8 and 48 beats -- making sure
+            # a new play sequence between 8 and 32 beats -- making sure
             # that the new sequence is always modulo 4.
 
             if ( will_jump ):
@@ -518,7 +515,7 @@ class InfiniteJukebox(object):
         """ If a reporting callback was passed, call it in oder
             to mark progress.
         """
-        if self.__progress_callback != None:
+        if self.__progress_callback:
             self.__progress_callback( pct_done, message )
             
     def __compute_best_cluster(self, evecs, Cnorm):
