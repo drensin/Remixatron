@@ -84,7 +84,8 @@ def display_playback_progress(v):
     curses.setupterm()
     term_width = curses.tigetnum('cols')
 
-    v_idx = max(0, jukebox.play_vector.index(v) - 1)
+#    v_idx = max(0, jukebox.play_vector.index(v) - 1)
+    v_idx = jukebox.play_vector.index(v)
     beat = jukebox.play_vector[v_idx]['beat']
     min_sequence = jukebox.play_vector[v_idx]['seq_len']
     current_sequence = jukebox.play_vector[v_idx]['seq_pos']
