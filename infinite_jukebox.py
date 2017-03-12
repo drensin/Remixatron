@@ -174,7 +174,7 @@ if __name__ == "__main__":
 
             how_long_this_took = display_playback_progress(v)
 
-            pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 1000 ) )   
+            pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 999 ) )   
                 
     except KeyboardInterrupt:
         print
