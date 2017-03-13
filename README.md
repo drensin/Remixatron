@@ -86,11 +86,11 @@ Play with verbose info.
 
     ...........[16]....................................................................................
 
-<b>Clusters</b> are buckets of musical similarity. Every beat belongs to exactly *one* cluster. Beats in the same cluster are musically similar -- ie. have similar pitch or timbre. When jumps are computed they always try to match clusters.
+*Clusters* are buckets of musical similarity. Every beat belongs to exactly *one* cluster. Beats in the same cluster are musically similar -- ie. have similar pitch or timbre. When jumps are computed they always try to match clusters.
 
-<b>Segments</b> are contiguous blocks of beats in the same cluster. 
+*Segments* are contiguous blocks of beats in the same cluster. 
 
-The segment map above shows a general shape of the musical segments in the song. The cluster map is the same map as the segment map, except that every beat is represented by its cluster. 
+The segment map above shows a general shape of the musical segments in the song. The cluster map is the same map as the segment map, except that every beat is represented by its cluster number. 
 
 **Example 3:**
 
