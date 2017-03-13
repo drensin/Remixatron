@@ -86,6 +86,8 @@ Play with verbose info.
 
     ...........[16]....................................................................................
 
+*Clusters* are buckets of musical similarity.
+
 **Example 3:**
 
 Create a 4 minute remix named *myRemix.wav*
