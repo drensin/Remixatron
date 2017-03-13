@@ -496,7 +496,6 @@ class InfiniteJukebox(object):
 
                 current_sequence = 0
                 min_sequence = random.randrange(8,33)
-#                min_sequence = random.randrange(8,33,4)
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    

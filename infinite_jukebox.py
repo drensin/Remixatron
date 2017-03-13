@@ -44,6 +44,9 @@ def process_args():
     parser.add_argument("-duration", metavar='seconds', type=int, default=180,
                         help="length (in seconds) to save. Must use with -save. Deafult: 180")
     
+    parser.add_argument("-verbose", action='store_true',
+                        help="print extra info about the track and play vector")
+    
     return parser.parse_args()
 
 def MyCallback(pct_complete, message):
@@ -128,14 +131,15 @@ def show_verbose_info():
     for b in jukebox.beats:
         segment_map += segment_chars[ b['segment'] % 2 ]
         cluster_map += cluster_chars[ b['cluster'] ] 
-        
-    print
-    print "Segmemt Map:"
-    print segment_map
-    print
-    print "Cluster Map:"
-    print cluster_map
-    print
+    
+    if args.verbose:
+        print
+        print "Segmemt Map:"
+        print segment_map
+        print
+        print "Cluster Map:"
+        print cluster_map
+        print
     
 if __name__ == "__main__":
 
