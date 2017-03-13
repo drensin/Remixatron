@@ -473,7 +473,7 @@ class InfiniteJukebox(object):
 
             current_sequence += 1
 
-            will_jump = current_sequence >= min_sequence
+            will_jump = (current_sequence >= min_sequence) or (beat == beats[-1])
 
             # if it's time to jump, then assign the next beat, and create
             # a new play sequence between 8 and 32 beats -- making sure
