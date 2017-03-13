@@ -86,7 +86,7 @@ Play with verbose info.
 
     ...........[16]....................................................................................
 
-*Clusters* are buckets of musical similarity.
+<b>Clusters</b> are buckets of musical similarity.
 
 **Example 3:**
 
