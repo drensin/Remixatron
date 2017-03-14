@@ -113,7 +113,7 @@ def display_playback_progress(v):
     x_pos = beat % term_width
     y_pos = int(beat/term_width) + y_offset
 
-    window.addstr(y_pos, x_pos, str(min_sequence - current_sequence).zfill(2), curses.A_BOLD | curses.A_REVERSE )
+    window.addstr(y_pos, x_pos, str(min_sequence - current_sequence).zfill(2), curses.A_BOLD | curses.A_REVERSE | curses.A_STANDOUT )
 
     window.refresh()
     
@@ -227,8 +227,8 @@ if __name__ == "__main__":
         curses.curs_set(1)
         curses.endwin()
                 
-        print w_str
-#        print
+        print w_str.rstrip()
+        print
 #        print 'exiting...'
 #        print
         

@@ -446,7 +446,7 @@ class InfiniteJukebox(object):
         #
         
         random.seed()
-        min_sequence = 32
+        min_sequence = random.randrange(8,33)
         current_sequence = 0
         beat = beats[0]
         
@@ -473,7 +473,7 @@ class InfiniteJukebox(object):
 
             current_sequence += 1
 
-            will_jump = (current_sequence >= min_sequence) or (beat == beats[-1])
+            will_jump = (current_sequence == min_sequence) or (beat == beats[-1])
 
             # if it's time to jump, then assign the next beat, and create
             # a new play sequence between 8 and 32 beats -- making sure

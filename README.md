@@ -1,3 +1,12 @@
+<style>
+.text1 {
+            COLOR: #FFFFFF; 
+            TEXT-DECORATION: none; 
+            background: #000000;
+            font-weight: bold;
+           }
+</style>
+
 # Remixatron
 (c) 2017 - Dave Rensin - dave@rensin.com
 
@@ -39,6 +48,22 @@ Creates an infinite remix of an audio file by finding musically similar beats an
 Play a song infinitely.
 
     $ python infinite_jukebox.py i_cant_go_for_that.mp3 
+
+    [##########] ready                                                             
+                                                                                
+       filename: i_cant_go_for_that.mp3                                            
+       duration: 224.095782 seconds                                                
+          beats: 392                                                               
+          tempo: 109.956782 beats per minute                                       
+       clusters: 14                                                                
+       segments: 36                                                                
+     samplerate: 44100                                                             
+                                                                                
+    #################--------------------------####--------------------------------#
+    ####------###---####------##-----###############################----------------
+    ---------------#####------###---####-------#-----##############################-
+    --------#17##################-------######---###----######---####---------------
+    ---------------#######------------######################################
 
     [##########] ready                                                                                                
   
