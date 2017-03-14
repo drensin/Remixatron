@@ -56,7 +56,7 @@ Play with verbose info.
 
 <img src="images/verbose.png"/>
 
-The block of information under the segment map is the *cluster map*. This is the same layout as the segment map, except that the beats have been replaced by their cluster IDs. Beats with the same cluster ID are musically similar. In the above image, for example, we can see that the position tracker rests on a beat that belongs to cluster "D". (As do all the highlighted jump candidates.)
+The block of information under the segment map is the *cluster map*. This is the same layout as the segment map, except that the beats have been replaced by their cluster IDs. Beats with the same cluster ID are musically similar. In the above image, for example, we can see that the position tracker rests on a beat that belongs to cluster "5". (As do all the highlighted jump candidates.)
 
 **Example 3:**
 
