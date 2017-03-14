@@ -8,6 +8,7 @@ work.
 
 import argparse
 import curses
+import curses.textpad
 import numpy as np
 import os
 import pygame
@@ -57,15 +58,15 @@ def MyCallback(pct_complete, message):
         Example: [######    ] Doing some thing...
     """
 
-    curses.setupterm()
     term_width = curses.tigetnum('cols')
     
     progress_bar = " [" + "".ljust(int(pct_complete * 10),'#') + "".ljust(10 - int(pct_complete * 10), ' ') + "] " 
     log_line =  progress_bar + message
 
-    sys.stdout.write( log_line.ljust(term_width) + '\r' )
-    sys.stdout.flush()
-        
+    window.clear()
+    window.addstr(1,0,log_line)
+    window.refresh()
+    
 
 def display_playback_progress(v):
     
@@ -84,31 +85,46 @@ def display_playback_progress(v):
     
     time_start = time.time()
     
-    curses.setupterm()
     term_width = curses.tigetnum('cols')
 
+    y_offset = 11
+    
     beat = v['beat']
     min_sequence = v['seq_len']
     current_sequence = v['seq_pos']
 
-    pct = float(beat) / len(jukebox.beats)
-    term_pos = int( pct * term_width )
+    segment_map = ''
+    segment_chars = '#-'
+    
+    for b in jukebox.beats:
+        segment_map += segment_chars[ b['segment'] % 2 ]
 
-    prefix = "".ljust( min(term_pos, term_width - 4), '.') + '[' + str(min_sequence - current_sequence).zfill(2) + ']'
-    log_line =  prefix + "".ljust(term_width - len(prefix), '.')
+    window.addstr(y_offset,0,segment_map + " ")
 
-    sys.stdout.write( log_line.ljust(term_width) + '\r' )
-    sys.stdout.flush()
+    for c in jukebox.beats[beat]['jump_candidates']:
+
+        b = jukebox.beats[c]
+        
+        window.addch(y_offset + int(b['id'] / term_width), 
+                      b['id'] % term_width, 
+                      ord(segment_chars[b['segment'] %2]), 
+                      curses.A_REVERSE)
+        
+    x_pos = beat % term_width
+    y_pos = int(beat/term_width) + y_offset
+
+    window.addstr(y_pos, x_pos, str(min_sequence - current_sequence).zfill(2), curses.A_BOLD | curses.A_REVERSE )
+
+    window.refresh()
     
     time_finish = time.time()
 
     return time_finish - time_start
 
-def show_verbose_info():
+def get_verbose_info():
     """Show statistics about the song and the analysis"""
     
     info = """
-    
     filename: %s
     duration: %f seconds
        beats: %d
@@ -118,9 +134,9 @@ def show_verbose_info():
   samplerate: %d
     """
     
-    print info % (os.path.basename(args.filename), jukebox.duration, 
-                  len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.segments,
-                  jukebox.sample_rate)
+    verbose_info = info % (os.path.basename(args.filename), jukebox.duration, 
+                           len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.segments,
+                           jukebox.sample_rate)
     
     segment_map = ''
     cluster_map = ''
@@ -133,14 +149,10 @@ def show_verbose_info():
         cluster_map += cluster_chars[ b['cluster'] ] 
     
     if args.verbose:
-        print
-        print "Segmemt Map:"
-        print segment_map
-        print
-        print "Cluster Map:"
-        print cluster_map
-        print
-    
+        verbose_info += "\n%s\n\nCluster Map:\n%s\n" % (segment_map, cluster_map)
+        
+    return verbose_info
+
 if __name__ == "__main__":
 
     """ Main logic """
@@ -149,14 +161,19 @@ if __name__ == "__main__":
 
         args = process_args()
 
-        print
+        curses.setupterm()
 
+        window = curses.initscr()
+        curses.start_color()
+        curses.curs_set(0)
+        
         # do the clustering. Run synchronously. Post status messages to MyCallback()
         jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters, 
                                   progress_callback=MyCallback, async=False)
 
         # show more info about what was found
-        show_verbose_info()
+        window.addstr(2,0, get_verbose_info())
+        window.refresh()
             
         # if we're just saving the remix to a file, then just 
         # find the necessarry beats and do that
@@ -174,6 +191,8 @@ if __name__ == "__main__":
             
             sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, subtype='PCM_24')
             
+            curses.curs_set(1)
+            curses.endwin()
             sys.exit()
 
         # important to make sure the mixer is setup with the
@@ -199,6 +218,18 @@ if __name__ == "__main__":
             pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 1000 ) )   
                 
     except KeyboardInterrupt:
-        print
-        print 'exiting...'
+        
+        tbox = curses.textpad.Textbox(window)
+        tbox.stripspaces = False;
+        
+        w_str = tbox.gather()
+        
+        curses.curs_set(1)
+        curses.endwin()
+                
+        print w_str
+#        print
+#        print 'exiting...'
+#        print
+        
         mixer.quit()

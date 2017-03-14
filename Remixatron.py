@@ -446,7 +446,7 @@ class InfiniteJukebox(object):
         #
         
         random.seed()
-        min_sequence = random.randrange(32,49,8)
+        min_sequence = 32
         current_sequence = 0
         beat = beats[0]
         
