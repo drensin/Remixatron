@@ -165,6 +165,7 @@ if __name__ == "__main__":
 
         window = curses.initscr()
         curses.curs_set(0)
+        window.idlok(1)
         
         # do the clustering. Run synchronously. Post status messages to MyCallback()
         jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters, 
