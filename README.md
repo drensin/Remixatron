@@ -46,7 +46,7 @@ Play a song infinitely.
 
 *Segments* are contiguous blocks of beats in the same cluster. 
 
-During playback the program displays a *segment map* of the song. This shows the general outline of the musical segements of the track. The bolded number is called the *position tracker*. The *location* of the tracker shows the position currently playing in the song. The *number* displayed in the tracker shows how many beats until a possible jump can occur. The highlighted characters in the segment map show the possible viable jump positions from the currently playing beat. 
+During playback the program displays a *segment map* of the song. This shows the general outline of the musical segments of the track. The bolded number is called the *position tracker*. The *location* of the tracker shows the position currently playing in the song. The *number* displayed in the tracker shows how many beats until a possible jump can occur. The highlighted characters in the segment map show the possible viable jump positions from the currently playing beat. 
 
 **Example 2:**
 
@@ -54,8 +54,9 @@ Play with verbose info.
 
     $ python infinite_jukebox.py test_audio_files/i_got_bills.mp3 -verbose
 
+<img src="images/verbose.png"/>
 
-
+The block of information under the segment map is the *cluster map*. This is the same layout as the segment map, except that the beats have been replaced by their cluster IDs. Beats with the same cluster ID are musically similar. In the above image, for example, we can see that the position tracker rests on a beat that belongs to cluster "D". (As do all the highlighted jump candidates.)
 
 **Example 3:**
 
