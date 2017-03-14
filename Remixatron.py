@@ -445,7 +445,7 @@ class InfiniteJukebox(object):
         # remix of the current song.
         #
         
-        self.segments = max([b['segment'] for b in beats])
+        self.segments = max([b['segment'] for b in beats]) + 1
 
         random.seed()
 
