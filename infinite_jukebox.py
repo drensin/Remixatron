@@ -93,6 +93,9 @@ def display_playback_progress(v):
     min_sequence = v['seq_len']
     current_sequence = v['seq_pos']
 
+    # compute a segment map and display it. See README.md for an
+    # explanation of segment maps and cluster maps.
+    
     segment_map = ''
     segment_chars = '#-'
     
@@ -101,15 +104,20 @@ def display_playback_progress(v):
 
     window.addstr(y_offset,0,segment_map + " ")
 
+    # highlight all the jump candidates in the segment
+    # map
+    
     for c in jukebox.beats[beat]['jump_candidates']:
 
         b = jukebox.beats[c]
         
-        window.addch(y_offset + int(b['id'] / term_width), 
-                      b['id'] % term_width, 
-                      ord(segment_chars[b['segment'] %2]), 
-                      curses.A_REVERSE)
-        
+        window.addch(y_offset + int(b['id'] / term_width),   # y position of character
+                      b['id'] % term_width,                  # x position of character
+                      ord(segment_chars[b['segment'] %2]),   # either '#' or '-' depending on the segment
+                      curses.A_REVERSE)                      # print in reverse highlight
+    
+    # print the position tracker on the segment map
+    
     x_pos = beat % term_width
     y_pos = int(beat/term_width) + y_offset
 
