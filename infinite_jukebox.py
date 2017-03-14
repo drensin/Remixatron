@@ -142,15 +142,15 @@ def get_verbose_info():
     cluster_map = ''
     
     segment_chars = '#-'
-    cluster_chars = 'A1b2c3D4e5F6G7h8I9j0kLMnoPQrsTuVwXyZ`~!@#$%^&*()_+-=[{}|\]<,.>?/'
+    cluster_chars = 'A1b2c3D4e5F6G7h8I9j0kLMnoPQrsTuVwXyZ~!@#$%^&*()_+-='
     
     for b in jukebox.beats:
         segment_map += segment_chars[ b['segment'] % 2 ]
         cluster_map += cluster_chars[ b['cluster'] ] 
     
     if args.verbose:
-        verbose_info += "\n%s\n\nCluster Map:\n%s\n" % (segment_map, cluster_map)
-        
+        verbose_info += "\n\n" + cluster_map + "\n\n" + cluster_map
+    
     return verbose_info
 
 if __name__ == "__main__":
@@ -164,7 +164,6 @@ if __name__ == "__main__":
         curses.setupterm()
 
         window = curses.initscr()
-        curses.start_color()
         curses.curs_set(0)
         
         # do the clustering. Run synchronously. Post status messages to MyCallback()

@@ -42,7 +42,11 @@ Play a song infinitely.
 
 <img src='images/playback.png'/>
 
-The dots represent the beats of the song. The number is a countdown of how many beats until the playback will attempt to jump to a random place in the song that is musically similar. The **position** of the countdown is the part of the song that is now playing. In the above example, the song is playing at (roughly) 70% and will attempt a musically sensible jump in 7 beats.
+*Clusters* are buckets of musical similarity. Every beat belongs to exactly *one* cluster. Beats in the same cluster are musically similar -- ie. have similar pitch or timbre. When jumps are computed they always try to match clusters.
+
+*Segments* are contiguous blocks of beats in the same cluster. 
+
+During playback the program displays a **segment map** of the song. This shows the general outline of the musical segements of the track. The bolded number is called the **position tracker**. The **location** of the tracker shows the position currently playing in the song. The **number** displayed in the tracker shows how many beats until a possible jump can occur. The highlighted characters in the segment map show the possible viable jump positions from the currently playing beat. 
 
 **Example 2:**
 
@@ -50,38 +54,8 @@ Play with verbose info.
 
     $ python infinite_jukebox.py test_audio_files/i_got_bills.mp3 -verbose
 
-    [##########] ready                                                                                                
-    
-       filename: i_got_bills.mp3
-       duration: 203.035283 seconds
-          beats: 424
-          tempo: 126.048018 beats per minute
-       clusters: 23
-       segments: 82
-     samplerate: 44100
-    
 
-    Segmemt Map:
-    ###----------##----------###----######-----#---------########---############################----###
-    ---------####---------#####--##----###-----###---##-##-##--################################--###---
-    -----####----------######-###---###-----###--##----####----###----###########---######----#########
-    -------########----############------#####-##########-------###--####---#####---##---###----####---
-    -#####---------##-------####
 
-    Cluster Map:
-    8882222222222LL5555555555333FFFF00000044444I000000000IIIIIIIIbbbAAAAAAAAAAAAAAAAAAAAAAAAAAAAMMMM888
-    222222222LLLL55555555533333FFcc7777111eeeee999ccc771hh1hh66AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMM888222
-    22222LLLL5555555555333333Fccc777111eeeee999cc771111eeee9999cccGGGGkkkkkkkkkkkGGGDDDDDD6666222222222
-    LLLLLLL555555553333FFFFFFFFFFFF00000044444I0000000000IIIIIIIbbbcc7777111eeeee999cc777111eeee9999ccc
-    chhhhhjjjjjjjjjcchhhhhhh6666
-
-    ...........[16]....................................................................................
-
-*Clusters* are buckets of musical similarity. Every beat belongs to exactly *one* cluster. Beats in the same cluster are musically similar -- ie. have similar pitch or timbre. When jumps are computed they always try to match clusters.
-
-*Segments* are contiguous blocks of beats in the same cluster. 
-
-The segment map above shows a general shape of the musical segments in the song. The cluster map is the same map as the segment map, except that every beat is represented by its cluster number. 
 
 **Example 3:**
 
