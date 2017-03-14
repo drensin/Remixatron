@@ -445,8 +445,11 @@ class InfiniteJukebox(object):
         # remix of the current song.
         #
         
+        self.segments = max([b['segment'] for b in beats])
+
         random.seed()
-        min_sequence = random.randrange(8,33)
+#        min_sequence = random.randrange(8,33)
+        min_sequence = random.randrange(8, int(round((float(self.segments) / self.clusters) * 8)) )
         current_sequence = 0
         beat = beats[0]
         
@@ -455,8 +458,6 @@ class InfiniteJukebox(object):
         play_vector = []
 
         play_vector.append( {'beat':0, 'seq_len':min_sequence, 'seq_pos':current_sequence} )
-
-        self.segments = max([b['segment'] for b in beats])
         
         # we want to keep a list of recent jump segments so we don't accidentally wind up in a local loop
         #
@@ -495,7 +496,8 @@ class InfiniteJukebox(object):
                     recent.append(beat['segment'])
 
                 current_sequence = 0
-                min_sequence = random.randrange(8,33)
+#                min_sequence = random.randrange(8,33)
+                min_sequence = random.randrange(8, int(round((float(self.segments) / self.clusters) * 8)) )
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    
