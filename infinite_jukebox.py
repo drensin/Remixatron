@@ -153,6 +153,16 @@ def get_verbose_info():
     
     return verbose_info
 
+def get_window_contents():
+    """Dump the contents of the current curses window."""
+
+    tbox = curses.textpad.Textbox(window)
+    tbox.stripspaces = False;
+
+    w_str = tbox.gather()
+
+    return w_str
+
 if __name__ == "__main__":
 
     """ Main logic """
@@ -189,9 +199,14 @@ if __name__ == "__main__":
             output_bytes = np.concatenate( main_bytes )
             
             sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, subtype='PCM_24')
-            
+
+            w_str = get_window_contents()
             curses.curs_set(1)
             curses.endwin()
+
+            print w_str.rstrip()
+            print
+            
             sys.exit()
 
         # important to make sure the mixer is setup with the
@@ -218,17 +233,11 @@ if __name__ == "__main__":
                 
     except KeyboardInterrupt:
         
-        tbox = curses.textpad.Textbox(window)
-        tbox.stripspaces = False;
-        
-        w_str = tbox.gather()
-        
+        w_str = get_window_contents()
         curses.curs_set(1)
         curses.endwin()
-                
+
         print w_str.rstrip()
         print
-#        print 'exiting...'
-#        print
         
         mixer.quit()
