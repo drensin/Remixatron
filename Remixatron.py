@@ -465,7 +465,7 @@ class InfiniteJukebox(object):
 
         play_vector.append( {'beat':0, 'seq_len':min_sequence, 'seq_pos':current_sequence} )
         
-        # we want to keep a list of recent jump segments so we don't accidentally wind up in a local loop
+        # we want to keep a list of recently played segments so we don't accidentally wind up in a local loop
         #
         # the number of segments in a song will vary so we want to set the number of recents to keep 
         # at 50% of the total number of segments. Eg: if there are 34 segments, then the depth will
