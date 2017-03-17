@@ -157,7 +157,7 @@ def get_verbose_info():
         cluster_map += cluster_chars[ b['cluster'] ] 
     
     if args.verbose:
-        verbose_info += "\n" + segment_map + "\n\n" + cluster_map
+        verbose_info += "\n" + segment_map + "\n\n" + cluster_map + "\n\n" + jukebox._extra_diag
     
     return verbose_info
 

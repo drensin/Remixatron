@@ -154,6 +154,7 @@ class InfiniteJukebox(object):
         self.__filename = filename
         self.__start_beat = start_beat        
         self.clusters = clusters
+        self._extra_diag = ""
         
         if async == True:
             self.play_ready = threading.Event()
@@ -377,23 +378,30 @@ class InfiniteJukebox(object):
         self.__report_progress( .7, "truncating to fade point..." )
         
         # get the mean amplitude of the beats
-        avg_amplitude = np.mean([b['amplitude'] for b in info])
+        avg_amplitude = np.mean([float(b['amplitude']) for b in info])
         
-        # assume that the fade point of the song is the beat that (a) is after 95% of the song and (b) has
-        # an amplitude of <= 90% of the mean. For songs that have 'button' endings, just return the last
-        # beat
-        fade = next( (b for b in info[int(len(info) * .90):] if b['amplitude'] <= (.7 * avg_amplitude)), info[-1] )
+        # assume that the fade point of the song is the last beat of the song that is >= 80% of
+        # the avergage amplitude.
+       
+        self.avg_amplitude = avg_amplitude
+    
+        info.reverse()
+        fade = next(b for b in info if b['amplitude'] >= (.8 * avg_amplitude))
+        info.reverse()
 
         # truncate the beats to [start:fade]
         beats = info[self.__start_beat:info.index(fade)]
         self.fade = info[info.index(fade):]
-        
-        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
-        # have 4 beats per measure and doing this will make looping from the end of the song
-        # into some other place sound more natural
-        
-        if ( fade != info[-1] and len(beats) % 4 != 0 ):
-            beats = beats[:(len(beats) % 4) * -1]
+
+#
+#        TODO: Need to do some more testing, but I'm pretty sure I don't need this code anymore...
+#
+#        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
+#        # have 4 beats per measure and doing this will make looping from the end of the song
+#        # into some other place sound more natural
+#        
+#        if ( fade != info[-1] and len(beats) % 4 != 0 ):
+#            beats = beats[:(len(beats) % 4) * -1]
 
         # nearly all songs have an intro that should be discarded during the jump calculations because
         # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
@@ -449,7 +457,9 @@ class InfiniteJukebox(object):
 
         random.seed()
 
-        min_sequence = random.randrange(8, int(round((float(self.segments) / self.clusters) * 8)) )
+        max_sequence_len = int(round((float(self.segments) / self.clusters) * 8))        
+        min_sequence = max(max_sequence_len, loop_bounds_begin)
+        
         current_sequence = 0
         beat = beats[0]
         
@@ -496,7 +506,7 @@ class InfiniteJukebox(object):
                     recent.append(beat['segment'])
 
                 current_sequence = 0
-                min_sequence = random.randrange(8, int(round((float(self.segments) / self.clusters) * 8)) )
+                min_sequence = random.randrange(8, max_sequence_len )
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    
