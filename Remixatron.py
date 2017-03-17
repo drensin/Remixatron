@@ -426,6 +426,7 @@ class InfiniteJukebox(object):
                 
                 beat['next'] = next( (b['id'] for b in beats if b['cluster'] == beat['cluster'] and
                                       b['id'] % 4 == (beat['id'] + 1) % 4 and
+                                      b['id'] <= (.5 * len(beats)) and
                                       b['id'] >= loop_bounds_begin), loop_bounds_begin )
             else:
                 beat['next'] = beats.index(beat) + 1
