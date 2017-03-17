@@ -472,16 +472,19 @@ class InfiniteJukebox(object):
         # we want to keep a list of recent jump segments so we don't accidentally wind up in a local loop
         #
         # the number of segments in a song will vary so we want to set the number of recents to keep 
-        # at 10% of the total number of segments. Eg: if there are 34 segments, then the depth will
-        # be set at 3.
+        # at 50% of the total number of segments. Eg: if there are 34 segments, then the depth will
+        # be set at 17.
         #
         # On the off chance that the # of segments < 10 we set a floor queue depth of 1
             
-        recent_depth = max( round(self.segments * .1), 1 )
+#        recent_depth = max( round(self.segments * .1), 1 )
+        recent_depth = max( round(self.segments * .5), 1 )
         recent = collections.deque(maxlen=recent_depth)
 
         for i in range(0, 1024 * 1024):
 
+            recent.append(beat['segment'])
+            
             current_sequence += 1
 
             will_jump = (current_sequence == min_sequence) or (beat == beats[-1])
@@ -498,9 +501,6 @@ class InfiniteJukebox(object):
                 # if there aren't any good jump candidates then just target the next ordinal beat. This is
                 # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
                 # the candidates
-
-                if beat['segment'] not in recent:
-                    recent.append(beat['segment'])
                     
                 if len(non_recent_candidates) == 0:
                     beat = beats[ beat['next'] ]
