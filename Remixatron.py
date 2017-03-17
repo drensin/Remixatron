@@ -393,15 +393,13 @@ class InfiniteJukebox(object):
         beats = info[self.__start_beat:info.index(fade)]
         self.fade = info[info.index(fade):]
 
-#
-#        TODO: Need to do some more testing, but I'm pretty sure I don't need this code anymore...
-#
-#        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
-#        # have 4 beats per measure and doing this will make looping from the end of the song
-#        # into some other place sound more natural
-#        
-#        if ( fade != info[-1] and len(beats) % 4 != 0 ):
-#            beats = beats[:(len(beats) % 4) * -1]
+
+        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
+        # have 4 beats per measure and doing this will make looping from the end of the song
+        # into some other place sound more natural
+        
+        if ( fade != info[-1] and len(beats) % 4 != 0 ):
+            beats = beats[:(len(beats) % 4) * -1]
 
         # nearly all songs have an intro that should be discarded during the jump calculations because
         # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
@@ -477,8 +475,9 @@ class InfiniteJukebox(object):
         #
         # On the off chance that the # of segments < 10 we set a floor queue depth of 1
             
-#        recent_depth = max( round(self.segments * .1), 1 )
-        recent_depth = max( round(self.segments * .5), 1 )
+        recent_depth = max( int(round(self.segments * .5)), 1 )
+        self._extra_diag += "recents depth: %d\n" % recent_depth
+        
         recent = collections.deque(maxlen=recent_depth)
 
         for i in range(0, 1024 * 1024):
@@ -498,18 +497,18 @@ class InfiniteJukebox(object):
                 # randomly pick from the beat jump candidates that aren't in recently jumped segments
                 non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
-                # if there aren't any good jump candidates then just target the next ordinal beat. This is
-                # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
-                # the candidates
+                # if there aren't any good jump candidates, then find the max() of next ordinal beat OR the 
+                # earliest beat with ANY jump candidates (ie. the end of the song intro)
                     
                 if len(non_recent_candidates) == 0:
-                    beat = beats[ beat['next'] ]
+                    first_beat_with_candidates = next(b['id'] for b in beats if len(b['jump_candidates']) > 0)
+                    beat = beats[ max(beat['next'], first_beat_with_candidates) ]
                 else:
                     beat = beats[ random.choice(non_recent_candidates) ]
 #                    recent.append(beat['segment'])
 
                 current_sequence = 0
-                min_sequence = random.randrange(8, max_sequence_len )
+                min_sequence = random.randrange(8, max_sequence_len, 4)
 
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:                    
