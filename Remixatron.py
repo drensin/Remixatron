@@ -470,7 +470,7 @@ class InfiniteJukebox(object):
         #
         # the number of segments in a song will vary so we want to set the number of recents to keep 
         # at 25% of the total number of segments. Eg: if there are 34 segments, then the depth will
-        # be set at 17.
+        # be set at round(8.5) == 9.
         #
         # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
             
