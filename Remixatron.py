@@ -499,11 +499,14 @@ class InfiniteJukebox(object):
                 # a failsafe that in practice should very rarely be needed. Otherwise, just pick a random beat from
                 # the candidates
 
+                if beat['segment'] not in recent:
+                    recent.append(beat['segment'])
+                    
                 if len(non_recent_candidates) == 0:
                     beat = beats[ beat['next'] ]
                 else:
                     beat = beats[ random.choice(non_recent_candidates) ]
-                    recent.append(beat['segment'])
+#                    recent.append(beat['segment'])
 
                 current_sequence = 0
                 min_sequence = random.randrange(8, max_sequence_len )
