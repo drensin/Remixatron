@@ -385,21 +385,20 @@ class InfiniteJukebox(object):
        
         self.avg_amplitude = avg_amplitude
     
-        info.reverse()
-        fade = next(b for b in info if b['amplitude'] >= (.8 * avg_amplitude))
-        info.reverse()
+        fade = next(b for b in reversed(info) if b['amplitude'] >= (.8 * avg_amplitude))
 
         # truncate the beats to [start:fade]
         beats = info[self.__start_beat:info.index(fade)]
         self.fade = info[info.index(fade):]
 
 
-        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
-        # have 4 beats per measure and doing this will make looping from the end of the song
-        # into some other place sound more natural
-        
-        if ( fade != info[-1] and len(beats) % 4 != 0 ):
-            beats = beats[:(len(beats) % 4) * -1]
+        #TODO: DELETE THIS CODE AFTER MORE TESTING...
+#        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
+#        # have 4 beats per measure and doing this will make looping from the end of the song
+#        # into some other place sound more natural
+#        
+#        if ( fade != info[-1] and len(beats) % 4 != 0 ):
+#            beats = beats[:(len(beats) % 4) * -1]
 
         # nearly all songs have an intro that should be discarded during the jump calculations because
         # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
@@ -422,11 +421,11 @@ class InfiniteJukebox(object):
             if beat == beats[-1]:
                 
                 # if we're at the last beat, then we want to find a reasonable 'next' beat to play. It should (a) share the
-                # same cluster, (b) be not closer than 64 beats to the current beat, and (c) be after the computed loop_bounds_begin.
+                # same cluster, (b) be in a logical place in its measure, and (c) be after the computed loop_bounds_begin.
                 # If we can't find such an animal, then just return the beat at loop_bounds_begin
                 
-                beat['next'] = next( (b['id'] for b in beats if b['cluster'] == beat['cluster'] and 
-                                      b['id'] <= (beat['id'] - 64) and 
+                beat['next'] = next( (b['id'] for b in beats if b['cluster'] == beat['cluster'] and
+                                      b['id'] % 4 == (beat['id'] + 1) % 4 and
                                       b['id'] >= loop_bounds_begin), loop_bounds_begin )
             else:
                 beat['next'] = beats.index(beat) + 1
@@ -441,8 +440,7 @@ class InfiniteJukebox(object):
                                (bx['cluster'] == beats[beat['next']]['cluster']) and 
                                (bx['is'] == beats[beat['next']]['is']) and 
                                (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
-                               (bx['id'] != beat['next']) and
-                               (abs(bx['id'] - beat['id']) >= 16)]
+                               (bx['id'] != beat['next'])]
             
             beat['jump_candidates'] = jump_candidates
 
@@ -476,17 +474,17 @@ class InfiniteJukebox(object):
         # On the off chance that the # of segments < 10 we set a floor queue depth of 1
             
         recent_depth = max( int(round(self.segments * .5)), 1 )
-        self._extra_diag += "recents depth: %d\n" % recent_depth
         
         recent = collections.deque(maxlen=recent_depth)
 
         for i in range(0, 1024 * 1024):
 
-            recent.append(beat['segment'])
+            if beat['segment'] not in recent:
+                recent.append(beat['segment'])
             
             current_sequence += 1
 
-            will_jump = (current_sequence == min_sequence) or (beat == beats[-1])
+            will_jump = (current_sequence == min_sequence)
 
             # if it's time to jump, then assign the next beat, and create
             # a new play sequence between 8 and 32 beats -- making sure
@@ -505,7 +503,6 @@ class InfiniteJukebox(object):
                     beat = beats[ max(beat['next'], first_beat_with_candidates) ]
                 else:
                     beat = beats[ random.choice(non_recent_candidates) ]
-#                    recent.append(beat['segment'])
 
                 current_sequence = 0
                 min_sequence = random.randrange(8, max_sequence_len, 4)
