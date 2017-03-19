@@ -513,10 +513,10 @@ class InfiniteJukebox(object):
                 play_vector.append({'beat':beat['next'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
                 beat = beats[beat['next']]
 
-        self.__report_progress(1.0, "ready")
-
         self.beats = beats
         self.play_vector = play_vector
+
+        self.__report_progress(1.0, "ready")
         
         if self.play_ready:
             self.play_ready.set()
