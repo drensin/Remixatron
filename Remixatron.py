@@ -35,14 +35,9 @@ be signaled when the processing is complete. The default mode is to run synchron
 import collections
 import librosa
 import math
-import pygame
 import random
 import scipy
-import sys
 import threading
-
-from operator import itemgetter, attrgetter
-from pygame import mixer
 
 import numpy as np
 import sklearn.cluster
@@ -186,7 +181,7 @@ class InfiniteJukebox(object):
         #
 
         y, sr = librosa.core.load(self.__filename, mono=False, sr=44100)
-        y, index = librosa.effects.trim(y)
+        y, _ = librosa.effects.trim(y)
 
         self.duration = librosa.core.get_duration(y,sr)
         self.raw_audio = (y * np.iinfo(np.int16).max).astype(np.int16).T.copy(order='C')
@@ -270,7 +265,7 @@ class InfiniteJukebox(object):
 
 
         # and its spectral decomposition
-        evals, evecs = scipy.linalg.eigh(L)
+        _, evecs = scipy.linalg.eigh(L)
 
 
         # We can clean this up further with a median filter.
@@ -302,26 +297,6 @@ class InfiniteJukebox(object):
             seg_ids = KM.fit_predict(X)
 
         self.__report_progress( .51, "using %d clusters" % self.clusters )
-
-        ###############################################################
-        # Locate segment boundaries from the label sequence
-        bound_beats = 1 + np.flatnonzero(seg_ids[:-1] != seg_ids[1:])
-
-        # Count beat 0 as a boundary
-        bound_beats = librosa.util.fix_frames(bound_beats, x_min=0)
-
-        # Compute the segment label for each boundary
-        bound_segs = list(seg_ids[bound_beats])
-
-        # Convert beat indices to frames
-        bound_frames = beats[bound_beats]
-
-        # Make sure we cover to the end of the track
-        bound_frames = librosa.util.fix_frames(bound_frames,
-                                               x_min=None,
-                                               x_max=C.shape[1]-1)
-
-        bound_times = librosa.frames_to_time(bound_frames)
 
         # Get the amplitudes and beat-align them
         self.__report_progress( .6, "getting amplitudes" )
