@@ -58,8 +58,6 @@ def MyCallback(pct_complete, message):
         Example: [######    ] Doing some thing...
     """
 
-    term_width = curses.tigetnum('cols')
-
     progress_bar = " [" + "".ljust(int(pct_complete * 10),'#') + "".ljust(10 - int(pct_complete * 10), ' ') + "] "
     log_line =  progress_bar + message
 
@@ -173,7 +171,9 @@ def get_window_contents():
 
 if __name__ == "__main__":
 
-    """ Main logic """
+    #
+    # Main program logic
+    #
 
     try:
 
