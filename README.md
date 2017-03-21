@@ -1,16 +1,16 @@
 # Remixatron
 (c) 2017 - Dave Rensin - dave@rensin.com
 
-This program attempts to recreate the wonderful Infinite Jukebox (http://www.infinitejuke.com) on the command line in Python. It groups musically similar beats of a song into clusters and then plays a random path through the song that makes musical sense, but not does not repeat. It will do this infinitely.  
+This program attempts to recreate the wonderful Infinite Jukebox (http://www.infinitejuke.com) on the command line in Python. It groups musically similar beats of a song into clusters and then plays a random path through the song that makes musical sense, but not does not repeat. It will do this infinitely.
 
 ***
-# Installation  
+# Installation
 
-pip install --upgrade pip  
-pip install --user pygame pyparsing numpy  
-pip install --user librosa  
+pip install --upgrade pip
+pip install --user pygame pyparsing numpy
+pip install --user librosa
 ***
-# Usage  
+# Usage
 
 usage: infinite_jukebox.py [-h] [-clusters N] [-start start_beat]
                            [-save label] [-duration seconds] [-verbose]
@@ -33,20 +33,20 @@ Creates an infinite remix of an audio file by finding musically similar beats an
       -duration seconds  length (in seconds) to save. Must use with -save.
                          Deafult: 180
       -verbose           print extra info about the track and play vector
-  
-**Example 1:**  
+
+**Example 1:**
 
 Play a song infinitely.
 
-    $ python infinite_jukebox.py i_cant_go_for_that.mp3 
+    $ python infinite_jukebox.py i_cant_go_for_that.mp3
 
 <img src='images/playback.png'/>
 
 *Clusters* are buckets of musical similarity. Every beat belongs to exactly *one* cluster. Beats in the same cluster are musically similar -- ie. have similar pitch or timbre. When jumps are computed they always try to match clusters.
 
-*Segments* are contiguous blocks of beats in the same cluster. 
+*Segments* are contiguous blocks of beats in the same cluster.
 
-During playback the program displays a *segment map* of the song. This shows the general outline of the musical segments of the track. The bolded number is called the *position tracker*. The *location* of the tracker shows the position currently playing in the song. The *number* displayed in the tracker shows how many beats until a possible jump can occur. The highlighted characters in the segment map show the possible viable jump positions from the currently playing beat. 
+During playback the program displays a *segment map* of the song. This shows the general outline of the musical segments of the track. The bolded number is called the *position tracker*. The *location* of the tracker shows the position currently playing in the song. The *number* displayed in the tracker shows how many beats until a possible jump can occur. The highlighted characters in the segment map show the possible viable jump positions from the currently playing beat.
 
 **Example 2:**
 
@@ -62,25 +62,25 @@ The block of information under the segment map is the *cluster map*. This is the
 
 Create a 4 minute remix named *myRemix.wav*
 
-    $ python infinite_jukebox.py i_cant_go_for_that.mp3 -save myRemix -duration 240 
+    $ python infinite_jukebox.py i_cant_go_for_that.mp3 -save myRemix -duration 240
 
-    [##########] ready                                                                                                
-  
-       filename: i_cant_go_for_that.mp3  
-       duration: 224.095782 seconds  
-          beats: 396  
-          tempo: 109.956782 beats per minute  
-       clusters: 14  
-     samplerate: 44100  
+    [##########] ready
+
+       filename: i_cant_go_for_that.mp3
+       duration: 224.095782 seconds
+          beats: 396
+          tempo: 109.956782 beats per minute
+       clusters: 14
+     samplerate: 44100
 
 
 ***
-  
-# Some notes about the code  
 
-The core work is done in the InfiniteJukebox class in the Remixatron module. *infinite_jukebox.py* is just a simple demonstration on how to use that class.  
+# Some notes about the code
 
-The InfiniteJukebox class can do its processing in a background thread and reports progress via the progress_callback arg. To run in a thread, pass *async=True* to the constructor. In that case, it exposes an Event named *play_ready* -- which will be signaled when the processing is complete. The default mode is to run synchronously.  
+The core work is done in the InfiniteJukebox class in the Remixatron module. *infinite_jukebox.py* is just a simple demonstration on how to use that class.
+
+The InfiniteJukebox class can do its processing in a background thread and reports progress via the progress_callback arg. To run in a thread, pass *async=True* to the constructor. In that case, it exposes an Event named *play_ready* -- which will be signaled when the processing is complete. The default mode is to run synchronously.
 
 Simple async example:
 
@@ -91,7 +91,7 @@ Simple async example:
       jukebox.play_ready.wait()
 
       <some work here...>
-  
+
 Simple Non-async example:
 
       def MyCallback(percentage_complete_as_float, string_message):
@@ -100,18 +100,18 @@ Simple Non-async example:
       jukebox = InfiniteJukebox(filename='some_file.mp3', progress_callback=MyCallback, async=False)
 
       <blocks until completion... some work here...>
-      
-Example: Playing the first 32 beats of a song:  
+
+Example: Playing the first 32 beats of a song:
 
     from Remixatron import InfiniteJukebox
     from pygame import mixer
     import time
-    
+
     jukebox = InfiniteJukebox('some_file.mp3')
-    pygame.mixer.init(frequency=jukebox.sample_rate)
+    mixer.init(frequency=jukebox.sample_rate)
     channel = pygame.mixer.Channel(0)
-    
+
     for beat in jukebox.beats[0:32]:
-        snd = pygame.Sound(buffer=beat['buffer'])
+        snd = mixer.Sound(buffer=beat['buffer'])
         channel.queue(snd)
         time.sleep(beat['duration'])
