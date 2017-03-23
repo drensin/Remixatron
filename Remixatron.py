@@ -586,8 +586,8 @@ class InfiniteJukebox(object):
             # ie: the % of clusters that appear in only 1 segment
             entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
 
-            # get the list of clusters that have less than 6 beats. Those are stubs
-            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
+            # get the list of clusters that have less than 8 beats. Those are stubs
+            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 8] )
 
             self._clusters_list.append(entry)
 
