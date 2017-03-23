@@ -577,11 +577,11 @@ class InfiniteJukebox(object):
 
             entry['cluster_map'] = lst
 
-            # get a list of clusters that only appear in 1 cluster. Those are orphans.
+            # get a list of clusters that only appear in 1 segment. Those are orphans.
             entry['orphans'] = [l['label'] for l in entry['cluster_map'] if l['segs'] == 1]
 
             # across all the clusters, get the avg number of orphans per cluster
-            # ie: the % of clusters that appear in only 1 cluster
+            # ie: the % of clusters that appear in only 1 segment
             entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
 
             # get the list of clusters that have less than 6 beats. Those are stubs
