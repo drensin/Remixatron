@@ -294,7 +294,8 @@ class InfiniteJukebox(object):
             # (Algorithm 1)
             KM = sklearn.cluster.KMeans(n_clusters=k)
 
-            seg_ids = KM.fit_predict(X)
+#            seg_ids = KM.fit_predict(X)
+            seg_ids = KM.fit(X).labels_
 
         self.__report_progress( .51, "using %d clusters" % self.clusters )
 
@@ -552,7 +553,8 @@ class InfiniteJukebox(object):
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
 
             # cluster with candidate ki
-            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
+#            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
+            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit(X).labels_
 
             entry = {'clusters':ki, 'labels':labels}
 
