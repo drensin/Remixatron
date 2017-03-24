@@ -432,7 +432,7 @@ class InfiniteJukebox(object):
 
         random.seed()
 
-        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 64 )
+        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 48 )
         min_sequence = max(max_sequence_len, loop_bounds_begin)
 
         current_sequence = 0
