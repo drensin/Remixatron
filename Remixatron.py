@@ -432,7 +432,7 @@ class InfiniteJukebox(object):
 
         random.seed()
 
-        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 32)
+        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 32 )
         min_sequence = max(max_sequence_len, loop_bounds_begin)
 
         current_sequence = 0
@@ -452,10 +452,11 @@ class InfiniteJukebox(object):
         #
         # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
 
-        recent_depth = max( [int(round((float(self.segments) / self.clusters) * 4)), 1, int(round(self.segments * .25))] )
-
+        recent_depth = min( int(round((float(self.segments) / self.clusters) * 4)), int(round(self.segments * .25)) )
+        recent_depth = max( recent_depth, 1 )
+        
         recent = collections.deque(maxlen=recent_depth)
-
+        
         first_beat_with_candidates = next(b['id'] for b in beats if len(b['jump_candidates']) > 0)
 
         for i in range(0, 1024 * 1024):
