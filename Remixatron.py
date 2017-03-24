@@ -551,7 +551,7 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-        for ki in range(12,49):
+        for ki in range(8,49):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
