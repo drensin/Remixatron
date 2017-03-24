@@ -432,7 +432,8 @@ class InfiniteJukebox(object):
 
         random.seed()
 
-        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 48 )
+#        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 48 )
+        max_sequence_len = int(round((self.tempo / 120.0) * 32.0))
         min_sequence = max(max_sequence_len, loop_bounds_begin)
 
         current_sequence = 0
@@ -550,14 +551,14 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-        for ki in range(8,49):
+        for ki in range(12,49):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
 
             # cluster with candidate ki
-#            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
-            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit(X).labels_
+            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
+#            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit(X).labels_
 
             entry = {'clusters':ki, 'labels':labels}
 
@@ -606,8 +607,6 @@ class InfiniteJukebox(object):
 
         max_seg_ratio = max( cl['seg_ratio'] for cl in self._clusters_list )
         cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] == max_seg_ratio)
-
-        self._extra_diag += "\nMax Seg Ratio: %f\nWinning Cluster: %d\n" % ( max_seg_ratio, cluster_with_max )
 
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
         final_cluster_size = cluster_with_max
