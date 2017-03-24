@@ -592,10 +592,14 @@ class InfiniteJukebox(object):
 
             # get the list of clusters that have less than 6 beats. Those are stubs
             entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
+
+            # get the average number of segments to which a cluster belongs
             entry['seg_ratio'] = np.mean([l['segs'] for l in entry['cluster_map']])
 
             self._clusters_list.append(entry)
 
+        # get the cluster with the highest segments/cluster ratio. This is the cluster
+        # that will have the most diverse set of jump opportunities
         max_seg_ratio = max( cl['seg_ratio'] for cl in self._clusters_list )
         cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] == max_seg_ratio)
 
@@ -605,6 +609,7 @@ class InfiniteJukebox(object):
         # find the candidates that have an average orphan count <= the global average AND have no stubs
         candidates = [cl['clusters'] for cl in self._clusters_list if cl['avg_orphans'] <= avg_orphan_ratio and cl['stubs'] == 0]
 
+        # add the cluster with the best jump opportunities to the candidate pool
         candidates.append(cluster_with_max)
 
         # the winner is the highest cluster size among the candidates
