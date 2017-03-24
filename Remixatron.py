@@ -557,8 +557,8 @@ class InfiniteJukebox(object):
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
 
             # cluster with candidate ki
-            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
-#            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit(X).labels_
+#            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
+            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit(X).labels_
 
             entry = {'clusters':ki, 'labels':labels}
 
@@ -583,31 +583,32 @@ class InfiniteJukebox(object):
 
             entry['cluster_map'] = lst
 
-#            # get a list of clusters that only appear in 1 segment. Those are orphans.
-#            entry['orphans'] = [l['label'] for l in entry['cluster_map'] if l['segs'] == 1]
-#
-#            # across all the clusters, get the avg number of orphans per cluster
-#            # ie: the % of clusters that appear in only 1 segment
-#            entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
-#
-#            # get the list of clusters that have less than 6 beats. Those are stubs
-#            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 4] )
+            # get a list of clusters that only appear in 1 segment. Those are orphans.
+            entry['orphans'] = [l['label'] for l in entry['cluster_map'] if l['segs'] == 1]
+
+            # across all the clusters, get the avg number of orphans per cluster
+            # ie: the % of clusters that appear in only 1 segment
+            entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
+
+            # get the list of clusters that have less than 6 beats. Those are stubs
+            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
             entry['seg_ratio'] = np.mean([l['segs'] for l in entry['cluster_map']])
 
             self._clusters_list.append(entry)
 
-#        # compute the average number of orphan clusters across all candidate clusterings
-#        avg_orphan_ratio = sum([cl['avg_orphans'] for cl in self._clusters_list]) / len(self._clusters_list)
-#
-#        # find the candidates that have an average orphan count <= the global average AND have no stubs
-#        candidates = [cl['clusters'] for cl in self._clusters_list if cl['avg_orphans'] <= avg_orphan_ratio and cl['stubs'] == 0]
-#
-#        # the winner is the highest cluster size among the candidates
-#        final_cluster_size = max(candidates)
-
         max_seg_ratio = max( cl['seg_ratio'] for cl in self._clusters_list )
         cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] == max_seg_ratio)
 
+        # compute the average number of orphan clusters across all candidate clusterings
+        avg_orphan_ratio = sum([cl['avg_orphans'] for cl in self._clusters_list]) / len(self._clusters_list)
+
+        # find the candidates that have an average orphan count <= the global average AND have no stubs
+        candidates = [cl['clusters'] for cl in self._clusters_list if cl['avg_orphans'] <= avg_orphan_ratio and cl['stubs'] == 0]
+
+        candidates.append(cluster_with_max)
+
+        # the winner is the highest cluster size among the candidates
+        final_cluster_size = max(candidates)
+
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
-        final_cluster_size = cluster_with_max
         return (final_cluster_size, next(c['labels'] for c in self._clusters_list if c['clusters'] == final_cluster_size))
