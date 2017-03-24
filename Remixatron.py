@@ -564,7 +564,7 @@ class InfiniteJukebox(object):
 
             # create an array of dictionary entries containing (a) the cluster label,
             # (b) the number of total beats that belong to that cluster, and
-            # (c) the number of clusters in which that cluster appears.
+            # (c) the number of segments in which that cluster appears.
 
             lst = []
 
