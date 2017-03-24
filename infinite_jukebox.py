@@ -169,6 +169,17 @@ def get_window_contents():
 
     return w_str
 
+def cleanup():
+    """Cleanup before exiting"""
+    w_str = get_window_contents()
+    curses.curs_set(1)
+    curses.endwin()
+
+    print w_str.rstrip()
+    print
+
+    mixer.quit()
+
 if __name__ == "__main__":
 
     #
@@ -240,12 +251,6 @@ if __name__ == "__main__":
             pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 1000 ) )
 
     except KeyboardInterrupt:
-
-        w_str = get_window_contents()
-        curses.curs_set(1)
-        curses.endwin()
-
-        print w_str.rstrip()
-        print
-
-        mixer.quit()
+        cleanup()
+    finally:
+        cleanup()
