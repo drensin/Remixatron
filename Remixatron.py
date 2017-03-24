@@ -419,8 +419,10 @@ class InfiniteJukebox(object):
                                (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
                                (bx['id'] != beat['next'])]
 
-            beat['jump_candidates'] = jump_candidates
-
+            if jump_candidates:
+                beat['jump_candidates'] = jump_candidates
+            else:
+                beat['jump_candidates'] = []
         #
         # This section of the code computes the play_vector -- a 1024*1024 beat length
         # remix of the current song.
@@ -430,7 +432,7 @@ class InfiniteJukebox(object):
 
         random.seed()
 
-        max_sequence_len = int(round((float(self.segments) / self.clusters) * 8))
+        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 32)
         min_sequence = max(max_sequence_len, loop_bounds_begin)
 
         current_sequence = 0
@@ -450,7 +452,7 @@ class InfiniteJukebox(object):
         #
         # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
 
-        recent_depth = max( int(round(self.segments * .25)), 1 )
+        recent_depth = max( [int(round((float(self.segments) / self.clusters) * 4)), 1, int(round(self.segments * .25))] )
 
         recent = collections.deque(maxlen=recent_depth)
 
@@ -586,8 +588,8 @@ class InfiniteJukebox(object):
             # ie: the % of clusters that appear in only 1 segment
             entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
 
-            # get the list of clusters that have less than 8 beats. Those are stubs
-            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 8] )
+            # get the list of clusters that have less than 6 beats. Those are stubs
+            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
 
             self._clusters_list.append(entry)
 
