@@ -294,7 +294,6 @@ class InfiniteJukebox(object):
             # (Algorithm 1)
             KM = sklearn.cluster.KMeans(n_clusters=k)
 
-#            seg_ids = KM.fit_predict(X)
             seg_ids = KM.fit(X).labels_
 
         self.__report_progress( .51, "using %d clusters" % self.clusters )
@@ -536,12 +535,13 @@ class InfiniteJukebox(object):
 
             SUMMARY:
 
-                Group the beats in [2..48] clusters. Compute the average number of
-                orphans in each of the 47 computed clusterings. We want to find the
-                right cluster size (2..48) that will give us the highest possiblity
-                of smoothly jumping around but without being too promiscuous. The way
-                we do that is to find the highest cluster value (2..48) that has an
-                average orphan count <= the global average orphan count AND has no stub clusters.
+                Group the beats in [2..48] clusters. They key metric is the segment:cluster ratio.
+                This values gives the avg number of different segments to which a cluster
+                might belong. The higher the value, the more diverse the playback because
+                the track can jump more freely. There is a balance, however, between this
+                ratio and the number of clusters. In general, we want to find the highest
+                numeric cluster that has a ratio of segments:clusters nearest 4.
+                That ratio produces the most musically pleasing results.
 
                 Basically, we're looking for the highest possible cluster # that doesn't
                 obviously overfit.
@@ -551,14 +551,18 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-#        for ki in range(12,49):
+        # We compute the even numbered clusters between 8 and 64. Owing to the inherent
+        # symmetry of Western popular music (including Jazz and Classical), the most
+        # pleasing musical results will come from even cluster values. The other benefit
+        # of itterating over only the even cluster values is that it reduces the computation
+        # time by 50%.
+
         for ki in range(8,64,2):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
 
             # cluster with candidate ki
-#            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
             labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit(X).labels_
 
             entry = {'clusters':ki, 'labels':labels}
@@ -584,16 +588,6 @@ class InfiniteJukebox(object):
 
             entry['cluster_map'] = lst
 
-            # get a list of clusters that only appear in 1 segment. Those are orphans.
-            entry['orphans'] = [l['label'] for l in entry['cluster_map'] if l['segs'] == 1]
-
-            # across all the clusters, get the avg number of orphans per cluster
-            # ie: the % of clusters that appear in only 1 segment
-            entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
-
-            # get the list of clusters that have less than 6 beats. Those are stubs
-            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
-
             # get the average number of segments to which a cluster belongs
             entry['seg_ratio'] = np.mean([l['segs'] for l in entry['cluster_map']])
 
@@ -604,18 +598,14 @@ class InfiniteJukebox(object):
         max_seg_ratio = max( [cl['seg_ratio'] for cl in self._clusters_list] )
         max_seg_ratio = min( max_seg_ratio, 4 )
 
-        cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= max_seg_ratio)
+        final_cluster_size = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= max_seg_ratio)
 
-        final_cluster_size = cluster_with_max
-
-        for c in self._clusters_list:
-            if c['clusters'] == final_cluster_size:
-                labels = c['labels']
-                break
+        labels = next(c['labels'] for c in self._clusters_list if c['clusters'] == final_cluster_size)
 
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
         return (final_cluster_size, labels)
 
     def __add_log(self, line):
         """Convenience method to add debug logging info for later"""
+
         self._extra_diag += line + "\n"
