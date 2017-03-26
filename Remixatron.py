@@ -535,8 +535,8 @@ class InfiniteJukebox(object):
 
             SUMMARY:
 
-                Group the beats in [2..48] clusters. They key metric is the segment:cluster ratio.
-                This values gives the avg number of different segments to which a cluster
+                Group the beats in [8..64] clusters. They key metric is the segment:cluster ratio.
+                This value gives the avg number of different segments to which a cluster
                 might belong. The higher the value, the more diverse the playback because
                 the track can jump more freely. There is a balance, however, between this
                 ratio and the number of clusters. In general, we want to find the highest
