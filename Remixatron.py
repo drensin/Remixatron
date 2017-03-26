@@ -366,15 +366,6 @@ class InfiniteJukebox(object):
         beats = info[self.__start_beat:info.index(fade)]
         self.fade = info[info.index(fade):]
 
-
-        #TODO: DELETE THIS CODE AFTER MORE TESTING...
-#        # truncate the beats so that they are a multiple of 4. The vast majority of songs will
-#        # have 4 beats per measure and doing this will make looping from the end of the song
-#        # into some other place sound more natural
-#
-#        if ( fade != info[-1] and len(beats) % 4 != 0 ):
-#            beats = beats[:(len(beats) % 4) * -1]
-
         # nearly all songs have an intro that should be discarded during the jump calculations because
         # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
         loop_bounds_begin = beats.index(next(b for b in beats if b['cluster'] != beats[0]['cluster']))
@@ -431,7 +422,11 @@ class InfiniteJukebox(object):
 
         random.seed()
 
-#        max_sequence_len = min( int(round((float(self.segments) / self.clusters) * 8)), 48 )
+        # how long should our longest contiguous playback blocks be? One way to
+        # consider it is that higher bpm songs need longer segments becase
+        # each beat takes less time. A simple way to estimate a good value
+        # is to scale it by it's distance from 120bpm -- the canonical bpm
+        # for more popular music.
         max_sequence_len = int(round((self.tempo / 120.0) * 32.0))
         min_sequence = max(max_sequence_len, loop_bounds_begin)
 
