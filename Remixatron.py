@@ -611,9 +611,11 @@ class InfiniteJukebox(object):
         for c in self._clusters_list:
             if c['clusters'] == final_cluster_size:
                 labels = c['labels']
+                break
 
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
         return (final_cluster_size, labels)
 
     def __add_log(self, line):
+        """Convenience method to add debug logging info for later"""
         self._extra_diag += line + "\n"
