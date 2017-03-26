@@ -551,7 +551,8 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-        for ki in range(8,49):
+#        for ki in range(12,49):
+        for ki in range(8,64,2):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
@@ -590,8 +591,8 @@ class InfiniteJukebox(object):
             # ie: the % of clusters that appear in only 1 segment
             entry['avg_orphans'] = len(entry['orphans']) / float(entry['clusters'])
 
-            # get the list of clusters that have less than 4 beats. Those are stubs
-            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 4] )
+            # get the list of clusters that have less than 6 beats. Those are stubs
+            entry['stubs'] = len( [l for l in entry['cluster_map'] if l['beats'] < 6] )
 
             # get the average number of segments to which a cluster belongs
             entry['seg_ratio'] = np.mean([l['segs'] for l in entry['cluster_map']])
@@ -600,20 +601,37 @@ class InfiniteJukebox(object):
 
         # get the cluster with the highest segments/cluster ratio. This is the cluster
         # that will have the most diverse set of jump opportunities
-        max_seg_ratio = max( cl['seg_ratio'] for cl in self._clusters_list )
+        max_seg_ratio = max( [cl['seg_ratio'] for cl in self._clusters_list] )
+        avg_seg_ratio = np.mean( [cl['seg_ratio'] for cl in self._clusters_list] )
         cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] == max_seg_ratio)
+#        cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= avg_seg_ratio)
 
-        # compute the average number of orphan clusters across all candidate clusterings
-        avg_orphan_ratio = sum([cl['avg_orphans'] for cl in self._clusters_list]) / len(self._clusters_list)
+#        # compute the average number of orphan clusters across all candidate clusterings
+#        avg_orphan_ratio = sum([cl['avg_orphans'] for cl in self._clusters_list]) / len(self._clusters_list)
+#
+#        # find the candidates that have an average orphan count <= the global average AND have no stubs
+#        candidates = [cl['clusters'] for cl in self._clusters_list if cl['avg_orphans'] <= avg_orphan_ratio and cl['stubs'] == 0]
+#
+#        # add the cluster with the best jump opportunities to the candidate pool
+#        candidates.append(cluster_with_max)
+#        candidates.sort()
+#
+#        # the winner is the highest cluster size among the candidates
+#        final_cluster_size = max(candidates)
+#        final_cluster_size = np.median(candidates)
+#        final_cluster_size = int(round(np.mean(candidates)))
+#        final_cluster_size += (final_cluster_size % 2)
+#
+#        self.__add_log( str(candidates) )
 
-        # find the candidates that have an average orphan count <= the global average AND have no stubs
-        candidates = [cl['clusters'] for cl in self._clusters_list if cl['avg_orphans'] <= avg_orphan_ratio and cl['stubs'] == 0]
+        final_cluster_size = cluster_with_max
 
-        # add the cluster with the best jump opportunities to the candidate pool
-        candidates.append(cluster_with_max)
-
-        # the winner is the highest cluster size among the candidates
-        final_cluster_size = max(candidates)
+        for c in self._clusters_list:
+            if c['clusters'] == final_cluster_size:
+                labels = c['labels']
 
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
-        return (final_cluster_size, next(c['labels'] for c in self._clusters_list if c['clusters'] == final_cluster_size))
+        return (final_cluster_size, labels)
+
+    def __add_log(self, line):
+        self._extra_diag += line + "\n"

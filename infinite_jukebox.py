@@ -134,14 +134,14 @@ def get_verbose_info():
     filename: %s
     duration: %f seconds
        beats: %d
-       tempo: %f beats per minute
+       tempo: %d bpm
     clusters: %d
     segments: %d
   samplerate: %d
     """
 
     verbose_info = info % (os.path.basename(args.filename), jukebox.duration,
-                           len(jukebox.beats), jukebox.tempo, jukebox.clusters, jukebox.segments,
+                           len(jukebox.beats), int(round(jukebox.tempo)), jukebox.clusters, jukebox.segments,
                            jukebox.sample_rate)
 
     segment_map = ''
@@ -154,8 +154,12 @@ def get_verbose_info():
         segment_map += segment_chars[ b['segment'] % 2 ]
         cluster_map += cluster_chars[ b['cluster'] ]
 
+    verbose_info += "\n" + segment_map + "\n\n"
+
     if args.verbose:
-        verbose_info += "\n" + segment_map + "\n\n" + cluster_map + "\n\n" + jukebox._extra_diag
+        verbose_info += cluster_map + "\n\n"
+
+    verbose_info += jukebox._extra_diag
 
     return verbose_info
 
@@ -171,6 +175,10 @@ def get_window_contents():
 
 def cleanup():
     """Cleanup before exiting"""
+
+    if not window:
+        return
+
     w_str = get_window_contents()
     curses.curs_set(1)
     curses.endwin()
@@ -187,6 +195,8 @@ if __name__ == "__main__":
     #
 
     try:
+
+        window = None
 
         args = process_args()
 
