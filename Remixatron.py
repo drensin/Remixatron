@@ -593,7 +593,7 @@ class InfiniteJukebox(object):
 
             self._clusters_list.append(entry)
 
-        # get the max cluster with the segments/cluster ratio not great than 4. That
+        # get the max cluster with the segments/cluster ratio nearest to 4. That
         # will produce the most musically pleasing effect
         max_seg_ratio = max( [cl['seg_ratio'] for cl in self._clusters_list] )
         max_seg_ratio = min( max_seg_ratio, 4 )
