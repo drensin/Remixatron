@@ -606,24 +606,6 @@ class InfiniteJukebox(object):
 
         cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= max_seg_ratio)
 
-#        # compute the average number of orphan clusters across all candidate clusterings
-#        avg_orphan_ratio = sum([cl['avg_orphans'] for cl in self._clusters_list]) / len(self._clusters_list)
-#
-#        # find the candidates that have an average orphan count <= the global average AND have no stubs
-#        candidates = [cl['clusters'] for cl in self._clusters_list if cl['avg_orphans'] <= avg_orphan_ratio and cl['stubs'] == 0]
-#
-#        # add the cluster with the best jump opportunities to the candidate pool
-#        candidates.append(cluster_with_max)
-#        candidates.sort()
-#
-#        # the winner is the highest cluster size among the candidates
-#        final_cluster_size = max(candidates)
-#        final_cluster_size = np.median(candidates)
-#        final_cluster_size = int(round(np.mean(candidates)))
-#        final_cluster_size += (final_cluster_size % 2)
-#
-#        self.__add_log( str(candidates) )
-
         final_cluster_size = cluster_with_max
 
         for c in self._clusters_list:
