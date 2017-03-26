@@ -602,9 +602,11 @@ class InfiniteJukebox(object):
         # get the cluster with the highest segments/cluster ratio. This is the cluster
         # that will have the most diverse set of jump opportunities
         max_seg_ratio = max( [cl['seg_ratio'] for cl in self._clusters_list] )
-        avg_seg_ratio = np.mean( [cl['seg_ratio'] for cl in self._clusters_list] )
-        cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] == max_seg_ratio)
-#        cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= avg_seg_ratio)
+
+        if max_seg_ratio <= 4:
+            cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] == max_seg_ratio)
+        else:
+            cluster_with_max = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= 4)
 
 #        # compute the average number of orphan clusters across all candidate clusterings
 #        avg_orphan_ratio = sum([cl['avg_orphans'] for cl in self._clusters_list]) / len(self._clusters_list)
