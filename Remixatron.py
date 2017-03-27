@@ -516,7 +516,7 @@ class InfiniteJukebox(object):
             of a hack right now..
 
             PARAMETERS:
-                evecs: Eigen-vectors computed from the clusteration algorithm
+                evecs: Eigen-vectors computed from the segmentation algorithm
                 Cnorm: Cumulative normalization of evecs. Easier to pass it in than
                        compute it from scratch here.
 
