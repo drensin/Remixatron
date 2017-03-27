@@ -546,13 +546,13 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-        # We compute the even numbered clusters between 8 and 64. Owing to the inherent
+        # We compute the even numbered clusters between 8 and 50. Owing to the inherent
         # symmetry of Western popular music (including Jazz and Classical), the most
         # pleasing musical results will come from even cluster values. The other benefit
         # of itterating over only the even cluster values is that it reduces the computation
         # time by 50%.
 
-        for ki in range(8,64,2):
+        for ki in range(8,51,2):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
