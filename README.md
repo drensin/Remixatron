@@ -6,9 +6,9 @@ This program attempts to recreate the wonderful Infinite Jukebox (http://www.inf
 ***
 # Installation
 
-pip install --upgrade pip  
-pip install --user pygame pyparsing numpy  
-pip install --user librosa  
+pip install --upgrade pip
+pip install --user pygame pyparsing numpy
+pip install --user librosa
 ***
 # Usage
 
@@ -67,9 +67,9 @@ Create a 4 minute remix named *myRemix.wav*
     [##########] ready
 
        filename: i_cant_go_for_that.mp3
-       duration: 224.095782 seconds
+       duration: 00:03:44
           beats: 396
-          tempo: 109.956782 beats per minute
+          tempo: 110 bpm
        clusters: 14
      samplerate: 44100
 
