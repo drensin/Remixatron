@@ -366,6 +366,8 @@ class InfiniteJukebox(object):
         beats = info[self.__start_beat:info.index(fade)]
         self.fade = info[info.index(fade):]
 
+        beats = info[self.__start_beat:]
+
         # nearly all songs have an intro that should be discarded during the jump calculations because
         # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
         loop_bounds_begin = beats.index(next(b for b in beats if b['cluster'] != beats[0]['cluster']))
