@@ -360,11 +360,11 @@ class InfiniteJukebox(object):
 
         self.avg_amplitude = avg_amplitude
 
-        fade = next(b for b in reversed(info) if b['amplitude'] >= (.8 * avg_amplitude))
+        fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.8 * avg_amplitude))
 
         # truncate the beats to [start:fade]
-        beats = info[self.__start_beat:info.index(fade)]
-        self.fade = info[info.index(fade):]
+        beats = info[self.__start_beat:fade + 1]
+        self.fade = info[fade:]
 
         beats = info[self.__start_beat:]
 
