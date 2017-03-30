@@ -462,7 +462,8 @@ class InfiniteJukebox(object):
         #
         # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
 
-        recent_depth = min( int(round((float(self.segments) / self.clusters) * 4)), int(round(self.segments * .25)) )
+#        recent_depth = min( int(round((float(self.segments) / self.clusters) * 4)), int(round(self.segments * .25)) )
+        recent_depth = int(round(self.segments * .25))
         recent_depth = max( recent_depth, 1 )
 
         recent = collections.deque(maxlen=recent_depth)
