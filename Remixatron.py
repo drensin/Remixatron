@@ -462,13 +462,18 @@ class InfiniteJukebox(object):
         #
         # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
 
-#        recent_depth = min( int(round((float(self.segments) / self.clusters) * 4)), int(round(self.segments * .25)) )
         recent_depth = int(round(self.segments * .25))
         recent_depth = max( recent_depth, 1 )
 
         recent = collections.deque(maxlen=recent_depth)
 
         first_beat_with_candidates = next(b['id'] for b in beats if len(b['jump_candidates']) > 0)
+
+        # keep track of the number of times it was possible to jump but we
+        # decided not to because it would mean jumping into a segment we have
+        # recently played.
+
+        failed_jump_attempts = 0
 
         for i in range(0, 1024 * 1024):
 
@@ -477,7 +482,12 @@ class InfiniteJukebox(object):
 
             current_sequence += 1
 
-            will_jump = (current_sequence == min_sequence) or (beat == beats[-1])
+            # it's time to attempt a jump if we've played all the beats we wanted in the
+            # current sequence. Also, if we've aborted jumps more than 4 consecutive times
+            # then it's likely we've swirled into a pathological local loop. In that case,
+            # we need to jump as soon as we can.
+
+            will_jump = (current_sequence == min_sequence) or (failed_jump_attempts > 4)
 
             # if it's time to jump, then assign the next beat, and create
             # a new play sequence between 8 and 32 beats -- making sure
@@ -493,11 +503,13 @@ class InfiniteJukebox(object):
 
                 if len(non_recent_candidates) == 0:
 
-                    if beat == beats[-1]:
-                        beat = beats[ max(beat['next'], first_beat_with_candidates) ]
-                    else:
-                        beat = beats[beat['next']]
+                    if len(beat['jump_candidates']) > 0:
+                        failed_jump_attempts += 1
+
+                    beat = beats[beat['next']]
+
                 else:
+                    failed_jump_attempts = 0
                     beat = beats[ random.choice(non_recent_candidates) ]
 
                 current_sequence = 0
