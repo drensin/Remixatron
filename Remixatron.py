@@ -350,7 +350,22 @@ class InfiniteJukebox(object):
 
             info.append(final_beat)
 
-        beats = info[self.__start_beat:]
+            self.__report_progress( .7, "truncating to fade point..." )
+
+
+        # get the mean amplitude of the beats
+        avg_amplitude = np.mean([float(b['amplitude']) for b in info])
+
+        # assume that the fade point of the song is the last beat of the song that is >= 80% of
+        # the avergage amplitude.
+
+        self.avg_amplitude = avg_amplitude
+
+        fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.8 * avg_amplitude))
+
+        # truncate the beats to [start:fade]
+        beats = info[self.__start_beat:fade + 1]
+#        beats = info[self.__start_beat:]
 
         loop_bounds_begin = self.__start_beat
 
@@ -400,7 +415,8 @@ class InfiniteJukebox(object):
         # so let's find the latest point in the song where there are still jump
         # candidates and make sure that we can't play past it.
 
-        last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0 )
+        last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
+
         beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
 
         # store the beats that start after the last jumpable point. That's
