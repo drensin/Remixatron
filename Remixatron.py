@@ -350,29 +350,9 @@ class InfiniteJukebox(object):
 
             info.append(final_beat)
 
-        self.__report_progress( .7, "truncating to fade point..." )
+        beats = info[self.__start_beat:]
 
-        # get the mean amplitude of the beats
-        avg_amplitude = np.mean([float(b['amplitude']) for b in info])
-
-        # assume that the fade point of the song is the last beat of the song that is >= 80% of
-        # the avergage amplitude.
-
-        self.avg_amplitude = avg_amplitude
-
-        fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.8 * avg_amplitude))
-
-        # truncate the beats to [start:fade]
-        beats = info[self.__start_beat:fade + 1]
-        self.fade = info[fade:]
-
-        # nearly all songs have an intro that should be discarded during the jump calculations because
-        # landing there will sound stilted. This line finds the first beat of the 2nd cluster in the song
-        loop_bounds_begin = beats.index(next(b for b in beats if b['cluster'] != beats[0]['cluster']))
-
-        # if start_beat has been passed in, then use the max(start_beat, loop_bounds_begin) as the earliest
-        # allowed jump point in the song
-        loop_bounds_begin = max(loop_bounds_begin, self.__start_beat)
+        loop_bounds_begin = self.__start_beat
 
         self.__report_progress( .8, "computing final beat array..." )
 
@@ -413,12 +393,31 @@ class InfiniteJukebox(object):
                 beat['jump_candidates'] = jump_candidates
             else:
                 beat['jump_candidates'] = []
+
+        self.segments = max([b['segment'] for b in beats]) + 1
+
+        # we don't want to ever play past the point where it's impossible to loop,
+        # so let's find the latest point in the song where there are still jump
+        # candidates and make sure that we can't play past it.
+
+        last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0 )
+        beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
+
+        # store the beats that start after the last jumpable point. That's
+        # the outro to the song. We can use these
+        # beasts to create a sane ending for a fixed-length remix
+
+        outro_start = last_chance + 1 + self.__start_beat
+
+        if outro_start >= len(info):
+            self.outro = []
+        else:
+            self.outro = info[outro_start:]
+
         #
         # This section of the code computes the play_vector -- a 1024*1024 beat length
         # remix of the current song.
         #
-
-        self.segments = max([b['segment'] for b in beats]) + 1
 
         random.seed()
 
