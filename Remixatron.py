@@ -469,11 +469,14 @@ class InfiniteJukebox(object):
 
         first_beat_with_candidates = next(b['id'] for b in beats if len(b['jump_candidates']) > 0)
 
-        # keep track of the number of times it was possible to jump but we
-        # decided not to because it would mean jumping into a segment we have
-        # recently played.
+        # keep track of the time since the last successful jump. If we go more than
+        # 10% of the song length since our last jump, then we will prioritize an
+        # immediate jump to a not recently played segment. Otherwise playback will
+        # be boring for the listener. This also has the advantage of busting out of
+        # local loops.
 
-        failed_jump_attempts = 0
+        max_time_between_jumps = self.duration * .1
+        time_since_jump = 0
 
         for i in range(0, 1024 * 1024):
 
@@ -483,11 +486,10 @@ class InfiniteJukebox(object):
             current_sequence += 1
 
             # it's time to attempt a jump if we've played all the beats we wanted in the
-            # current sequence. Also, if we've aborted jumps more than 2 consecutive times
-            # then it's likely we've swirled into a pathological local loop. In that case,
-            # we need to jump as soon as we can.
+            # current sequence. Also, if we've gone more than 10% of the length of the song
+            # without jumping we need to immediately prioritze jumping to a non-recent segment.
 
-            will_jump = (current_sequence == min_sequence) or (failed_jump_attempts > 2)
+            will_jump = (current_sequence == min_sequence) or (time_since_jump >= max_time_between_jumps)
 
             # if it's time to jump, then assign the next beat, and create
             # a new play sequence between 8 and 32 beats -- making sure
@@ -495,21 +497,19 @@ class InfiniteJukebox(object):
 
             if ( will_jump ):
 
-                # randomly pick from the beat jump candidates that aren't in recently jumped segments
+                # randomly pick from the beat jump candidates that aren't in recently played segments
                 non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
-                # if there aren't any good jump candidates, then find the max() of next ordinal beat OR the
-                # earliest beat with ANY jump candidates (ie. the end of the song intro)
+                # if there aren't any good jump candidates, then just play the next calculated beat in
+                # the segment.
 
                 if len(non_recent_candidates) == 0:
 
-                    if len(beat['jump_candidates']) > 0:
-                        failed_jump_attempts += 1
-
+                    time_since_jump += beat['duration']
                     beat = beats[beat['next']]
 
                 else:
-                    failed_jump_attempts = 0
+                    time_since_jump = 0
                     beat = beats[ random.choice(non_recent_candidates) ]
 
                 current_sequence = 0
@@ -519,6 +519,7 @@ class InfiniteJukebox(object):
             else:
                 play_vector.append({'beat':beat['next'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
                 beat = beats[beat['next']]
+                time_since_jump += beat['duration']
 
         self.beats = beats
         self.play_vector = play_vector
