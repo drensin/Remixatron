@@ -443,7 +443,7 @@ class InfiniteJukebox(object):
         # is to scale it by it's distance from 120bpm -- the canonical bpm
         # for more popular music.
         max_sequence_len = int(round((self.tempo / 120.0) * 32.0))
-        min_sequence = max(max_sequence_len, loop_bounds_begin)
+        min_sequence = max(random.randrange(8, max_sequence_len, 4), loop_bounds_begin)
 
         current_sequence = 0
         beat = beats[0]
@@ -483,11 +483,11 @@ class InfiniteJukebox(object):
             current_sequence += 1
 
             # it's time to attempt a jump if we've played all the beats we wanted in the
-            # current sequence. Also, if we've aborted jumps more than 4 consecutive times
+            # current sequence. Also, if we've aborted jumps more than 2 consecutive times
             # then it's likely we've swirled into a pathological local loop. In that case,
             # we need to jump as soon as we can.
 
-            will_jump = (current_sequence == min_sequence) or (failed_jump_attempts > 4)
+            will_jump = (current_sequence == min_sequence) or (failed_jump_attempts > 2)
 
             # if it's time to jump, then assign the next beat, and create
             # a new play sequence between 8 and 32 beats -- making sure
