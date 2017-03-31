@@ -119,7 +119,16 @@ def display_playback_progress(v):
     x_pos = beat % term_width
     y_pos = int(beat/term_width) + y_offset
 
-    window.addstr(y_pos, x_pos, str(min_sequence - current_sequence).zfill(2), curses.A_BOLD | curses.A_REVERSE | curses.A_STANDOUT )
+    beats_until_jump = min_sequence - current_sequence
+
+    buj_disp = ''
+
+    if beats_until_jump > 0:
+        buj_disp = str(beats_until_jump).zfill(2)
+    else:
+        buj_disp = ':('
+
+    window.addstr(y_pos, x_pos, buj_disp, curses.A_BOLD | curses.A_REVERSE | curses.A_STANDOUT )
 
     window.refresh()
 

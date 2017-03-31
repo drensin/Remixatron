@@ -528,6 +528,9 @@ class InfiniteJukebox(object):
                 current_sequence = 0
                 min_sequence = random.randrange(8, max_sequence_len, 4)
 
+                if time_since_jump >= max_time_between_jumps:
+                    current_sequence = min_sequence
+
                 play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
             else:
                 play_vector.append({'beat':beat['next'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
