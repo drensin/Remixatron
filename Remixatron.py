@@ -477,6 +477,7 @@ class InfiniteJukebox(object):
 
         max_time_between_jumps = self.duration * .1
         time_since_jump = 0
+        failed_jumps = 0
 
         for i in range(0, 1024 * 1024):
 
@@ -506,10 +507,19 @@ class InfiniteJukebox(object):
                 if len(non_recent_candidates) == 0:
 
                     time_since_jump += beat['duration']
-                    beat = beats[beat['next']]
+                    failed_jumps += 1
+
+                    # if we've gone more than 2x max_time_between_jumps,
+                    # then it's time for drastic measures!
+
+                    if failed_jumps >= (.1 * len(beats)):
+                        beat = beats[0]
+                    else:
+                        beat = beats[beat['next']]
 
                 else:
                     time_since_jump = 0
+                    failed_jumps = 0
                     beat = beats[ random.choice(non_recent_candidates) ]
 
                 current_sequence = 0
