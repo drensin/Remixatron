@@ -509,10 +509,13 @@ class InfiniteJukebox(object):
                     time_since_jump += beat['duration']
                     failed_jumps += 1
 
-                    # if we've gone more than 2x max_time_between_jumps,
-                    # then it's time for drastic measures!
+                    # if we've failed jumps >= 20% of the total
+                    # beat length, then something super bad
+                    # is happening.. Time for drastic measures!
 
-                    if failed_jumps >= (.1 * len(beats)):
+                    if failed_jumps >= (.2 * len(beats)):
+                        time_since_jump = 0
+                        failed_jumps = 0
                         beat = beats[0]
                     else:
                         beat = beats[beat['next']]
