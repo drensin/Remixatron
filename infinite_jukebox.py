@@ -123,6 +123,10 @@ def display_playback_progress(v):
 
     buj_disp = ''
 
+    # show the beats until the next jump. If the value == 0 then
+    # then sequence wanted to jump but couldn't find a suitable
+    # target. Display an appropriate symbol for that (a frowny face, of course!)
+
     if beats_until_jump > 0:
         buj_disp = str(beats_until_jump).zfill(2)
     else:
