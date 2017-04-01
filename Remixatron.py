@@ -517,8 +517,8 @@ class InfiniteJukebox(object):
 
                         furthest_candidate_distance = max([abs(beat['id'] - c) for c in beat['jump_candidates']])
 
-                        jump_to = next(c for c in beats['jump_candidates']
-                                       if abs(beats.index(beat)-c) == furthest_candidate_distance)
+                        jump_to = next(c for c in beat['jump_candidates']
+                                       if abs(beat['id'] - c) == furthest_candidate_distance)
 
                         beat = beats[jump_to]
                         beats_since_jump = 0
