@@ -354,14 +354,14 @@ class InfiniteJukebox(object):
 
 
         # get the mean amplitude of the beats
-        avg_amplitude = np.mean([float(b['amplitude']) for b in info])
+        max_amplitude = max([float(b['amplitude']) for b in info])
 
-        # assume that the fade point of the song is the last beat of the song that is >= 80% of
-        # the avergage amplitude.
+        # assume that the fade point of the song is the last beat of the song that is >= 75% of
+        # the max amplitude.
 
-        self.avg_amplitude = avg_amplitude
+        self.max_amplitude = max_amplitude
 
-        fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.8 * avg_amplitude))
+        fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.75 * max_amplitude))
 
         # truncate the beats to [start:fade]
         beats = info[self.__start_beat:fade + 1]
