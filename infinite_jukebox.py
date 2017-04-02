@@ -145,7 +145,7 @@ def get_verbose_info():
 
     info = """
     filename: %s
-    duration: %s
+    duration: %02d:%02d:%02d
        beats: %d
        tempo: %d bpm
     clusters: %d
@@ -153,7 +153,10 @@ def get_verbose_info():
   samplerate: %d
     """
 
-    verbose_info = info % (os.path.basename(args.filename), time.strftime('%X',time.localtime(round(jukebox.duration))),
+    (minutes,seconds) = divmod(round(jukebox.duration),60)
+    (hours, minutes)  = divmod(minutes, 60)
+
+    verbose_info = info % (os.path.basename(args.filename), hours, minutes, seconds,
                            len(jukebox.beats), int(round(jukebox.tempo)), jukebox.clusters, jukebox.segments,
                            jukebox.sample_rate)
 
