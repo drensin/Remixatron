@@ -180,7 +180,7 @@ class InfiniteJukebox(object):
         # trim the silences from each end
         #
 
-        y, sr = librosa.core.load(self.__filename, mono=False, sr=44100)
+        y, sr = librosa.core.load(self.__filename, mono=False, sr=None)
         y, _ = librosa.effects.trim(y)
 
         self.duration = librosa.core.get_duration(y,sr)
