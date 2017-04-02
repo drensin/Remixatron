@@ -365,7 +365,6 @@ class InfiniteJukebox(object):
 
         # truncate the beats to [start:fade]
         beats = info[self.__start_beat:fade + 1]
-#        beats = info[self.__start_beat:]
 
         loop_bounds_begin = self.__start_beat
 
