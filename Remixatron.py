@@ -68,7 +68,7 @@ class InfiniteJukebox(object):
                  or similar modules. If the audio is mono then the shape of the array will
                  be (bytes,). If it's stereo, then the shape will be (2,bytes).
 
-    sample_rate: the sample rate from the audio file. Usually 44100
+    sample_rate: the sample rate from the audio file. Usually 44100 or 48000
 
        clusters: the number of clusters used to group the beats. If you pass in a value, then
                  this will be reflected here. If you let the algorithm decide, then auto-generated
