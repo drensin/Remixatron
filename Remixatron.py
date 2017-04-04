@@ -353,7 +353,7 @@ class InfiniteJukebox(object):
             self.__report_progress( .7, "truncating to fade point..." )
 
 
-        # get the mean amplitude of the beats
+        # get the max amplitude of the beats
         max_amplitude = max([float(b['amplitude']) for b in info])
 
         # assume that the fade point of the song is the last beat of the song that is >= 75% of
@@ -363,7 +363,7 @@ class InfiniteJukebox(object):
 
         fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.75 * max_amplitude))
 
-        # truncate the beats to [start:fade]
+        # truncate the beats to [start:fade + 1]
         beats = info[self.__start_beat:fade + 1]
 
         loop_bounds_begin = self.__start_beat
@@ -373,7 +373,7 @@ class InfiniteJukebox(object):
         # assign final beat ids
         for beat in beats:
             beat['id'] = beats.index(beat)
-            beat['quartile'] = beat['id'] // (len(beats) // 4.0)
+            beat['quartile'] = beat['id'] // (len(beats) / 4.0)
 
         # compute a coherent 'next' beat to play. This is always just the next ordinal beat
         # unless we're at the end of the song. Then it gets a little trickier.
@@ -382,15 +382,16 @@ class InfiniteJukebox(object):
             if beat == beats[-1]:
 
                 # if we're at the last beat, then we want to find a reasonable 'next' beat to play. It should (a) share the
-                # same cluster, (b) be in a logical place in its measure, and (c) be after the computed loop_bounds_begin.
-                # If we can't find such an animal, then just return the beat at loop_bounds_begin
+                # same cluster, (b) be in a logical place in its measure, (c) be after the computed loop_bounds_begin, and
+                # is in the first half of the song. If we can't find such an animal, then just return the beat
+                # at loop_bounds_begin
 
                 beat['next'] = next( (b['id'] for b in beats if b['cluster'] == beat['cluster'] and
                                       b['id'] % 4 == (beat['id'] + 1) % 4 and
                                       b['id'] <= (.5 * len(beats)) and
                                       b['id'] >= loop_bounds_begin), loop_bounds_begin )
             else:
-                beat['next'] = beats.index(beat) + 1
+                beat['next'] = beat['id'] + 1
 
             # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
             # cluster position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
@@ -409,6 +410,7 @@ class InfiniteJukebox(object):
             else:
                 beat['jump_candidates'] = []
 
+        # safe off the segment count
         self.segments = max([b['segment'] for b in beats]) + 1
 
         # we don't want to ever play past the point where it's impossible to loop,
@@ -416,6 +418,10 @@ class InfiniteJukebox(object):
         # candidates and make sure that we can't play past it.
 
         last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
+
+        # if we play our way to the last beat that has jump candidates, then just skip
+        # to the earliest jump candidate rather than enter a section from which no
+        # jumping is possible.
 
         beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
 
@@ -438,10 +444,11 @@ class InfiniteJukebox(object):
         random.seed()
 
         # how long should our longest contiguous playback blocks be? One way to
-        # consider it is that higher bpm songs need longer segments becase
+        # consider it is that higher bpm songs need longer blocks because
         # each beat takes less time. A simple way to estimate a good value
         # is to scale it by it's distance from 120bpm -- the canonical bpm
-        # for more popular music.
+        # for popular music.
+
         max_sequence_len = int(round((self.tempo / 120.0) * 32.0))
         min_sequence = max(random.randrange(8, max_sequence_len, 4), loop_bounds_begin)
 
@@ -466,8 +473,6 @@ class InfiniteJukebox(object):
         recent_depth = max( recent_depth, 1 )
 
         recent = collections.deque(maxlen=recent_depth)
-
-        first_beat_with_candidates = next(b['id'] for b in beats if len(b['jump_candidates']) > 0)
 
         # keep track of the time since the last successful jump. If we go more than
         # 10% of the song length since our last jump, then we will prioritize an
@@ -597,7 +602,7 @@ class InfiniteJukebox(object):
 
     def __report_progress(self, pct_done, message):
 
-        """ If a reporting callback was passed, call it in oder
+        """ If a reporting callback was passed, call it in order
             to mark progress.
         """
         if self.__progress_callback:
@@ -617,9 +622,9 @@ class InfiniteJukebox(object):
 
             KEY DEFINITIONS:
 
-                 Cluster: buckets of musical similarity
+                Clusters: buckets of musical similarity
                 Segments: contiguous blocks of beats belonging to the same cluster
-                 Orphans: clusters that only belong to one cluster
+                 Orphans: clusters that only belong to one segment
                     Stub: a cluster with less than N beats. Stubs are a sign of
                           overfitting
 
@@ -641,9 +646,9 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-        # We compute the even numbered clusters between 4 and 50. Owing to the inherent
+        # We compute the clusters between 4 and 50. Owing to the inherent
         # symmetry of Western popular music (including Jazz and Classical), the most
-        # pleasing musical results will usually ome from even cluster values.
+        # pleasing musical results will often, though not always, come from even cluster values.
 
         for ki in range(4,51):
 
@@ -683,6 +688,7 @@ class InfiniteJukebox(object):
 
         # get the max cluster with the segments/cluster ratio nearest to 4. That
         # will produce the most musically pleasing effect
+
         max_seg_ratio = max( [cl['seg_ratio'] for cl in self._clusters_list] )
         max_seg_ratio = min( max_seg_ratio, 4 )
 
