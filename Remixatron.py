@@ -373,6 +373,7 @@ class InfiniteJukebox(object):
         # assign final beat ids
         for beat in beats:
             beat['id'] = beats.index(beat)
+            beat['quartile'] = beat['id'] // (len(beats) // 4.0)
 
         # compute a coherent 'next' beat to play. This is always just the next ordinal beat
         # unless we're at the end of the song. Then it gets a little trickier.
@@ -510,14 +511,22 @@ class InfiniteJukebox(object):
                     # suppose we've been trying to jump but couldn't find a good non-recent candidate. If
                     # the length of time we've been trying (and failing) is >= 10% of the song length
                     # then it's time to relax our criteria. Let's find the jump candidate that's furthest
-                    # from the current beat (irrespective if it's been played recently) and go there
+                    # from the current beat (irrespective if it's been played recently) and go there. Ideally
+                    # we'd like to jump to a beat that is not in the same quartile of the song as the currently
+                    # playing section. That way we maximize our chances of avoiding a long local loop -- such as
+                    # might be found in the section preceeding the outro of a song.
 
                     if failed_jumps >= (.1 * len(beats)) and len(beat['jump_candidates']) > 0:
 
-                        furthest_candidate_distance = max([abs(beat['id'] - c) for c in beat['jump_candidates']])
+                        non_quartile_candidates = [c for c in beat['jump_candidates'] if beats[c]['quartile'] != beat['quartile']]
+
+                        if len(non_quartile_candidates) > 0:
+                            furthest_distance = max([abs(beat['id'] - c) for c in non_quartile_candidates])
+                        else:
+                            furthest_distance = max([abs(beat['id'] - c) for c in beat['jump_candidates']])
 
                         jump_to = next(c for c in beat['jump_candidates']
-                                       if abs(beat['id'] - c) == furthest_candidate_distance)
+                                       if abs(beat['id'] - c) == furthest_distance)
 
                         beat = beats[jump_to]
                         beats_since_jump = 0
