@@ -395,7 +395,7 @@ class InfiniteJukebox(object):
 
             # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
             # cluster position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
-            # (d) but AREN'T the next beat.
+            # (d) but AREN'T the next beat, and (e) AREN'T in the same cluster as the current beat.
             #
             # THAT collection of beats contains our jump candidates
 
@@ -403,6 +403,7 @@ class InfiniteJukebox(object):
                                (bx['cluster'] == beats[beat['next']]['cluster']) and
                                (bx['is'] == beats[beat['next']]['is']) and
                                (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
+                               (bx['segment'] != beat['segment']) and
                                (bx['id'] != beat['next'])]
 
             if jump_candidates:
