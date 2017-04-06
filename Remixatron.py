@@ -522,16 +522,13 @@ class InfiniteJukebox(object):
                     # playing section. That way we maximize our chances of avoiding a long local loop -- such as
                     # might be found in the section preceeding the outro of a song.
 
-                    if failed_jumps >= (.1 * len(beats)) and len(beat['jump_candidates']) > 0:
+                    non_quartile_candidates = [c for c in beat['jump_candidates'] if beats[c]['quartile'] != beat['quartile']]
 
-                        non_quartile_candidates = [c for c in beat['jump_candidates'] if beats[c]['quartile'] != beat['quartile']]
+                    if (failed_jumps >= (.1 * len(beats))) and (len(non_quartile_candidates) > 0):
 
-                        if len(non_quartile_candidates) > 0:
-                            furthest_distance = max([abs(beat['id'] - c) for c in non_quartile_candidates])
-                        else:
-                            furthest_distance = max([abs(beat['id'] - c) for c in beat['jump_candidates']])
+                        furthest_distance = max([abs(beat['id'] - c) for c in non_quartile_candidates])
 
-                        jump_to = next(c for c in beat['jump_candidates']
+                        jump_to = next(c for c in non_quartile_candidates
                                        if abs(beat['id'] - c) == furthest_distance)
 
                         beat = beats[jump_to]
@@ -545,7 +542,7 @@ class InfiniteJukebox(object):
                     elif failed_jumps >= (.2 * len(beats)):
                         beats_since_jump = 0
                         failed_jumps = 0
-                        beat = beats[0]
+                        beat = beats[loop_bounds_begin]
 
                     # asuuming we're not in one of the failure modes but haven't found a good
                     # candidate that hasn't been recently played, just play the next beat in the
