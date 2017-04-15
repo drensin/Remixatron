@@ -71,12 +71,8 @@ def display_playback_progress(v):
     """
         Displays a super low-fi playback progress map
 
-        Example:  .............[16].....................
-
-        The dots are the measures in the song. The *number* is a countdown of how
-        many beats until a possible jump. The *location* of the number
-        is the currently playing beat.
-
+        See README.md for details..
+        
         Returns the time this function took so we can deduct it from the
         sleep time for the beat
     """
