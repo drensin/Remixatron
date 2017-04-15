@@ -72,7 +72,7 @@ def display_playback_progress(v):
         Displays a super low-fi playback progress map
 
         See README.md for details..
-        
+
         Returns the time this function took so we can deduct it from the
         sleep time for the beat
     """
