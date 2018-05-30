@@ -25,13 +25,13 @@ Creates an infinite remix of an audio file by finding musically similar beats an
     optional arguments:
       -h, --help         show this help message and exit
       -clusters N        set the number of clusters into which we want to bucket
-                         the audio. Deafult: 0 (automatically try to find the
+                         the audio. Default: 0 (automatically try to find the
                          optimal cluster value.)
-      -start start_beat  start on a specific beat. Deafult: 1
+      -start start_beat  start on a specific beat. Default: 1
       -save label        Save the remix to a file, rather than play it. Will
                          create file named [label].wav
       -duration seconds  length (in seconds) to save. Must use with -save.
-                         Deafult: 180
+                         Default: 180
       -verbose           print extra info about the track and play vector
 
 **Example 1:**
