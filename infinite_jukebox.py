@@ -34,16 +34,16 @@ def process_args():
                         help="the name of the audio file to play. Most common audio types should work. (mp3, wav, ogg, etc..)")
 
     parser.add_argument("-clusters", metavar='N', type=int, default=0,
-                        help="set the number of clusters into which we want to bucket the audio. Deafult: 0 (automatically try to find the optimal cluster value.)")
+                        help="set the number of clusters into which we want to bucket the audio. Default: 0 (automatically try to find the optimal cluster value.)")
 
     parser.add_argument("-start", metavar='start_beat', type=int, default=1,
-                        help="start on a specific beat. Deafult: 1")
+                        help="start on a specific beat. Default: 1")
 
     parser.add_argument("-save", metavar='label', type=str,
                         help="Save the remix to a file, rather than play it. Will create file named [label].wav")
 
     parser.add_argument("-duration", metavar='seconds', type=int, default=180,
-                        help="length (in seconds) to save. Must use with -save. Deafult: 180")
+                        help="length (in seconds) to save. Must use with -save. Default: 180")
 
     parser.add_argument("-verbose", action='store_true',
                         help="print extra info about the track and play vector")
