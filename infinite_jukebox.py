@@ -12,6 +12,7 @@ import curses.textpad
 import numpy as np
 import os
 import pygame
+import signal
 import soundfile as sf
 import sys
 import time
@@ -200,7 +201,23 @@ def cleanup():
 
     mixer.quit()
 
+def graceful_exit(signum, frame):
+
+    """Catch SIGINT gracefully"""
+
+    # restore the original signal handler as otherwise evil things will happen
+    # in raw_input when CTRL+C is pressed, and our signal handler is not re-entrant
+    signal.signal(signal.SIGINT, original_sigint)
+
+    cleanup()
+    sys.exit(0)
+
+
 if __name__ == "__main__":
+
+    # store the original SIGINT handler
+    original_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, graceful_exit)
 
     #
     # Main program logic
@@ -219,7 +236,7 @@ if __name__ == "__main__":
 
         # do the clustering. Run synchronously. Post status messages to MyCallback()
         jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters,
-                                  progress_callback=MyCallback, async=False)
+                                  progress_callback=MyCallback, do_async=False)
 
         # show more info about what was found
         window.addstr(2,0, get_verbose_info())
@@ -272,7 +289,5 @@ if __name__ == "__main__":
 
             pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 1000 ) )
 
-    except KeyboardInterrupt:
-        cleanup()
     finally:
         cleanup()

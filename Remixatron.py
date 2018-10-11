@@ -7,7 +7,7 @@ as an attempt to re-create the amazing Infinite Jukebox (http://www.infinitejuke
 created by Paul Lamere of Echo Nest.
 
 The InfiniteJukebox class can do it's processing in a background thread and
-reports progress via the progress_callback arg. To run in a thread, pass async=True
+reports progress via the progress_callback arg. To run in a thread, pass do_async=True
 to the constructor. In that case, it exposes an Event named play_ready -- which will
 be signaled when the processing is complete. The default mode is to run synchronously.
 
@@ -16,7 +16,7 @@ be signaled when the processing is complete. The default mode is to run synchron
       def MyCallback(percentage_complete_as_float, string_message):
         print "I am now %f percent complete with message: %s" % (percentage_complete_as_float * 100, string_message)
 
-      jukebox = InfiniteJukebox(filename='some_file.mp3', progress_callback=MyCallback, async=True)
+      jukebox = InfiniteJukebox(filename='some_file.mp3', progress_callback=MyCallback, do_async=True)
       jukebox.play_ready.wait()
 
       <some work here...>
@@ -26,7 +26,7 @@ be signaled when the processing is complete. The default mode is to run synchron
       def MyCallback(percentage_complete_as_float, string_message):
         print "I am now %f percent complete with message: %s" % (percentage_complete_as_float * 100, string_message)
 
-      jukebox = InfiniteJukebox(filename='some_file.mp3', progress_callback=MyCallback, async=False)
+      jukebox = InfiniteJukebox(filename='some_file.mp3', progress_callback=MyCallback, do_async=False)
 
       <blocks until completion... some work here...>
 
@@ -58,7 +58,7 @@ class InfiniteJukebox(object):
     Attributes:
 
      play_ready: an Event that triggers when the processing/clustering is complete and
-                 playback can begin. This is only defined if you pass async=True in the
+                 playback can begin. This is only defined if you pass do_async=True in the
                  constructor.
 
        duration: the duration (in seconds) of the track after the leading and trailing silences
@@ -124,7 +124,7 @@ class InfiniteJukebox(object):
 
     """
 
-    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None, async=False):
+    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None, do_async=False):
 
         """ The constructor for the class. Also starts the processing thread.
 
@@ -151,7 +151,7 @@ class InfiniteJukebox(object):
         self.clusters = clusters
         self._extra_diag = ""
 
-        if async == True:
+        if do_async == True:
             self.play_ready = threading.Event()
             self.__thread = threading.Thread(target=self.__process_audio)
             self.__thread.start()
