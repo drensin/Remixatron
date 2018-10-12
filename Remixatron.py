@@ -1,5 +1,4 @@
 """ Classes for remixing audio files.
-
 (c) 2017 - Dave Rensin - dave@rensin.com
 
 This module contains classes for remixing audio files. It started
@@ -200,7 +199,7 @@ class InfiniteJukebox(object):
         N_OCTAVES = 7
 
         cqt = librosa.cqt(y=y, sr=sr, bins_per_octave=BINS_PER_OCTAVE, n_bins=N_OCTAVES * BINS_PER_OCTAVE)
-        C = librosa.amplitude_to_db( cqt, ref=np.max)
+        C = librosa.amplitude_to_db( np.abs(cqt), ref=np.max)
 
         self.__report_progress( .3, "Finding beats..." )
 
@@ -306,7 +305,8 @@ class InfiniteJukebox(object):
         # create a list of tuples that include the ordinal position, the start time of the beat,
         # the cluster to which the beat belongs and the mean amplitude of the beat
 
-        beat_tuples = zip(range(0,len(beats)), beat_times, seg_ids, ampSync[0].tolist())
+        zbeat_tuples = zip(range(0,len(beats)), beat_times, seg_ids, ampSync[0].tolist())
+        beat_tuples =tuple(zbeat_tuples)
 
         info = []
 
