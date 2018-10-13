@@ -215,7 +215,7 @@ def graceful_exit(signum, frame):
 
 if __name__ == "__main__":
 
-    # store the original SIGINT handler
+    # store the original SIGINT handler and install a new handler
     original_sigint = signal.getsignal(signal.SIGINT)
     signal.signal(signal.SIGINT, graceful_exit)
 
