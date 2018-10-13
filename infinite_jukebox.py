@@ -180,7 +180,7 @@ def get_window_contents():
     """Dump the contents of the current curses window."""
 
     tbox = curses.textpad.Textbox(window)
-    tbox.stripspaces = False;
+    tbox.stripspaces = False
 
     w_str = tbox.gather()
 
@@ -256,7 +256,7 @@ if __name__ == "__main__":
 
             output_bytes = np.concatenate( main_bytes )
 
-            sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, subtype='PCM_24')
+            sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, format='WAV', subtype='PCM_24')
 
             w_str = get_window_contents()
             curses.curs_set(1)
