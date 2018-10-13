@@ -243,7 +243,7 @@ if __name__ == "__main__":
         window.refresh()
 
         # if we're just saving the remix to a file, then just
-        # find the necessarry beats and do that
+        # find the necessarry beats and do that 
 
         if args.save:
             avg_beat_duration = 60 / jukebox.tempo
