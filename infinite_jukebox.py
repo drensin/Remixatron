@@ -254,8 +254,12 @@ if __name__ == "__main__":
 
             main_bytes = [jukebox.beats[v['beat']]['buffer'] for v in jukebox.play_vector[0:num_beats_to_save]]
 
+            # main_bytes is an array of byte[] arrays. We need to flatten it to just a 
+            # regular byte[]
+
             output_bytes = np.concatenate( main_bytes )
 
+            # write out the wav file
             sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, format='WAV', subtype='PCM_24')
 
             w_str = get_window_contents()
