@@ -7,7 +7,7 @@ This program attempts to recreate the wonderful Infinite Jukebox (http://www.inf
 # Installation
 
 pip install --upgrade pip  
-pip install --user pygame pyparsing numpy  
+pip install --user soundfile pygame pyparsing numpy  
 pip install --user librosa  
 ***
 # Usage
