@@ -648,7 +648,7 @@ class InfiniteJukebox(object):
         # symmetry of Western popular music (including Jazz and Classical), the most
         # pleasing musical results will often, though not always, come from even cluster values.
 
-        for ki in range(4,51):
+        for ki in range(4,51, 2):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
