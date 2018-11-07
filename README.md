@@ -2,7 +2,11 @@
 (c) 2017 - Dave Rensin - dave@rensin.com
 
 This program attempts to recreate the wonderful Infinite Jukebox (http://www.infinitejuke.com) on the command line in Python. It groups musically similar beats of a song into clusters and then plays a random path through the song that makes musical sense, but not does not repeat. It will do this infinitely.
+***
+# Demo Video
+Click the image below to see a short video of the code remixing Billy Joel's _For the Longest Time_.
 
+[![Remixatron Demo](https://img.youtube.com/vi/1HYLoJaCb_g/maxresdefault.jpg)](https://www.youtube.com/watch?v=1HYLoJaCb_g&feature=youtu.be "Remixatron Demo")
 ***
 # Installation
 
