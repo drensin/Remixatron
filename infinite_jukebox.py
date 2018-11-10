@@ -161,7 +161,7 @@ def get_verbose_info():
     cluster_map = ''
 
     segment_chars = '#-'
-    cluster_chars = 'A1b2c3D4e5F6G7h8I9j0kLMnoPQrsTuVwXyZ~!@#$%^&*()_+-='
+    cluster_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890-=,.<>/?;:!@#$%^&*()_+'
 
     for b in jukebox.beats:
         segment_map += segment_chars[ b['segment'] % 2 ]
