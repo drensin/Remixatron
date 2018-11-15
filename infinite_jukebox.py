@@ -49,6 +49,9 @@ def process_args():
     parser.add_argument("-verbose", action='store_true',
                         help="print extra info about the track and play vector")
 
+    parser.add_argument("-use_v1", action='store_true',
+                        help="use the original auto clustering algorithm instead of the new one. -clusters must not be set.")
+
     return parser.parse_args()
 
 def MyCallback(pct_complete, message):
@@ -236,7 +239,7 @@ if __name__ == "__main__":
 
         # do the clustering. Run synchronously. Post status messages to MyCallback()
         jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters,
-                                  progress_callback=MyCallback, do_async=False)
+                                  progress_callback=MyCallback, do_async=False, use_v1=args.use_v1)
 
         # show more info about what was found
         window.addstr(2,0, get_verbose_info())

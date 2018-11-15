@@ -40,6 +40,9 @@ import threading
 
 import numpy as np
 import sklearn.cluster
+import sklearn.metrics
+
+from operator import itemgetter
 
 class InfiniteJukebox(object):
 
@@ -123,7 +126,8 @@ class InfiniteJukebox(object):
 
     """
 
-    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None, do_async=False):
+    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None, 
+                 do_async=False, use_v1=False):
 
         """ The constructor for the class. Also starts the processing thread.
 
@@ -143,12 +147,15 @@ class InfiniteJukebox(object):
 
                              percent_complete: FLOAT between 0.0 and 1.0
                                       message: STRING with the progress message
+                  use_v1: set to True if you want to use the original auto clustering algorithm.
+                          Otherwise, it will use the newer silhouette-based scheme.
         """
         self.__progress_callback = progress_callback
         self.__filename = filename
         self.__start_beat = start_beat
         self.clusters = clusters
         self._extra_diag = ""
+        self._use_v1 = use_v1
 
         if do_async == True:
             self.play_ready = threading.Event()
@@ -280,20 +287,23 @@ class InfiniteJukebox(object):
 
         self.__report_progress( .5, "clustering..." )
 
-        if self.clusters == 0:
-            self.clusters, seg_ids = self.__compute_best_cluster(evecs, Cnorm)
+        # if a value for clusters wasn't passed in, then we need to auto-cluster
 
-        else:
+        if self.clusters == 0:
+
+            # if we've been asked to use the original auto clustering alogrithm, otherwise
+            # use the new and improved one that accounts for silhouette scores.
+
+            if self._use_v1:
+                self.clusters, seg_ids = self.__compute_best_cluster(evecs, Cnorm)
+            else:
+                self.clusters, seg_ids = self.__compute_best_cluster_with_sil(evecs, Cnorm)
+
+        else: # otherwise, just use the cluster value passed in
             k = self.clusters
 
             X = evecs[:, :k] / Cnorm[:, k-1:k]
-
-            #############################################################
-            # Let's use these k components to cluster beats into segments
-            # (Algorithm 1)
-            KM = sklearn.cluster.KMeans(n_clusters=k)
-
-            seg_ids = KM.fit_predict(X)
+            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000).fit_predict(X)
 
         self.__report_progress( .51, "using %d clusters" % self.clusters )
 
@@ -411,20 +421,26 @@ class InfiniteJukebox(object):
             else:
                 beat['jump_candidates'] = []
 
-        # safe off the segment count
+        # save off the segment count
         self.segments = max([b['segment'] for b in beats]) + 1
 
         # we don't want to ever play past the point where it's impossible to loop,
         # so let's find the latest point in the song where there are still jump
         # candidates and make sure that we can't play past it.
 
-        last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
+        try:
+            last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
+        except:
+            last_chance = len(beats) - 1
 
         # if we play our way to the last beat that has jump candidates, then just skip
         # to the earliest jump candidate rather than enter a section from which no
         # jumping is possible.
 
-        beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
+        try:
+            beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
+        except:
+            pass
 
         # store the beats that start after the last jumpable point. That's
         # the outro to the song. We can use these
@@ -606,9 +622,95 @@ class InfiniteJukebox(object):
         if self.__progress_callback:
             self.__progress_callback( pct_done, message )
 
-    def __compute_best_cluster(self, evecs, Cnorm):
+    def __compute_best_cluster_with_sil(self, evecs, Cnorm):
 
         ''' Attempts to compute optimum clustering
+
+            Uses the the silhouette score to pick the best number of clusters.
+            See: https://en.wikipedia.org/wiki/Silhouette_(clustering)
+
+            PARAMETERS:
+                evecs: Eigen-vectors computed from the segmentation algorithm
+                Cnorm: Cumulative normalization of evecs. Easier to pass it in than
+                       compute it from scratch here.
+
+            KEY DEFINITIONS:
+
+                  Clusters: buckets of musical similarity
+                  Segments: contiguous blocks of beats belonging to the same cluster
+                Silhouette: A score given to a cluster that measures how well the cluster
+                            members fit together. The value is from -1 to +1. Higher values
+                            indicated higher quality. 
+ 
+            SUMMARY:
+
+                From testing, I observe that clusters with segment/cluster ratios between 2 and 4
+                produce the best musical effects. There may, of course be many such cluster
+                choices. This alogrithm selects the highest cluster value with a ratio between 
+                2 and 4 AND an average silhouette score > .5.
+
+                Why not just pick the cluster with the highest silhouette score?
+
+                There's a tradeoff to make. The higher the clusters, the higher the quality of the
+                jumps will be because the average distance between any two beat in the same cluster
+                will be smaller.
+
+                On the other hand, there needs to be at least a minimum silhouette threshold. Based
+                on my testing, these aggregate parameters produce the best results.
+
+                If you're an ML person, you can think of this as hyperparameter tuning.
+        '''
+
+        self._clusters_list = []
+
+        # We compute the clusters between 4 and 64. Owing to the inherent
+        # symmetry of Western popular music (including Jazz and Classical), the most
+        # pleasing musical results will often, though not always, come from even cluster values.
+
+        best_cluster_size = 0
+        best_labels = None
+
+        for n_clusters in range(2,65,1):
+
+            # compute a matrix of the Eigen-vectors / their normalized values
+            X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
+
+            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=1000, random_state=0)
+            cluster_labels = clusterer.fit_predict(X)
+
+            silhouette_avg = sklearn.metrics.silhouette_score(X, cluster_labels)
+
+            segments = self.__segment_count_from_labels(cluster_labels.tolist())
+
+            ratio = float(segments) / float(n_clusters)
+
+            if (2.0 < ratio < 4.0) and (silhouette_avg > .5):
+                best_cluster_size = n_clusters
+                best_labels = cluster_labels
+
+        return (best_cluster_size, best_labels)
+
+    def __segment_count_from_labels(self, labels):
+
+        ''' Computes the number of unique segments from a set of ordered labels. Segements are
+            contiguous beats that belong to the same cluster. '''
+
+        segment_count = 0
+        previous_label = -1
+
+        for label in labels:
+            if label != previous_label:
+                previous_label = label
+                segment_count += 1
+
+        return segment_count
+
+    def __compute_best_cluster(self, evecs, Cnorm):
+
+        ''' Attempts to compute optimum clustering from a set of simplified
+            hueristics. This method has been deprecated in favor of code above that takes into
+            account the average silhouette score of each cluster. You can force the code to use
+            this method by passing in use_v1=True in the constructor.
 
             [TODO] Implelent a proper RMSE-based algorithm. This is kind
             of a hack right now..
