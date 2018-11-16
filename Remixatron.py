@@ -660,7 +660,10 @@ class InfiniteJukebox(object):
         # pleasing musical results will often, though not always, come from even cluster values.
 
         best_cluster_size = 0
+        best_cluster_size_low = 0
+
         best_labels = None
+        best_labels_low = None
 
         for n_clusters in range(2,65,1):
 
@@ -676,11 +679,27 @@ class InfiniteJukebox(object):
 
             ratio = float(segments) / float(n_clusters)
 
+            # store off results with a sillhouette threshold of both .2 and .5
+            # sometimes, a song will return no matching clusters with a value of
+            # .5. In that case, we need a failsafe. I haven't yet found one that didn't
+            # at least meet a .2 bar. If I turn out to be wrong, then I'll re-write this
+            # to step down prgressively.
+
+            if (2.0 < ratio < 4.0) and (silhouette_avg > .2):
+                best_cluster_size_low = n_clusters
+                best_labels_low = cluster_labels
+
             if (2.0 < ratio < 4.0) and (silhouette_avg > .5):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
 
-        return (best_cluster_size, best_labels)
+        # if we found an answer with a higher sillhouette average, then let's use that.
+        # otherwise, we pass back out fallthrough.
+        
+        if best_cluster_size != 0:
+            return (best_cluster_size, best_labels)
+        else:
+            return (best_cluster_size_low, best_labels_low)
 
     @staticmethod
     def __segment_count_from_labels(labels):
