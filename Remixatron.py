@@ -42,8 +42,6 @@ import numpy as np
 import sklearn.cluster
 import sklearn.metrics
 
-from operator import itemgetter
-
 class InfiniteJukebox(object):
 
     """ Class to "infinitely" remix a song.
@@ -126,7 +124,7 @@ class InfiniteJukebox(object):
 
     """
 
-    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None, 
+    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None,
                  do_async=False, use_v1=False):
 
         """ The constructor for the class. Also starts the processing thread.
@@ -428,19 +426,13 @@ class InfiniteJukebox(object):
         # so let's find the latest point in the song where there are still jump
         # candidates and make sure that we can't play past it.
 
-        try:
-            last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
-        except:
-            last_chance = len(beats) - 1
+        last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
 
         # if we play our way to the last beat that has jump candidates, then just skip
         # to the earliest jump candidate rather than enter a section from which no
         # jumping is possible.
 
-        try:
-            beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
-        except:
-            pass
+        beats[last_chance]['next'] = min(beats[last_chance]['jump_candidates'])
 
         # store the beats that start after the last jumpable point. That's
         # the outro to the song. We can use these
@@ -646,7 +638,7 @@ class InfiniteJukebox(object):
 
                 From testing, I observe that clusters with segment/cluster ratios between 2 and 4
                 produce the best musical effects. There may, of course be many such cluster
-                choices. This alogrithm selects the highest cluster value with a ratio between 
+                choices. This alogrithm selects the highest cluster value with a ratio between
                 2 and 4 AND an average silhouette score > .5.
 
                 Why not just pick the cluster with the highest silhouette score?
@@ -690,7 +682,8 @@ class InfiniteJukebox(object):
 
         return (best_cluster_size, best_labels)
 
-    def __segment_count_from_labels(self, labels):
+    @staticmethod
+    def __segment_count_from_labels(labels):
 
         ''' Computes the number of unique segments from a set of ordered labels. Segements are
             contiguous beats that belong to the same cluster. '''
