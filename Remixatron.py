@@ -456,9 +456,12 @@ class InfiniteJukebox(object):
         # consider it is that higher bpm songs need longer blocks because
         # each beat takes less time. A simple way to estimate a good value
         # is to scale it by it's distance from 120bpm -- the canonical bpm
-        # for popular music.
+        # for popular music. Find that value and round down to the nearest
+        # multiple of 4. (There almost always are 4 beats per measure in Western music).
 
         max_sequence_len = int(round((self.tempo / 120.0) * 32.0))
+        max_sequence_len = max_sequence_len - (max_sequence_len % 4)
+
         min_sequence = max(random.randrange(8, max_sequence_len, 4), loop_bounds_begin)
 
         current_sequence = 0
@@ -636,10 +639,10 @@ class InfiniteJukebox(object):
  
             SUMMARY:
 
-                From testing, I observe that clusters with segment/cluster ratios between 2 and 4
+                From testing, I observe that clusters with segment/cluster ratios greater than 3.0
                 produce the best musical effects. There may, of course be many such cluster
-                choices. This alogrithm selects the highest cluster value with a ratio between
-                2 and 4 AND an average silhouette score > .5.
+                choices. This alogrithm selects the highest cluster value with a ratio >= 3.0
+                AND an average silhouette score > .4.
 
                 Why not just pick the cluster with the highest silhouette score?
 
@@ -655,22 +658,15 @@ class InfiniteJukebox(object):
 
         self._clusters_list = []
 
-        # We compute the clusters between 4 and 64. Owing to the inherent
-        # symmetry of Western popular music (including Jazz and Classical), the most
-        # pleasing musical results will often, though not always, come from even cluster values.
-
         best_cluster_size = 0
-        best_cluster_size_low = 0
-
         best_labels = None
-        best_labels_low = None
 
         for n_clusters in range(2,65,1):
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
 
-            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=1000, random_state=0)
+            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=10000, random_state=0)
             cluster_labels = clusterer.fit_predict(X)
 
             silhouette_avg = sklearn.metrics.silhouette_score(X, cluster_labels)
@@ -679,27 +675,21 @@ class InfiniteJukebox(object):
 
             ratio = float(segments) / float(n_clusters)
 
-            # store off results with a sillhouette threshold of both .2 and .5
-            # sometimes, a song will return no matching clusters with a value of
-            # .5. In that case, we need a failsafe. I haven't yet found one that didn't
-            # at least meet a .2 bar. If I turn out to be wrong, then I'll re-write this
-            # to step down prgressively.
+            # solutions that have a ratio of at least 3.0 and a silhouette > .4
+            # will sound good. Because this is in an ascending itteration, we'll
+            # wind up with the highest cluster value that meets those criterea
 
-            if (2.0 < ratio < 4.0) and (silhouette_avg > .2):
-                best_cluster_size_low = n_clusters
-                best_labels_low = cluster_labels
-
-            if (2.0 < ratio < 4.0) and (silhouette_avg > .5):
+            if (ratio >= 3.0) and (silhouette_avg > .4):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
 
-        # if we found an answer with a higher sillhouette average, then let's use that.
-        # otherwise, we pass back out fallthrough.
-        
+        # if we found an acceptable answer, the return it. Otherwise, return
+        # the results of the old clustering algorithm.
+
         if best_cluster_size != 0:
             return (best_cluster_size, best_labels)
         else:
-            return (best_cluster_size_low, best_labels_low)
+            return self.__compute_best_cluster(evecs, Cnorm)
 
     @staticmethod
     def __segment_count_from_labels(labels):
