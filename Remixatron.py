@@ -42,8 +42,6 @@ import numpy as np
 import sklearn.cluster
 import sklearn.metrics
 
-from operator import itemgetter
-
 class InfiniteJukebox(object):
 
     """ Class to "infinitely" remix a song.
@@ -303,7 +301,7 @@ class InfiniteJukebox(object):
             k = self.clusters
 
             X = evecs[:, :k] / Cnorm[:, k-1:k]
-            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000, 
+            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000,
                                              random_state=0, n_init=1000).fit_predict(X)
 
         self.__report_progress( .51, "using %d clusters" % self.clusters )
@@ -669,7 +667,7 @@ class InfiniteJukebox(object):
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
 
-            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=300, 
+            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=300,
                                                random_state=0, n_init=20)
 
             cluster_labels = clusterer.fit_predict(X)
@@ -695,11 +693,11 @@ class InfiniteJukebox(object):
         if best_cluster_size != 0:
 
             self.__report_progress(.52,"Creating %d high fidelity clusters..." % best_cluster_size)
-            best_labels = sklearn.cluster.KMeans(n_clusters=best_cluster_size, max_iter=1000, 
+            best_labels = sklearn.cluster.KMeans(n_clusters=best_cluster_size, max_iter=1000,
                                                  random_state=0, n_init=1000).fit_predict(X)
             return (best_cluster_size, best_labels)
         else:
-            self.__report_progress( .51, "clustering (v1)..." )
+            self.__report_progress( .51, "couldn't find and good candidates. Falling back to the v1 clustering algorithm..." )
             return self.__compute_best_cluster(evecs, Cnorm)
 
     @staticmethod
