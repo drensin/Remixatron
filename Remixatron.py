@@ -42,6 +42,8 @@ import numpy as np
 import sklearn.cluster
 import sklearn.metrics
 
+from operator import itemgetter
+
 class InfiniteJukebox(object):
 
     """ Class to "infinitely" remix a song.
@@ -301,7 +303,8 @@ class InfiniteJukebox(object):
             k = self.clusters
 
             X = evecs[:, :k] / Cnorm[:, k-1:k]
-            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000).fit_predict(X)
+            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000, 
+                                             random_state=0, n_init=1000).fit_predict(X)
 
         self.__report_progress( .51, "using %d clusters" % self.clusters )
 
@@ -358,8 +361,7 @@ class InfiniteJukebox(object):
 
             info.append(final_beat)
 
-            self.__report_progress( .7, "truncating to fade point..." )
-
+        self.__report_progress( .7, "truncating to fade point..." )
 
         # get the max amplitude of the beats
         max_amplitude = max([float(b['amplitude']) for b in info])
@@ -663,10 +665,13 @@ class InfiniteJukebox(object):
 
         for n_clusters in range(2,65,1):
 
+            self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
 
-            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=10000, random_state=0)
+            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=300, 
+                                               random_state=0, n_init=20)
+
             cluster_labels = clusterer.fit_predict(X)
 
             silhouette_avg = sklearn.metrics.silhouette_score(X, cluster_labels)
@@ -679,16 +684,22 @@ class InfiniteJukebox(object):
             # will sound good. Because this is in an ascending itteration, we'll
             # wind up with the highest cluster value that meets those criterea
 
-            if (ratio >= 3.0) and (silhouette_avg > .4):
+            if (ratio >= 3.0) and (silhouette_avg > .6):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
+                self.__report_progress(.51, "Found possible match with %d clusters..." % best_cluster_size)
 
         # if we found an acceptable answer, the return it. Otherwise, return
         # the results of the old clustering algorithm.
 
         if best_cluster_size != 0:
+
+            self.__report_progress(.52,"Creating %d high fidelity clusters..." % best_cluster_size)
+            best_labels = sklearn.cluster.KMeans(n_clusters=best_cluster_size, max_iter=1000, 
+                                                 random_state=0, n_init=1000).fit_predict(X)
             return (best_cluster_size, best_labels)
         else:
+            self.__report_progress( .51, "clustering (v1)..." )
             return self.__compute_best_cluster(evecs, Cnorm)
 
     @staticmethod
@@ -758,7 +769,8 @@ class InfiniteJukebox(object):
             X = evecs[:, :ki] / Cnorm[:, ki-1:ki]
 
             # cluster with candidate ki
-            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000, n_init=10).fit_predict(X)
+            labels = sklearn.cluster.KMeans(n_clusters=ki, max_iter=1000,
+                                            random_state=0, n_init=20).fit_predict(X)
 
             entry = {'clusters':ki, 'labels':labels}
 
