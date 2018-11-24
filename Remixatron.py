@@ -301,7 +301,7 @@ class InfiniteJukebox(object):
             k = self.clusters
 
             self.__report_progress( .51, "using %d clusters" % self.clusters )
-    
+
             X = evecs[:, :k] / Cnorm[:, k-1:k]
             seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000,
                                              random_state=0, n_init=1000).fit_predict(X)
@@ -635,8 +635,8 @@ class InfiniteJukebox(object):
                   Segments: contiguous blocks of beats belonging to the same cluster
                 Silhouette: A score given to a cluster that measures how well the cluster
                             members fit together. The value is from -1 to +1. Higher values
-                            indicated higher quality. 
- 
+                            indicated higher quality.
+
             SUMMARY:
 
                 From testing, I observe that clusters with segment/cluster ratios greater than 3.0
@@ -661,10 +661,10 @@ class InfiniteJukebox(object):
         best_cluster_size = 0
         best_labels = None
 
-        for n_clusters in range(2,65,1):
+        for n_clusters in range(3,65,1):
 
             self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
-            
+
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
 
@@ -705,7 +705,7 @@ class InfiniteJukebox(object):
         if best_cluster_size != 0:
 
             self.__report_progress(.52,"Creating %d high fidelity clusters..." % best_cluster_size)
-            
+
             # re-cluster with the selected size, but much higher iteration values.
 
             X = evecs[:, :best_cluster_size] / Cnorm[:, best_cluster_size-1:best_cluster_size]
@@ -743,7 +743,7 @@ class InfiniteJukebox(object):
         clusters = max(labels) + 1
 
         previous_label = -1
-        
+
         segment_lengths = []
 
         for label in labels:
@@ -853,7 +853,7 @@ class InfiniteJukebox(object):
         X = evecs[:, :final_cluster_size] / Cnorm[:, final_cluster_size-1:final_cluster_size]
         labels = sklearn.cluster.KMeans(n_clusters=final_cluster_size, max_iter=1000,
                                         random_state=0, n_init=1000).fit_predict(X)
-        
+
         # labels = next(c['labels'] for c in self._clusters_list if c['clusters'] == final_cluster_size)
 
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
