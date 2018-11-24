@@ -12,6 +12,8 @@ import curses.textpad
 import numpy as np
 import os
 import pygame
+import pygame.event
+import pygame.locals
 import signal
 import soundfile as sf
 import sys
@@ -19,6 +21,8 @@ import time
 
 from Remixatron import InfiniteJukebox
 from pygame import mixer
+
+SOUND_FINISHED = pygame.locals.USEREVENT + 1
 
 def process_args():
 
@@ -215,6 +219,25 @@ def graceful_exit(signum, frame):
     cleanup()
     sys.exit(0)
 
+def save_to_file(jukebox, duration):
+    ''' Save a fixed length of audio to disk. '''
+
+    avg_beat_duration = 60 / jukebox.tempo
+    num_beats_to_save = int(duration / avg_beat_duration)
+
+    # this list comprehension returns all the 'buffer' arrays from the beats
+    # associated with the [0..num_beats_to_save] entries in the play vector
+
+    main_bytes = [jukebox.beats[v['beat']]['buffer'] for v in jukebox.play_vector[0:num_beats_to_save]]
+
+    # main_bytes is an array of byte[] arrays. We need to flatten it to just a
+    # regular byte[]
+
+    output_bytes = np.concatenate( main_bytes )
+
+    # write out the wav file
+    sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, format='WAV', subtype='PCM_24')
+
 
 if __name__ == "__main__":
 
@@ -226,75 +249,64 @@ if __name__ == "__main__":
     # Main program logic
     #
 
-    try:
+    window = None
 
-        window = None
+    args = process_args()
 
-        args = process_args()
+    curses.setupterm()
 
-        curses.setupterm()
+    window = curses.initscr()
+    curses.curs_set(0)
 
-        window = curses.initscr()
-        curses.curs_set(0)
+    # do the clustering. Run synchronously. Post status messages to MyCallback()
+    jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters,
+                                progress_callback=MyCallback, do_async=False, use_v1=args.use_v1)
 
-        # do the clustering. Run synchronously. Post status messages to MyCallback()
-        jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters,
-                                  progress_callback=MyCallback, do_async=False, use_v1=args.use_v1)
+    # show more info about what was found
+    window.addstr(2,0, get_verbose_info())
+    window.refresh()
 
-        # show more info about what was found
-        window.addstr(2,0, get_verbose_info())
-        window.refresh()
+    # if we're just saving the remix to a file, then just
+    # find the necessarry beats and do that
 
-        # if we're just saving the remix to a file, then just
-        # find the necessarry beats and do that
+    if args.save:
+        save_to_file(jukebox, args.duration)
+        graceful_exit(0, 0)
 
-        if args.save:
-            avg_beat_duration = 60 / jukebox.tempo
-            num_beats_to_save = int(args.duration / avg_beat_duration)
+    # it's important to make sure the mixer is setup with the
+    # same sample rate as the audio. Otherwise the playback will
+    # sound too slow/fast/awful
 
-            # this list comprehension returns all the 'buffer' arrays from the beats
-            # associated with the [0..num_beats_to_save] entries in the play vector
+    mixer.init(frequency=jukebox.sample_rate)
+    channel = mixer.Channel(0)
 
-            main_bytes = [jukebox.beats[v['beat']]['buffer'] for v in jukebox.play_vector[0:num_beats_to_save]]
+    pygame.display.init()
 
-            # main_bytes is an array of byte[] arrays. We need to flatten it to just a 
-            # regular byte[]
+    channel.set_endevent(SOUND_FINISHED)
 
-            output_bytes = np.concatenate( main_bytes )
+    # queue and start playing the first event in the play vector. This is basic
+    # audio double buffering that will reduce choppy audio from impercise timings. The
+    # goal is to always have one beat in queue to play as soon as the last one is done.
 
-            # write out the wav file
-            sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, format='WAV', subtype='PCM_24')
+    beat_to_play = jukebox.beats[ jukebox.play_vector[0]['beat'] ]
 
-            w_str = get_window_contents()
-            curses.curs_set(1)
-            curses.endwin()
+    snd = mixer.Sound(buffer=beat_to_play['buffer'])
+    channel.queue(snd)
 
-            print(w_str.rstrip())
-            print
+    display_playback_progress(jukebox.play_vector[0])
 
-            sys.exit()
+    # go through the rest of  the playback list, start playing each beat, display
+    # the progress and wait for the playback to complete. Playback happens on another
+    # thread in the pygame library, so we have to wait to be singaled to queue another
+    # event.
 
-        # important to make sure the mixer is setup with the
-        # same sample rate as the audio. Otherwise the playback will
-        # sound too slow/fast/awful
+    for v in jukebox.play_vector[1:]:
 
-        mixer.init(frequency=jukebox.sample_rate)
-        channel = mixer.Channel(0)
+        beat_to_play = jukebox.beats[ v['beat'] ]
 
-        # go through the playback list, start playing each beat, display the progress
-        # and wait for the playback to complete. Playback happens on another thread
-        # in the pygame library, so we have to wait for the beat's duration.
+        snd = mixer.Sound(buffer=beat_to_play['buffer'])
+        channel.queue(snd)
 
-        for v in jukebox.play_vector:
+        pygame.event.wait()
 
-            beat_to_play = jukebox.beats[ v['beat'] ]
-
-            snd = mixer.Sound(buffer=beat_to_play['buffer'])
-            channel.queue(snd)
-
-            how_long_this_took = display_playback_progress(v)
-
-            pygame.time.wait( int( (beat_to_play['duration'] - how_long_this_took) * 1000 ) )
-
-    finally:
-        cleanup()
+        display_playback_progress(v)
