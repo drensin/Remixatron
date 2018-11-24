@@ -687,9 +687,9 @@ class InfiniteJukebox(object):
             # That means that (on average) each cluster is represented in at least 2 segments.
             #
             # Next, we want to make sure that the beats in each cluster meet a minimum threshold
-            # for similarity. That's represented by the silhoueete average. In this case, we'll 
+            # for similarity. That's represented by the silhoueete average. In this case, we'll
             # select a threshold of .5.
-            # 
+            #
             # Finally, if we find that we have segments with only one beat, that's a pretty good
             # hint that we've overfit. So, we make sure that the smallest segment in each
             # candidate cluster is greather than 1 beat long.
@@ -735,7 +735,7 @@ class InfiniteJukebox(object):
         return segment_count
 
     def __segment_stats_from_labels(self, labels):
-        ''' Computes the segment/cluster ratio and min segment size value given an array 
+        ''' Computes the segment/cluster ratio and min segment size value given an array
             of labels. '''
 
         segment_count = 0.0
