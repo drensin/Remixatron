@@ -300,11 +300,11 @@ class InfiniteJukebox(object):
         else: # otherwise, just use the cluster value passed in
             k = self.clusters
 
+            self.__report_progress( .51, "using %d clusters" % self.clusters )
+    
             X = evecs[:, :k] / Cnorm[:, k-1:k]
             seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000,
                                              random_state=0, n_init=1000).fit_predict(X)
-
-        self.__report_progress( .51, "using %d clusters" % self.clusters )
 
         # Get the amplitudes and beat-align them
         self.__report_progress( .6, "getting amplitudes" )
@@ -664,25 +664,37 @@ class InfiniteJukebox(object):
         for n_clusters in range(2,65,1):
 
             self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
+            
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
 
+            # create the candidate clusters and fit them
             clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=300,
                                                random_state=0, n_init=20)
 
             cluster_labels = clusterer.fit_predict(X)
 
+            # get some key statistics, including how well each beat in the cluster resemble
+            # each other (the silhouette average), the ratio of segments to clusters, and the
+            # length of the smallest segment in this cluster configuration
+
             silhouette_avg = sklearn.metrics.silhouette_score(X, cluster_labels)
 
-            segments = self.__segment_count_from_labels(cluster_labels.tolist())
+            ratio, min_segment_len = self.__segment_stats_from_labels(cluster_labels.tolist())
 
-            ratio = float(segments) / float(n_clusters)
+            # There are a few key heuristics we can look at to see if we have a good solution.
+            # Firstly, we want to make sure the that segment-to-cluster ratio is at least 2.0.
+            # That means that (on average) each cluster is represented in at least 2 segments.
+            #
+            # Next, we want to make sure that the beats in each cluster meet a minimum threshold
+            # for similarity. That's represented by the silhoueete average. In this case, we'll 
+            # select a threshold of .5.
+            # 
+            # Finally, if we find that we have segments with only one beat, that's a pretty good
+            # hint that we've overfit. So, we make sure that the smallest segment in each
+            # candidate cluster is greather than 1 beat long.
 
-            # solutions that have a ratio of at least 3.0 and a silhouette > .4
-            # will sound good. Because this is in an ascending itteration, we'll
-            # wind up with the highest cluster value that meets those criterea
-
-            if (ratio >= 3.0) and (silhouette_avg > .6):
+            if (ratio >= 2.0) and (silhouette_avg >= .5) and (min_segment_len > 1):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
                 self.__report_progress(.51, "Found possible match with %d clusters..." % best_cluster_size)
@@ -693,11 +705,17 @@ class InfiniteJukebox(object):
         if best_cluster_size != 0:
 
             self.__report_progress(.52,"Creating %d high fidelity clusters..." % best_cluster_size)
+            
+            # re-cluster with the selected size, but much higher iteration values.
+
+            X = evecs[:, :best_cluster_size] / Cnorm[:, best_cluster_size-1:best_cluster_size]
             best_labels = sklearn.cluster.KMeans(n_clusters=best_cluster_size, max_iter=1000,
                                                  random_state=0, n_init=1000).fit_predict(X)
             return (best_cluster_size, best_labels)
         else:
-            self.__report_progress( .51, "couldn't find and good candidates. Falling back to the v1 clustering algorithm..." )
+
+            # well... That didn't work, so fallback to the V1 clustering algorithm.
+            self.__report_progress( .51, "couldn't find any good candidates. Falling back to the v1 clustering algorithm..." )
             return self.__compute_best_cluster(evecs, Cnorm)
 
     @staticmethod
@@ -716,15 +734,40 @@ class InfiniteJukebox(object):
 
         return segment_count
 
+    def __segment_stats_from_labels(self, labels):
+        ''' Computes the segment/cluster ratio and min segment size value given an array 
+            of labels. '''
+
+        segment_count = 0.0
+        segment_length = 0
+        clusters = max(labels) + 1
+
+        previous_label = -1
+        
+        segment_lengths = []
+
+        for label in labels:
+            if label != previous_label:
+                previous_label = label
+                segment_count += 1.0
+
+                if segment_length > 0:
+                    segment_lengths.append(segment_length)
+
+                segment_length = 1
+            else:
+                segment_length +=1
+
+        self.__report_progress( .52, "clusters: %d,  ratio: %f,  min_seg: %d" % (clusters, segment_count/len(labels), segment_length) )
+
+        return float(segment_count) / float(clusters), min(segment_lengths)
+
     def __compute_best_cluster(self, evecs, Cnorm):
 
         ''' Attempts to compute optimum clustering from a set of simplified
             hueristics. This method has been deprecated in favor of code above that takes into
             account the average silhouette score of each cluster. You can force the code to use
             this method by passing in use_v1=True in the constructor.
-
-            [TODO] Implelent a proper RMSE-based algorithm. This is kind
-            of a hack right now..
 
             PARAMETERS:
                 evecs: Eigen-vectors computed from the segmentation algorithm
@@ -806,7 +849,12 @@ class InfiniteJukebox(object):
 
         final_cluster_size = max(cl['clusters'] for cl in self._clusters_list if cl['seg_ratio'] >= max_seg_ratio)
 
-        labels = next(c['labels'] for c in self._clusters_list if c['clusters'] == final_cluster_size)
+        # compute a very high fidelity set of clusters using our selected cluster size.
+        X = evecs[:, :final_cluster_size] / Cnorm[:, final_cluster_size-1:final_cluster_size]
+        labels = sklearn.cluster.KMeans(n_clusters=final_cluster_size, max_iter=1000,
+                                        random_state=0, n_init=1000).fit_predict(X)
+        
+        # labels = next(c['labels'] for c in self._clusters_list if c['clusters'] == final_cluster_size)
 
         # return a tuple of (winning cluster size, [array of cluster labels for the beats])
         return (final_cluster_size, labels)
