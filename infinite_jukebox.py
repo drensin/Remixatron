@@ -219,7 +219,7 @@ def graceful_exit(signum, frame):
     cleanup()
     sys.exit(0)
 
-def save_to_file(jukebox, duration):
+def save_to_file(jukebox, label, duration):
     ''' Save a fixed length of audio to disk. '''
 
     avg_beat_duration = 60 / jukebox.tempo
@@ -236,7 +236,7 @@ def save_to_file(jukebox, duration):
     output_bytes = np.concatenate( main_bytes )
 
     # write out the wav file
-    sf.write(args.save + '.wav', output_bytes, jukebox.sample_rate, format='WAV', subtype='PCM_24')
+    sf.write(label + '.wav', output_bytes, jukebox.sample_rate, format='WAV', subtype='PCM_24')
 
 
 if __name__ == "__main__":
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     # find the necessarry beats and do that
 
     if args.save:
-        save_to_file(jukebox, args.duration)
+        save_to_file(jukebox, args.save, args.duration)
         graceful_exit(0, 0)
 
     # it's important to make sure the mixer is setup with the
@@ -280,7 +280,14 @@ if __name__ == "__main__":
     mixer.init(frequency=jukebox.sample_rate)
     channel = mixer.Channel(0)
 
+    # pygame's event handling functions won't work unless the
+    # display module has been initialized -- even though we
+    # won't be making any display calls.
+
     pygame.display.init()
+
+    # register the event type we want fired when a sound buffer
+    # finishes playing
 
     channel.set_endevent(SOUND_FINISHED)
 
@@ -297,7 +304,7 @@ if __name__ == "__main__":
 
     # go through the rest of  the playback list, start playing each beat, display
     # the progress and wait for the playback to complete. Playback happens on another
-    # thread in the pygame library, so we have to wait to be singaled to queue another
+    # thread in the pygame library, so we have to wait to be signaled to queue another
     # event.
 
     for v in jukebox.play_vector[1:]:
