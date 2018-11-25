@@ -459,10 +459,10 @@ class InfiniteJukebox(object):
         # for popular music. Find that value and round down to the nearest
         # multiple of 4. (There almost always are 4 beats per measure in Western music).
 
-        max_sequence_len = int(round((self.tempo / 120.0) * 32.0))
+        max_sequence_len = int(round((self.tempo / 120.0) * 48.0))
         max_sequence_len = max_sequence_len - (max_sequence_len % 4)
 
-        min_sequence = max(random.randrange(8, max_sequence_len, 4), loop_bounds_begin)
+        min_sequence = max(random.randrange(16, max_sequence_len, 4), loop_bounds_begin)
 
         current_sequence = 0
         beat = beats[0]
@@ -576,7 +576,7 @@ class InfiniteJukebox(object):
                 # 4 beats
 
                 current_sequence = 0
-                min_sequence = random.randrange(8, max_sequence_len, 4)
+                min_sequence = random.randrange(16, max_sequence_len, 4)
 
                 # if we're in the place where we want to jump but can't because
                 # we haven't found any good candidates, then set current_sequence equal to
@@ -661,7 +661,7 @@ class InfiniteJukebox(object):
         best_cluster_size = 0
         best_labels = None
 
-        for n_clusters in range(3,65,1):
+        for n_clusters in range(3,49,1):
 
             self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
 
