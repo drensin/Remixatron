@@ -683,8 +683,11 @@ class InfiniteJukebox(object):
             ratio, min_segment_len = self.__segment_stats_from_labels(cluster_labels.tolist())
 
             # There are a few key heuristics we can look at to see if we have a good solution.
-            # Firstly, we want to make sure the that segment-to-cluster ratio is at least 2.0.
-            # That means that (on average) each cluster is represented in at least 2 segments.
+            # Firstly, we want to make sure the that segment-to-cluster ratio is at least 2.5.
+            # That means that (on average) each cluster is represented in at least 2.5 segments.
+            # Why this value? Because it tends to produce good results. (If you're looking for a
+            # solid theoretical underpinning for these hyperparameters, you'll need to look
+            # elsewhere. :-))
             #
             # Next, we want to make sure that the beats in each cluster meet a minimum threshold
             # for similarity. That's represented by the silhoueete average. In this case, we'll
@@ -694,7 +697,7 @@ class InfiniteJukebox(object):
             # hint that we've overfit. So, we make sure that the smallest segment in each
             # candidate cluster is greather than 1 beat long.
 
-            if (ratio >= 2.0) and (silhouette_avg >= .5) and (min_segment_len > 1):
+            if (ratio >= 2.5) and (silhouette_avg >= .5) and (min_segment_len > 1):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
                 self.__report_progress(.51, "Found possible match with %d clusters..." % best_cluster_size)
