@@ -700,7 +700,6 @@ class InfiniteJukebox(object):
             if (ratio >= 2.5) and (silhouette_avg >= .5) and (min_segment_len > 1):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
-                self.__report_progress(.51, "Found possible match with %d clusters..." % best_cluster_size)
 
         # if we found an acceptable answer, the return it. Otherwise, return
         # the results of the old clustering algorithm.
