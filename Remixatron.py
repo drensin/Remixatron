@@ -572,7 +572,7 @@ class InfiniteJukebox(object):
                     beat = beats[ random.choice(non_recent_candidates) ]
 
                 # reset our sequence position counter and pick a new target length
-                # between 8 and max_sequence_len, making sure it's evenly divisible by
+                # between 16 and max_sequence_len, making sure it's evenly divisible by
                 # 4 beats
 
                 current_sequence = 0
@@ -635,7 +635,7 @@ class InfiniteJukebox(object):
                   Segments: contiguous blocks of beats belonging to the same cluster
                 Silhouette: A score given to a cluster that measures how well the cluster
                             members fit together. The value is from -1 to +1. Higher values
-                            indicated higher quality.
+                            indicate higher quality.
                    Orphans: Segments with only one beat. The presence of orphans is a potential
                             sign of overfitting.
 
@@ -722,9 +722,9 @@ class InfiniteJukebox(object):
             # then this won't matter in the overall scheme because everyone will be de-rated
             # by the same scaler.
             #
-            # Putting this all together, we muliply the cluster count X the average
-            # silhouette score for the clusters in this candidate X the ratio of clusters to
-            # segments. Then we scale (or de-rate) the fitness score be whether or not is has
+            # Putting this all together, we muliply the cluster count * the average
+            # silhouette score for the clusters in this candidate * the ratio of clusters to
+            # segments. Then we scale (or de-rate) the fitness score by whether or not is has
             # orphans in it.
 
             orphan_scaler = .8 if min_segment_len == 1 else 1
