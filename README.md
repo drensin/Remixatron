@@ -10,8 +10,8 @@ Click the image below to see a short video of the code remixing Billy Joel's _Fo
 ***
 # Installation
 
-pip install --upgrade pip
-pip install --user -r requirements.txt
+pip install --upgrade pip  
+pip install --user -r requirements.txt  
 ***
 # Usage
 
