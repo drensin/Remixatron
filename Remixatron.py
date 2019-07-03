@@ -636,30 +636,47 @@ class InfiniteJukebox(object):
                 Silhouette: A score given to a cluster that measures how well the cluster
                             members fit together. The value is from -1 to +1. Higher values
                             indicated higher quality.
+                   Orphans: Segments with only one beat. The presence of orphans is a potential
+                            sign of overfitting.
 
             SUMMARY:
 
-                From testing, I observe that clusters with segment/cluster ratios greater than 3.0
-                produce the best musical effects. There may, of course be many such cluster
-                choices. This alogrithm selects the highest cluster value with a ratio >= 3.0
-                AND an average silhouette score > .4.
+                There are lots of things that might indicate one cluster count is better than another.
+                High silhouette scores for the candidate clusters mean that the jumps will be higher
+                quality.
 
-                Why not just pick the cluster with the highest silhouette score?
+                On the other hand, we could easily choose so many clusters that everyone has a great
+                silhouette score but none of the beats have other segments into which they can jump.
+                That will be a pretty boring result!
 
-                There's a tradeoff to make. The higher the clusters, the higher the quality of the
-                jumps will be because the average distance between any two beat in the same cluster
-                will be smaller.
+                So, the cluster/segment ratio matters, too The higher the number, the more places (on average)
+                a beat can jump. However, if the beats aren't very similar (low silhouette scores) then
+                the jumps won't make any musical sense.
 
-                On the other hand, there needs to be at least a minimum silhouette threshold. Based
-                on my testing, these aggregate parameters produce the best results.
+                So, we can't just choose the cluster count with the highest average silhouette score or the
+                highest cluster/segment ratio.
 
-                If you're an ML person, you can think of this as hyperparameter tuning.
+                Instead, we comput a simple fitness score of:
+                        cluster_count * ratio * average_silhouette
+
+                Finally, segments with only one beat are a potential (but not definite) sign of overfitting.
+                We call these one-beat segments 'orphans'. We want to keep an eye out for those and slightly
+                penalize any candidate cluster count that contains orphans.
+
+                If we find an orphan, we scale the fitness score by .8 (ie. penalize it 20%). That's
+                enough to push any candidate cluster count down the stack rank if orphans aren't
+                otherwise very common across most of the other cluster count choices.
+
         '''
 
         self._clusters_list = []
 
         best_cluster_size = 0
         best_labels = None
+        best_cluster_score = 0
+
+        # we need at least 3 clusters for any song and shouldn't need to calculate more than
+        # 48 clusters for even a really complicated peice of music.
 
         for n_clusters in range(3,49,1):
 
@@ -682,43 +699,48 @@ class InfiniteJukebox(object):
 
             ratio, min_segment_len = self.__segment_stats_from_labels(cluster_labels.tolist())
 
-            # There are a few key heuristics we can look at to see if we have a good solution.
-            # Firstly, we want to make sure the that segment-to-cluster ratio is at least 2.5.
-            # That means that (on average) each cluster is represented in at least 2.5 segments.
-            # Why this value? Because it tends to produce good results. (If you're looking for a
-            # solid theoretical underpinning for these hyperparameters, you'll need to look
-            # elsewhere. :-))
+            # We need to grade each cluster according to how likely it is to produce a good
+            # result. There are a few factors to look at.
             #
-            # Next, we want to make sure that the beats in each cluster meet a minimum threshold
-            # for similarity. That's represented by the silhoueete average. In this case, we'll
-            # select a threshold of .5.
+            # First, we can look at how similar the beats in each cluster (on average) are for
+            # this candidate cluster size. This is known as the silhouette score. It ranges
+            # from -1 (very bad) to 1 (very good).
             #
-            # Finally, if we find that we have segments with only one beat, that's a pretty good
-            # hint that we've overfit. So, we make sure that the smallest segment in each
-            # candidate cluster is greather than 1 beat long.
+            # Another thing we can look at is the ratio of clusters to segments. Higher ratios
+            # are preferred because they afford each beat in a cluster the opportunity to jump
+            # around to meaningful places in the song.
+            #
+            # All other things being equal, we prefer a higher cluster count to a lower one
+            # because it will tend to make the jumps more selective -- and therefore higher
+            # quality.
+            #
+            # Lastly, if we see that we have segments equal to just one beat, that might be
+            # a sign of overfitting. We call these one beat segments 'orphans'. Some songs,
+            # however, will have orphans no matter what cluster count you use. So, we don't
+            # want to throw out a cluster count just because it has orphans. Instead, we
+            # just de-rate its fitness score. If most of the cluster candidates have orphans
+            # then this won't matter in the overall scheme because everyone will be de-rated
+            # by the same scaler.
+            #
+            # Putting this all together, we muliply the cluster count X the average
+            # silhouette score for the clusters in this candidate X the ratio of clusters to
+            # segments. Then we scale (or de-rate) the fitness score be whether or not is has
+            # orphans in it.
 
-            if (ratio >= 2.5) and (silhouette_avg >= .5) and (min_segment_len > 1):
+            orphan_scaler = .8 if min_segment_len == 1 else 1
+
+            cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
+
+            # if this cluster count has a score that's better than the best score so far, store
+            # it for later.
+
+            if cluster_score > best_cluster_score:
+                best_cluster_score = cluster_score
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
 
-        # if we found an acceptable answer, the return it. Otherwise, return
-        # the results of the old clustering algorithm.
-
-        if best_cluster_size != 0:
-
-            self.__report_progress(.52,"Creating %d high fidelity clusters..." % best_cluster_size)
-
-            # re-cluster with the selected size, but much higher iteration values.
-
-            X = evecs[:, :best_cluster_size] / Cnorm[:, best_cluster_size-1:best_cluster_size]
-            best_labels = sklearn.cluster.KMeans(n_clusters=best_cluster_size, max_iter=1000,
-                                                 random_state=0, n_init=1000).fit_predict(X)
-            return (best_cluster_size, best_labels)
-        else:
-
-            # well... That didn't work, so fallback to the V1 clustering algorithm.
-            self.__report_progress( .51, "couldn't find any good candidates. Falling back to the v1 clustering algorithm..." )
-            return self.__compute_best_cluster(evecs, Cnorm)
+        # return the best results
+        return (best_cluster_size, best_labels)
 
     @staticmethod
     def __segment_count_from_labels(labels):
