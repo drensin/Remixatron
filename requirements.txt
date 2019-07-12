@@ -2,8 +2,9 @@ audioread==2.1.8
 cffi==1.12.3
 decorator==4.4.0
 joblib==0.13.2
-librosa==0.6.3
+librosa==0.7.0
 llvmlite==0.29.0
+Nuitka==0.6.4
 numba==0.44.1
 numpy==1.16.4
 pycparser==2.19
