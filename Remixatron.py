@@ -308,7 +308,14 @@ class InfiniteJukebox(object):
 
         # Get the amplitudes and beat-align them
         self.__report_progress( .6, "getting amplitudes" )
-        amplitudes = librosa.feature.rmse(y=y)
+
+        # newer versions of librosa have renamed the rmse function
+
+        if hasattr(librosa.feature,'rms'):
+            amplitudes = librosa.feature.rms(y=y)
+        else:
+            amplitudes = librosa.feature.rmse(y=y)
+
         ampSync = librosa.util.sync(amplitudes, beats)
 
         # create a list of tuples that include the ordinal position, the start time of the beat,
@@ -729,7 +736,8 @@ class InfiniteJukebox(object):
 
             orphan_scaler = .8 if min_segment_len == 1 else 1
 
-            cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
+            # cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
+            cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
 
             # if this cluster count has a score that's better than the best score so far, store
             # it for later.
