@@ -734,10 +734,10 @@ class InfiniteJukebox(object):
             # segments. Then we scale (or de-rate) the fitness score by whether or not is has
             # orphans in it.
 
-            orphan_scaler = .8 if min_segment_len == 1 else 1
+            orphan_scaler = .9 if min_segment_len == 1 else 1
 
-            # cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
-            cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
+            cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
+            #cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
 
             # if this cluster count has a score that's better than the best score so far, store
             # it for later.
