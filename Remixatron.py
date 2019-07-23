@@ -210,7 +210,8 @@ class InfiniteJukebox(object):
 
         ##########################################################
         # To reduce dimensionality, we'll beat-synchronous the CQT
-        tempo, beats = librosa.beat.beat_track(y=y, sr=sr, trim=False)
+        #tempo, beats = librosa.beat.beat_track(y=y, sr=sr, trim=False)
+        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
         Csync = librosa.util.sync(C, beats, aggregate=np.median)
 
         self.tempo = tempo
