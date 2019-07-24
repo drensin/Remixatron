@@ -791,7 +791,7 @@ class InfiniteJukebox(object):
             else:
                 segment_length +=1
 
-        self.__report_progress( .52, "clusters: %d,  ratio: %f,  min_seg: %d" % (clusters, segment_count/len(labels), segment_length) )
+        # self.__report_progress( .52, "clusters: %d,  ratio: %f,  min_seg: %d" % (clusters, segment_count/len(labels), segment_length) )
 
         return float(segment_count) / float(clusters), min(segment_lengths)
 
