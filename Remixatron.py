@@ -210,15 +210,15 @@ class InfiniteJukebox(object):
 
         ##########################################################
         # To reduce dimensionality, we'll beat-synchronous the CQT
-        #tempo, beats = librosa.beat.beat_track(y=y, sr=sr, trim=False)
-        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
-        Csync = librosa.util.sync(C, beats, aggregate=np.median)
+        tempo, btz = librosa.beat.beat_track(y=y, sr=sr, trim=False)
+        # tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+        Csync = librosa.util.sync(C, btz, aggregate=np.median)
 
         self.tempo = tempo
 
         # For alignment purposes, we'll need the timing of the beats
         # we fix_frames to include non-beat frames 0 and C.shape[1] (final frame)
-        beat_times = librosa.frames_to_time(librosa.util.fix_frames(beats,
+        beat_times = librosa.frames_to_time(librosa.util.fix_frames(btz,
                                                                     x_min=0,
                                                                     x_max=C.shape[1]),
                                             sr=sr)
@@ -245,7 +245,7 @@ class InfiniteJukebox(object):
         # Here, we take :math:`\sigma` to be the median distance between successive beats.
         #
         mfcc = librosa.feature.mfcc(y=y, sr=sr)
-        Msync = librosa.util.sync(mfcc, beats)
+        Msync = librosa.util.sync(mfcc, btz)
 
         path_distance = np.sum(np.diff(Msync, axis=1)**2, axis=0)
         sigma = np.median(path_distance)
@@ -317,12 +317,12 @@ class InfiniteJukebox(object):
         else:
             amplitudes = librosa.feature.rmse(y=y)
 
-        ampSync = librosa.util.sync(amplitudes, beats)
+        ampSync = librosa.util.sync(amplitudes, btz)
 
         # create a list of tuples that include the ordinal position, the start time of the beat,
         # the cluster to which the beat belongs and the mean amplitude of the beat
 
-        zbeat_tuples = zip(range(0,len(beats)), beat_times, seg_ids, ampSync[0].tolist())
+        zbeat_tuples = zip(range(0,len(btz)), beat_times, seg_ids, ampSync[0].tolist())
         beat_tuples =tuple(zbeat_tuples)
 
         info = []
@@ -377,7 +377,12 @@ class InfiniteJukebox(object):
 
         self.max_amplitude = max_amplitude
 
-        fade = next(info.index(b) for b in reversed(info) if b['amplitude'] >= (.75 * max_amplitude))
+        fade = len(info) - 1
+
+        for b in reversed(info):
+            if b['amplitude'] >= (.75 * max_amplitude):
+                fade = info.index(b)
+                break
 
         # truncate the beats to [start:fade + 1]
         beats = info[self.__start_beat:fade + 1]
@@ -434,7 +439,12 @@ class InfiniteJukebox(object):
         # so let's find the latest point in the song where there are still jump
         # candidates and make sure that we can't play past it.
 
-        last_chance = next(beats.index(b) for b in reversed(beats) if len(b['jump_candidates']) > 0)
+        last_chance = len(beats) - 1
+
+        for b in reversed(beats):
+            if len(b['jump_candidates']) > 0:
+                last_chance = beats.index(b)
+                break
 
         # if we play our way to the last beat that has jump candidates, then just skip
         # to the earliest jump candidate rather than enter a section from which no
@@ -612,7 +622,7 @@ class InfiniteJukebox(object):
         self.beats = beats
         self.play_vector = play_vector
 
-        self.__report_progress(1.0, "ready")
+        self.__report_progress(1.0, "finished processing")
 
         if self.play_ready:
             self.play_ready.set()
@@ -735,7 +745,7 @@ class InfiniteJukebox(object):
             # segments. Then we scale (or de-rate) the fitness score by whether or not is has
             # orphans in it.
 
-            orphan_scaler = .9 if min_segment_len == 1 else 1
+            orphan_scaler = .7 if min_segment_len == 1 else 1
 
             cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
             #cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
