@@ -696,7 +696,7 @@ class InfiniteJukebox(object):
         # we need at least 3 clusters for any song and shouldn't need to calculate more than
         # 48 clusters for even a really complicated peice of music.
 
-        for n_clusters in range(3,49,1):
+        for n_clusters in range(48, 2, -1):
 
             self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
 
@@ -745,7 +745,7 @@ class InfiniteJukebox(object):
             # segments. Then we scale (or de-rate) the fitness score by whether or not is has
             # orphans in it.
 
-            orphan_scaler = .7 if min_segment_len == 1 else 1
+            orphan_scaler = .5 if min_segment_len == 1 else 1
 
             cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
             #cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
@@ -753,7 +753,7 @@ class InfiniteJukebox(object):
             # if this cluster count has a score that's better than the best score so far, store
             # it for later.
 
-            if cluster_score > best_cluster_score:
+            if cluster_score >= best_cluster_score:
                 best_cluster_score = cluster_score
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
