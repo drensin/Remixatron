@@ -211,7 +211,7 @@ class InfiniteJukebox(object):
         ##########################################################
         # To reduce dimensionality, we'll beat-synchronous the CQT
         tempo, btz = librosa.beat.beat_track(y=y, sr=sr, trim=False)
-        # tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+        # tempo, btz = librosa.beat.beat_track(y=y, sr=sr)
         Csync = librosa.util.sync(C, btz, aggregate=np.median)
 
         self.tempo = tempo
@@ -370,7 +370,8 @@ class InfiniteJukebox(object):
         self.__report_progress( .7, "truncating to fade point..." )
 
         # get the max amplitude of the beats
-        max_amplitude = max([float(b['amplitude']) for b in info])
+        # max_amplitude = max([float(b['amplitude']) for b in info])
+        max_amplitude = sum([float(b['amplitude']) for b in info]) / len(info)
 
         # assume that the fade point of the song is the last beat of the song that is >= 75% of
         # the max amplitude.
@@ -433,6 +434,7 @@ class InfiniteJukebox(object):
                 beat['jump_candidates'] = []
 
         # save off the segment count
+
         self.segments = max([b['segment'] for b in beats]) + 1
 
         # we don't want to ever play past the point where it's impossible to loop,
@@ -745,7 +747,7 @@ class InfiniteJukebox(object):
             # segments. Then we scale (or de-rate) the fitness score by whether or not is has
             # orphans in it.
 
-            orphan_scaler = .5 if min_segment_len == 1 else 1
+            orphan_scaler = .8 if min_segment_len == 1 else 1
 
             cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
             #cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
