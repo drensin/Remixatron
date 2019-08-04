@@ -25,7 +25,7 @@ I strongly reccommend that you setup and use a python virtual environment to run
 
 # Connecting
 
-Just navigate to http://localhost:8000 with a browser running on the same machine as the server. If you want to connect from another maching on your LAN, then you'll need to edit the cors.cfg file to allow it. For example, suppose your computer is named *mymachine.local*, the correct CORS config to allow it and localhost will be:
+Just navigate to http://localhost:8000 with a browser running on the same machine as the server. If you want to connect from another machine on your LAN, then you'll need to edit the cors.cfg file to allow it. For example, suppose your computer is named *mymachine.local*, the correct CORS config to allow it and localhost will be:
 
     {
 	"ORIGINS":["http://localhost:8000",
