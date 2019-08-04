@@ -441,8 +441,14 @@ function on_history_select(idx) {
 
     console.log(history[idx]);
 
+    var c = 0;
+
+    if (item.clusters != undefined){
+        c = item.clusters;
+    }
+
     // start the audio processing on the server for the URL
-    fetchURL(clusters = item.clusters);
+    fetchURL(clusters = c);
 }
 
 /**
