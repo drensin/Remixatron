@@ -275,16 +275,24 @@ def fetch_url():
                         redirect back to the index page.
     """
 
+    clusters = 0
+
     url = request.args['url']
+
+    if 'clusters' in request.args:
+        clusters = int(request.args['clusters'])
 
     deviceid = get_userid()
 
-    print( deviceid + ' asked for: ' + url )
+    print( deviceid + ' asked for:', url, 'with', clusters, 'clusters')
 
     # if there is already a proc entry for this client, then
     # kill it if it's running.
 
-    proc = procMap[deviceid]
+    proc = None
+
+    if deviceid in procMap:
+        proc = procMap[deviceid]
 
     if proc != None and proc.is_alive():
         print('!!!!!! killing', proc.pid, '!!!!!')
@@ -293,7 +301,7 @@ def fetch_url():
     # start the main audio processing proc and save a pointer to it
     # for this client
 
-    procMap[deviceid] = Process(target=process_audio, args=(url, deviceid))
+    procMap[deviceid] = Process(target=process_audio, args=(url, deviceid, False, clusters))
     procMap[deviceid].start()
 
     return index()
@@ -343,7 +351,7 @@ def post_status_message( userid, percentage, message ):
         params={'namespace': '/' + userid, 'event':'status', 'message': payload}
     )
 
-def process_audio(url, userid, isupload=False):
+def process_audio(url, userid, isupload=False, clusters=0):
     """ The main processing for the audio is done here. It makes heavy use of the
     InfiniteJukebox class (https://github.com/drensin/Remixatron).
 
@@ -375,7 +383,7 @@ def process_audio(url, userid, isupload=False):
     remixatron_callback(0.1, 'Audio downloaded')
 
     # all of the core analytics and processing is done in this call
-    jukebox = InfiniteJukebox(fn, progress_callback=remixatron_callback, do_async=False)
+    jukebox = InfiniteJukebox(fn, clusters=clusters, progress_callback=remixatron_callback, do_async=False)
 
     # save off a dictionary of all the beats of the song. We care about the id, when the
     # beat starts, how long it lasts, to which segment and cluster it belongs, and which

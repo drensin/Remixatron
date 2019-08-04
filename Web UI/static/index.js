@@ -71,7 +71,7 @@ async function copyUrlToClipboard(url) {
 /**
  * This is called when the user tries to get audio from Youtube.
  */
-function fetchURL() {
+function fetchURL(clusters = 0) {
 
     // hide the navbar
     $('#toggler').click();
@@ -85,14 +85,14 @@ function fetchURL() {
 
     var loc = $('#ytURL').val();
 
-    var relUrl = '/fetch_url?url=' + loc;
+    var relUrl = '/fetch_url?url=' + loc + "&clusters=" + clusters;
     var newUrl = new URL(relUrl, window.location.href);
 
     copyUrlToClipboard(newUrl.href);
 
     // kick off the audio processing on the server and return
 
-    $.get('/fetch_url',"url=" + loc);
+    $.get('/fetch_url',"url=" + loc + "&clusters=" + clusters);
 
     set_progress_bar(0, "Sending request to server...");
 
@@ -337,7 +337,8 @@ function add_to_history() {
     }
 
     // otherwise.. Construct the object to save
-    item = {"title": trackinfo.title, "thumbnail": trackinfo.thumbnail, "url": $('#ytURL').val()};
+    item = {"title": trackinfo.title, "thumbnail": trackinfo.thumbnail,
+            "url": $('#ytURL').val(), "clusters": clusters};
 
     // push it to the list
     history.push(item);
@@ -441,7 +442,7 @@ function on_history_select(idx) {
     console.log(history[idx]);
 
     // start the audio processing on the server for the URL
-    fetchURL();
+    fetchURL(clusters = item.clusters);
 }
 
 /**

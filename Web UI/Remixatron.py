@@ -301,11 +301,12 @@ class InfiniteJukebox(object):
         else: # otherwise, just use the cluster value passed in
             k = self.clusters
 
-            self.__report_progress( .51, "using %d clusters" % self.clusters )
+            self.__report_progress( .51, "using " + str(self.clusters) + " clusters..." )
 
             X = evecs[:, :k] / Cnorm[:, k-1:k]
-            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=1000,
-                                             random_state=0, n_init=1000).fit_predict(X)
+
+            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=300,
+                                               random_state=0, n_init=20).fit_predict(X)
 
         # Get the amplitudes and beat-align them
         self.__report_progress( .6, "getting amplitudes" )
