@@ -1,3 +1,10 @@
+/**
+ * Remixatron Web UI js - (c) 2019 - Dave Rensin - dave@rensin.com
+ *
+ * Client code for web ui.
+ */
+
+ // global vars
 var mychannel = null;
 
 var userID = null;
@@ -16,6 +23,9 @@ var segments = 0;
 var colorMap = [];
 var lastMessageID = -1;
 
+// start the session by finding out our device id and setting up our
+// socket.io channels.
+
 $.get('/whoami', (data) => {
 
     console.log('I am:' + data);
@@ -28,8 +38,16 @@ $.get('/whoami', (data) => {
 
 });
 
+// load the 'Stars' dropdown with our saved favorites
 load_history_dropdown();
 
+/**
+ * Shows the progress bar and displays the appropriate percentage and
+ * progress.
+ *
+ * @param {int} percentage
+ * @param {string} message
+ */
 function set_progress_bar(percentage, message) {
     $('#progress-modal').modal('show');
     $('#progress-message').text(message);
@@ -37,6 +55,12 @@ function set_progress_bar(percentage, message) {
     $('#progress').css('width', String(percentage) + '%');
 }
 
+/**
+ * Copies to the clipboard a ready-made URL you can bookmark to
+ * quickly relaunch the client and re-process the current song.
+ *
+ * @param {string} url
+ */
 async function copyUrlToClipboard(url) {
     try {
       await navigator.clipboard.writeText(url);
@@ -44,11 +68,20 @@ async function copyUrlToClipboard(url) {
     }
 }
 
+/**
+ * This is called when the user tries to get audio from Youtube.
+ */
 function fetchURL() {
 
+    // hide the navbar
     $('#toggler').click();
 
+    // show the prgress modal
     $('#progress-modal').modal('show');
+
+    // copy a fully qualified URL for this song
+    // to the clipboard. Suitable for bookmarking in a
+    // browser.
 
     var loc = $('#ytURL').val();
 
@@ -57,6 +90,8 @@ function fetchURL() {
 
     copyUrlToClipboard(newUrl.href);
 
+    // kick off the audio processing on the server and return
+
     $.get('/fetch_url',"url=" + loc);
 
     set_progress_bar(0, "Sending request to server...");
@@ -64,16 +99,27 @@ function fetchURL() {
     return false;
 }
 
+/**
+ * Called when the user wants to cancel the current audio processing
+ */
 function cancel_fetch() {
+
+    // call the cancel endpoint
     $.get('/cancel_fetch');
 
+    //re-open the navbar and hide the progress bar
     $('#toggler').click();
 
     $('#progress-modal').modal('hide');
 }
 
+/**
+ * Called when the user selects a local file to upload for
+ * processing.
+ */
 function upload_audio() {
 
+    // hide the navbar and show the progress bar
     $('#toggler').click();
 
     $('#progress-modal').modal('show');
@@ -85,6 +131,7 @@ function upload_audio() {
     // Create an FormData object
     var data = new FormData(form);
 
+    // post the auido file to the server
     $.ajax({
         type: "POST",
         enctype: 'multipart/form-data',
@@ -98,8 +145,18 @@ function upload_audio() {
 
     return false;
 }
+
+/**
+ * This is called when the client loses its socket.io connection to the server
+ * and successfully reconnects.
+ *
+ * @param {int} attempt
+ */
 function on_reconnect(attempt) {
     console.log("Reconnected with attempt: " + attempt);
+
+    // get the last 50 messages posted to this client. Repost the ones
+    // we haven't already handled.
 
     $.get('/getQueue', (q) => {
 
@@ -128,6 +185,12 @@ function on_reconnect(attempt) {
     });
 }
 
+/**
+ * The server will send progress messages via the socket.io library as it
+ * processes your audio. This function recieves those messages and displays them.
+ *
+ * @param {json} data
+ */
 function on_status_message(data) {
     data = JSON.parse(data);
 
@@ -135,14 +198,26 @@ function on_status_message(data) {
     set_progress_bar(data.percentage * 100, data.message);
 }
 
+/**
+ * When the server is done processing, it will send a READY message
+ * to signal that it's time to start downloading the finished files.
+ *
+ * @param {string} data
+ */
 function on_ready_message(data) {
     data = JSON.parse(data);
     lastMessageID = data.id;
 
+    // download the beat map
     set_progress_bar(100, 'Requesting beatmap...');
     $.get('/beatmap?'+Math.random(), on_get_beatmap);
 }
 
+/**
+ * Process the downloaded beatmap
+ *
+ * @param {json object} d
+ */
 function on_get_beatmap(d) {
     beatmap = d;
 
@@ -171,32 +246,59 @@ function on_get_beatmap(d) {
 
     set_progress_bar(100, 'Requesting play vector...');
 
+    // grab the play vector and track info information from the server.
+    // There's a bug I haven't tracked down yet that can cause caching of
+    // these files. To work around it, I append a random number. This is a
+    // hack. When I track down the problem, I'll fix this up.
+
     $.get('/playvector?' + Math.random(), on_get_playvector);
     $.get('/trackinfo?' + Math.random(), on_get_trackinfo);
 }
 
+/**
+ * Called after the play vector is received and we're ready to start
+ * playing the audio
+ *
+ * @param {json object} d
+ */
 function on_get_playvector(d) {
     playvector = d;
     set_progress_bar(100, 'Starting playback...')
+
+    // 100ms, start playing the audio
     window.setTimeout(playback, 100);
 }
 
+/**
+ * Called after we receive the track info. We just save it off.
+ *
+ * @param {json object} d
+ */
 function on_get_trackinfo(d) {
     trackinfo = d;
 }
 
+/**
+ * Checks to see if we've already saved this audio in our star/favorites/history. Returns a boolean.
+ *
+ * @param {string} title
+ */
 function is_in_history(title) {
 
+    // if the local storage hasn't been setup yet..
     if (localStorage.ytHistory == undefined){
         localStorage.ytHistory ="[]";
     }
 
+    // de-serialize the list from local storage
     var history = JSON.parse(localStorage.ytHistory);
 
+    // get the item if it's already there
     var item = history.find( (e) => {
         return e.title == title;
     });
 
+    // if we found the item, return true. Otherwise, false
     if (item != undefined){
         return true;
     }else{
@@ -205,18 +307,28 @@ function is_in_history(title) {
 
 }
 
+/**
+ * Add the currently playing item to the star/favorite/history. Right now,
+ * I don't support adding uploaded files. I might fix that later.
+ */
 function add_to_history() {
 
+    // if this is a local file, error out.
     if (trackinfo.thumbnail[0] == '/') {
         alert("Sorry. You can't add uploaded files to favorites.")
         return;
     }
 
+    // if the local storage isn't set up, fix that.
     if (localStorage.ytHistory == undefined){
         localStorage.ytHistory = "[]";
     }
 
+    // de-serialize the list
     var history = JSON.parse(localStorage.ytHistory);
+
+    // if the item is already in the list, then make sure the Now Playing star
+    // is filled in and return
 
     if (is_in_history(trackinfo.title)){
         $('#starIcon').text('star');
@@ -224,38 +336,58 @@ function add_to_history() {
         return;
     }
 
+    // otherwise.. Construct the object to save
     item = {"title": trackinfo.title, "thumbnail": trackinfo.thumbnail, "url": $('#ytURL').val()};
 
+    // push it to the list
     history.push(item);
 
+    // sort the list
     history = history.sort( (a,b) => {
         return a.title < b.title ? -1 : 1;
     });
 
+    // save it to local storage
     localStorage.ytHistory = JSON.stringify(history);
+
+    // re-load the dropdown in the UI and make sure the
+    // Now Playing star is lit.
 
     load_history_dropdown();
     $('#starIcon').text('star');
 
 }
 
+/**
+ * Delete the currently playing item from the save list
+ */
 function remove_from_history() {
 
+    // grab the list
     var history = JSON.parse(localStorage.ytHistory);
 
+    // find the item
     var idx = history.findIndex( (e) => {
         return e.title == trackinfo.title;
     });
 
+    // splice it out
     history.splice(idx,1)
 
+    // re-save the list to local storage
     localStorage.ytHistory = JSON.stringify(history);
 
+    // re-populate the dropdown list and clear
+    // the Now Playing star.
     load_history_dropdown();
     $('#starIcon').text('star_border');
 
 }
 
+/**
+ * Gets called when you tap the Now Playing star. Toggles the
+ * currently playing item in/out of the save list.
+ */
 function toggle_to_history() {
 
     if (is_in_history(trackinfo.title)){
@@ -265,15 +397,24 @@ function toggle_to_history() {
     }
 }
 
+/**
+ * Loads the save list dropdown from local storage
+ */
 function load_history_dropdown() {
 
+    // if localstorage isn't setup yet, return
     if (localStorage.ytHistory == undefined) {
         return;
     }
 
+    // clear the current dropdown
     $('#ddhistory').empty();
 
+    // grab the list from local storage
     var history = JSON.parse(localStorage.ytHistory);
+
+    // add each item to the drop down, making sure to attach each
+    // item to the on_history_select() callback.
 
     history.forEach( (item) => {
         var idx = history.indexOf(item);
@@ -281,33 +422,61 @@ function load_history_dropdown() {
     });
 }
 
+/**
+ * Called when an item is selected from the save list
+ *
+ * @param {int} idx
+ */
 function on_history_select(idx) {
+
+    // load the save list from storage
     var history = JSON.parse(localStorage.ytHistory);
 
+    // grab the item
     var item = history[idx];
 
+    // populate the UI with the correct URL
     $('#ytURL').val(item.url);
 
     console.log(history[idx]);
 
+    // start the audio processing on the server for the URL
     fetchURL();
 }
 
+/**
+ * Called when a local file is selected for upload
+ */
 function on_file_selected() {
 
+    // if the user canceled, just return.
     if ( $('#fcu')[0].files.length == 0 ){
         return;
     }
 
+    // update the display label with the file name
     $('#fcuLabel').text($('#fcu')[0].files[0].name);
 
+    // upload the file and start the audio processing
     upload_audio();
 }
 
+/**
+ * Show the Now Playing panel
+ */
 function showtoast() {
+
+    // set the Now Playing image to the thumbnail
     $('#npimg').attr('src', trackinfo.thumbnail);
+
+    // set the display text to the title
     $('#nptext').text(trackinfo.title);
+
+    // display the panel
     $('.toast').toast('show');
+
+    // if the item is in our save list, then color in the
+    // Now Playing star. Otherwise, leave it outlined.
 
     if (is_in_history(trackinfo.title) == true ){
         $('#starIcon').text('star');
@@ -316,15 +485,26 @@ function showtoast() {
     }
 }
 
+/**
+ * Toggles playback of the current audio OR starts playback of new
+ * audio
+ *
+ * @param {bool} createNew
+ */
 function playback(createNew = true){
 
+    // if we already have created a Howler.js soud object...
     if ( sound != null && createNew == false) {
+
+        // and if it's already playing, pause it and stop
+        // any more beats from playing..
         if ( sound.playing() == true ) {
             sound.pause();
             clearTimeout(timerPlaybackID);
             $('#playIcon').text('play_circle_outline');
             return;
         }else{
+            // if it wasn't already playing, then un-pause it and start the playback events
             sound.play(String(sndIndex));
             timerPlaybackID = setTimeout(onSoundEnd, beatmap[playvector[sndIndex].beat].duration);
             $('#playIcon').text('pause_circle_outline');
@@ -332,13 +512,22 @@ function playback(createNew = true){
         }
     }
 
+    // if we're creating a new playback then clear out the event timer that plays
+    // each beat.
+
     clearTimeout(timerPlaybackID);
 
+    // change the playback icon to reflect that we're not playing anymore
     $('#playIcon').text('play_circle_outline');
 
+    // if we have a sound object already, then stop it.
     if ( sound != null ) {
         sound.stop();
     }
+
+    // In this section, we create a new Howler.js sound object. Each beat will be loaded as
+    // an audio sprite so that we can quickly jump between them. When Howler finishes loading
+    // all the audio, it will call onSoundLoad().
 
     sound = null;
     var spritedef = {};
@@ -358,40 +547,68 @@ function playback(createNew = true){
         sprite: spritedef,
         onload: onSoundLoad,
         onplay: onSoundPlay
-        // onend: onSoundEnd
     });
 }
 
+/**
+ * One Howler has finished loading the audio, it's time to start playback...
+ */
 function onSoundLoad() {
+
+    // play the first sprite (the first beat of the song) and set
+    // a timer to play the next beat in the play vector. The duration
+    // of the time is the duration (in milliseconds) of the beat we just
+    // started playing.
+
     sndIndex = 0;
     sound.play('1');
     timerPlaybackID = setTimeout(onSoundEnd, beatmap[0].duration);
 
+    // hide the progress bar and show the Now Playing panel
     $('#progress-modal').modal('hide');
     showtoast();
+
+    // tell the server it's safe to cleanup the intermediate audio
+    // processing files and change the Now Playing icon to reflect that
+    // the audio is playing.
 
     $.get('/cleanup');
 
     $('#playIcon').text('pause_circle_outline');
 }
 
+/**
+ * This is called after we've waited for the current beat to play and we're
+ * ready to play the next beat.
+ */
 function onSoundEnd() {
+
+    // look in the play vector to see which beat we need to play next
     sndIndex = sndIndex + 1;
 
     var toplay = playvector[sndIndex].beat + 1;
 
+    // play that beat and reset the play timer
     id = sound.play(String(toplay));
 
     timerPlaybackID = setTimeout(onSoundEnd, beatmap[toplay - 1].duration);
 
 }
 
+/**
+ * This is called after each beat is played. It will draw the UI for the next
+ * beat to play.
+ */
 function onSoundPlay() {
-
-    // setTimeout(drawViz,0);
     drawViz();
 }
 
+/**
+ * Computes h colors that are evenly spread across the rainbow from each other. This is
+ * used when building the color map to draw the on-screen beatmap.
+ *
+ * @param {int} h
+ */
 function rainbowStop(h)
 {
   let f= (n,k=(n+h*12)%12) => .5-.5*Math.max(Math.min(k-3,9-k,1),-1);
@@ -399,14 +616,21 @@ function rainbowStop(h)
   return ( rgb2hex(f(0), f(8), f(4)) );
 }
 
+/**
+ * Draw the UI for the current beat
+ */
 function drawViz() {
 
+    // set/get the right height/width
     var width = screen.availWidth;
     var height = 400;
 
+    // set the canvas height/width
     $('#viz').prop('width', width);
     $('#viz').prop('height', height);
 
+    // get the draw context and figure out how many pixels wide
+    // to draw each beat.
     ctx = $('#viz')[0].getContext('2d');
 
     var xOffset = 1;
@@ -414,6 +638,7 @@ function drawViz() {
 
     ctx.font = '12px serif';
 
+    // clear the canvas
     ctx.clearRect( 0,0, width, height );
 
     // draw the timeline
@@ -421,6 +646,7 @@ function drawViz() {
     var timelineHeight = 100;
     var timelineY = (height / 2) - (timelineHeight / 2);
 
+    // paint the stats
     ctx.fillText( "Pos: " + String(sndIndex) +
                   "   Beats: " + String(beatmap.length) +
                   "   Clusters: " + String(clusters) +
@@ -428,17 +654,20 @@ function drawViz() {
                   "   Ratio: " + (segments / clusters).toFixed(3),
                   0, timelineY + timelineHeight + 23);
 
+    // get the current X and beat
     var currentX = (playvector[sndIndex].beat * beatWidth) + xOffset;
     var currentBeat = beatmap[playvector[sndIndex].beat];
 
     var segmentColorMap = ['#C2C2C2', '#FFFFFF'];
 
+    // first, paint a rectanlge with a shadow
     ctx.strokeRect(0, timelineY, width - 5, timelineHeight);
     ctx.shadowColor = 'Black';
     ctx.shadowOffsetX = 3;
     ctx.shadowOffsetY = 3;
     ctx.shadowBlur = 5;
 
+    // next, fill it in with white
     ctx.strokeStyle = 'Black';
     ctx.fillStyle = 'White';
     ctx.lineWidth = 1;
@@ -448,10 +677,17 @@ function drawViz() {
     ctx.shadowOffsetY = 0;
     ctx.shadowBlur = 0;
 
+    // paint each beat in the right spot and use its appropriate cluster color
     for (var i =0; i<beatmap.length; i++) {
 
+        // is this beat in the same segment as the currently playing beat?
         var isSameSegment = beatmap[i].segment == currentBeat.segment;
+
+        // is this beat in the list of beats that we could jump to right now?
         var isJumpCandidate = currentBeat.jump_candidate.includes(i);
+
+        // if either of those things is true, then we'll draw this beat at full color.
+        // Otherwise, we'll draw it very light
 
         if (isSameSegment || isJumpCandidate) {
             ctx.globalAlpha = 1.0;
@@ -459,13 +695,18 @@ function drawViz() {
             ctx.globalAlpha = .1;
         }
 
+        // draw this beat on the screen at the right location and with the correct
+        // width
+
         ctx.fillStyle = colorMap[beatmap[i].cluster];
         ctx.strokeStyle = ctx.fillStyle;
         ctx.fillRect( (i * beatWidth) + xOffset, timelineY + 1,
                        ctx.globalAlpha < 1.0 ? beatWidth : beatWidth + 2, timelineHeight - 2);
     }
 
-    // draw the jump candidate arcs
+    // draw the jump candidate arcs -- this section draws light grey arcs from the currently
+    // playing beat to all the places it might be allowed to jump (according to the beatmap).
+    // This code alternates drawing each arc over or under the timeline.
 
     var over = true;
 
@@ -474,7 +715,6 @@ function drawViz() {
     currentBeat.jump_candidate.forEach( (c) => {
         ctx.beginPath();
 
-        // ctx.strokeStyle = 'Black';
         ctx.strokeStyle = '#CFCFCF';
         ctx.lineWidth = beatWidth < 2 ? 1 : beatWidth / 2;
 
@@ -506,7 +746,7 @@ function drawViz() {
         over = !over;
     });
 
-    // draw the marker
+    // draw the now playing marker
 
     ctx.shadowColor = 'Black';
     ctx.shadowOffsetX = 3;
@@ -521,6 +761,7 @@ function drawViz() {
     ctx.shadowOffsetY = 0;
     ctx.shadowBlur = 0;
 
+    // compute how many beats until we want to jump (or '!!' if we're late)
     var leftInSeq =  playvector[sndIndex].seq_len - playvector[sndIndex].seq_pos;
 
     var str = '-' + String(leftInSeq).padStart(2, '0')
@@ -529,6 +770,6 @@ function drawViz() {
         str = '!!!'
     }
 
-    // ctx.fillText( str, currentX - 5, timelineY + timelineHeight + 25 );
+    // paint that number to the left of the Now Playing marker.
     ctx.fillText( str, currentX - 20, timelineY + (timelineHeight / 2) );
 }
