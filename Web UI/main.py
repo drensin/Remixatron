@@ -9,7 +9,7 @@
     how to install, configure, and run this.
 
 """
-
+import bz2
 import collections
 import glob
 import json
@@ -388,7 +388,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
     remixatron_callback(0.1, 'Audio downloaded')
 
-    cached_beatmap_fn = "/tmp/" + urllib.parse.quote(url, safe='') + ".beatmap"
+    cached_beatmap_fn = "/tmp/" + urllib.parse.quote(url, safe='') + ".beatmap.bz2"
 
     beats = None
     play_vector = None
@@ -405,18 +405,15 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
         def skip_encoder(o):
             return ''
 
-        with open(cached_beatmap_fn, 'w') as f:
+        with bz2.open(cached_beatmap_fn, 'wb') as f:
             f.write(json.dumps(jukebox.beats, default=skip_encoder))
 
     else:
 
         print("Reading beatmap from disk.")
 
-        with open(cached_beatmap_fn, 'r') as f:
+        with bz2.open(cached_beatmap_fn, 'rb') as f:
             beats = json.load(f)
-
-        est_duration = beats[-1]['start'] + beats[-1]['duration']
-        est_tempo = (len(beats) / est_duration) * 60
 
         play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats)
 
