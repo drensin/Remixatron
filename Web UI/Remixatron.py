@@ -471,153 +471,9 @@ class InfiniteJukebox(object):
         # remix of the current song.
         #
 
-        random.seed()
+        self.__report_progress(0.9, "creating play vector")
 
-        # how long should our longest contiguous playback blocks be? One way to
-        # consider it is that higher bpm songs need longer blocks because
-        # each beat takes less time. A simple way to estimate a good value
-        # is to scale it by it's distance from 120bpm -- the canonical bpm
-        # for popular music. Find that value and round down to the nearest
-        # multiple of 4. (There almost always are 4 beats per measure in Western music).
-
-        max_sequence_len = int(round((self.tempo / 120.0) * 48.0))
-        max_sequence_len = max_sequence_len - (max_sequence_len % 4)
-
-        min_sequence = max(random.randrange(16, max_sequence_len, 4), loop_bounds_begin)
-
-        current_sequence = 0
-        beat = beats[0]
-
-        self.__report_progress( .9, "creating play vector" )
-
-        play_vector = []
-
-        play_vector.append( {'beat':0, 'seq_len':min_sequence, 'seq_pos':current_sequence} )
-
-        # we want to keep a list of recently played segments so we don't accidentally wind up in a local loop
-        #
-        # the number of segments in a song will vary so we want to set the number of recents to keep
-        # at 25% of the total number of segments. Eg: if there are 34 segments, then the depth will
-        # be set at round(8.5) == 9.
-        #
-        # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
-
-        recent_depth = int(round(self.segments * .25))
-        recent_depth = max( recent_depth, 1 )
-
-        recent = collections.deque(maxlen=recent_depth)
-
-        # keep track of the time since the last successful jump. If we go more than
-        # 10% of the song length since our last jump, then we will prioritize an
-        # immediate jump to a not recently played segment. Otherwise playback will
-        # be boring for the listener. This also has the advantage of busting out of
-        # local loops.
-
-        max_beats_between_jumps = int(round(len(beats) * .1))
-        beats_since_jump = 0
-        failed_jumps = 0
-
-        for i in range(0, 1024 * 1024):
-
-            if beat['segment'] not in recent:
-                recent.append(beat['segment'])
-
-            current_sequence += 1
-
-            # it's time to attempt a jump if we've played all the beats we wanted in the
-            # current sequence. Also, if we've gone more than 10% of the length of the song
-            # without jumping we need to immediately prioritze jumping to a non-recent segment.
-
-            will_jump = (current_sequence == min_sequence) or (beats_since_jump >= max_beats_between_jumps)
-
-            # since it's time to jump, let's find the most musically pleasing place
-            # to go
-
-            if ( will_jump ):
-
-                # find the jump candidates that haven't been recently played
-                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
-
-                # if there aren't any good jump candidates, then we need to fall back
-                # to another selection scheme.
-
-                if len(non_recent_candidates) == 0:
-
-                    beats_since_jump += 1
-                    failed_jumps += 1
-
-                    # suppose we've been trying to jump but couldn't find a good non-recent candidate. If
-                    # the length of time we've been trying (and failing) is >= 10% of the song length
-                    # then it's time to relax our criteria. Let's find the jump candidate that's furthest
-                    # from the current beat (irrespective if it's been played recently) and go there. Ideally
-                    # we'd like to jump to a beat that is not in the same quartile of the song as the currently
-                    # playing section. That way we maximize our chances of avoiding a long local loop -- such as
-                    # might be found in the section preceeding the outro of a song.
-
-                    non_quartile_candidates = [c for c in beat['jump_candidates'] if beats[c]['quartile'] != beat['quartile']]
-
-                    if (failed_jumps >= (.1 * len(beats))) and (len(non_quartile_candidates) > 0):
-
-                        furthest_distance = max([abs(beat['id'] - c) for c in non_quartile_candidates])
-
-                        jump_to = next(c for c in non_quartile_candidates
-                                       if abs(beat['id'] - c) == furthest_distance)
-
-                        beat = beats[jump_to]
-                        beats_since_jump = 0
-                        failed_jumps = 0
-
-                    # uh oh! That fallback hasn't worked for yet ANOTHER 10%
-                    # of the song length. Something is seriously broken. Time
-                    # to punt and just start again from the first beat.
-
-                    elif failed_jumps >= (.2 * len(beats)):
-                        beats_since_jump = 0
-                        failed_jumps = 0
-                        beat = beats[loop_bounds_begin]
-
-                    # asuuming we're not in one of the failure modes but haven't found a good
-                    # candidate that hasn't been recently played, just play the next beat in the
-                    # sequence
-
-                    else:
-                        beat = beats[beat['next']]
-
-                else:
-
-                    # if it's time to jump and we have at least one good non-recent
-                    # candidate, let's just pick randomly from the list and go there
-
-                    beats_since_jump = 0
-                    failed_jumps = 0
-                    beat = beats[ random.choice(non_recent_candidates) ]
-
-                # reset our sequence position counter and pick a new target length
-                # between 16 and max_sequence_len, making sure it's evenly divisible by
-                # 4 beats
-
-                current_sequence = 0
-                min_sequence = random.randrange(16, max_sequence_len, 4)
-
-                # if we're in the place where we want to jump but can't because
-                # we haven't found any good candidates, then set current_sequence equal to
-                # min_sequence. During playback this will show up as having 00 beats remaining
-                # until we next jump. That's the signal that we'll jump as soon as we possibly can.
-                #
-                # Code that reads play_vector and sees this value can choose to visualize this in some
-                # interesting way.
-
-                if beats_since_jump >= max_beats_between_jumps:
-                    current_sequence = min_sequence
-
-                # add an entry to the play_vector
-                play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
-            else:
-
-                # if we're not trying to jump then just add the next item to the play_vector
-                play_vector.append({'beat':beat['next'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
-                beat = beats[beat['next']]
-                beats_since_jump += 1
+        play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats, start_beat = loop_bounds_begin)
 
         # save off the beats array and play_vector. Signal
         # the play_ready event (if it's been set)
@@ -910,3 +766,162 @@ class InfiniteJukebox(object):
         """Convenience method to add debug logging info for later"""
 
         self._extra_diag += line + "\n"
+
+    @staticmethod
+    def CreatePlayVectorFromBeats(beats, start_beat = 1):
+        #
+        # This section of the code computes the play_vector -- a 1024*1024 beat length
+        # remix of the current song.
+        #
+
+        random.seed()
+        duration = beats[-1]['start'] + beats[-1]['duration']
+        tempo = (len(beats)/duration) * 60
+
+        # how long should our longest contiguous playback blocks be? One way to
+        # consider it is that higher bpm songs need longer blocks because
+        # each beat takes less time. A simple way to estimate a good value
+        # is to scale it by it's distance from 120bpm -- the canonical bpm
+        # for popular music. Find that value and round down to the nearest
+        # multiple of 4. (There almost always are 4 beats per measure in Western music).
+
+        max_sequence_len = int(round((tempo / 120.0) * 48.0))
+        max_sequence_len = max_sequence_len - (max_sequence_len % 4)
+
+        min_sequence = max(random.randrange(16, max_sequence_len, 4), start_beat)
+
+        current_sequence = 0
+        beat = beats[0]
+
+        play_vector = []
+
+        play_vector.append( {'beat':0, 'seq_len':min_sequence, 'seq_pos':current_sequence} )
+
+        # we want to keep a list of recently played segments so we don't accidentally wind up in a local loop
+        #
+        # the number of segments in a song will vary so we want to set the number of recents to keep
+        # at 25% of the total number of segments. Eg: if there are 34 segments, then the depth will
+        # be set at round(8.5) == 9.
+        #
+        # On the off chance that the (# of segments) *.25 < 1 we set a floor queue depth of 1
+
+        segments = max([b['segment'] for b in beats]) + 1
+
+        recent_depth = int(round(segments * .25))
+        recent_depth = max( recent_depth, 1 )
+
+        recent = collections.deque(maxlen=recent_depth)
+
+        # keep track of the time since the last successful jump. If we go more than
+        # 10% of the song length since our last jump, then we will prioritize an
+        # immediate jump to a not recently played segment. Otherwise playback will
+        # be boring for the listener. This also has the advantage of busting out of
+        # local loops.
+
+        max_beats_between_jumps = int(round(len(beats) * .1))
+        beats_since_jump = 0
+        failed_jumps = 0
+
+        for i in range(0, 1024 * 1024):
+
+            if beat['segment'] not in recent:
+                recent.append(beat['segment'])
+
+            current_sequence += 1
+
+            # it's time to attempt a jump if we've played all the beats we wanted in the
+            # current sequence. Also, if we've gone more than 10% of the length of the song
+            # without jumping we need to immediately prioritze jumping to a non-recent segment.
+
+            will_jump = (current_sequence == min_sequence) or (beats_since_jump >= max_beats_between_jumps)
+
+            # since it's time to jump, let's find the most musically pleasing place
+            # to go
+
+            if ( will_jump ):
+
+                # find the jump candidates that haven't been recently played
+                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
+
+                # if there aren't any good jump candidates, then we need to fall back
+                # to another selection scheme.
+
+                if len(non_recent_candidates) == 0:
+
+                    beats_since_jump += 1
+                    failed_jumps += 1
+
+                    # suppose we've been trying to jump but couldn't find a good non-recent candidate. If
+                    # the length of time we've been trying (and failing) is >= 10% of the song length
+                    # then it's time to relax our criteria. Let's find the jump candidate that's furthest
+                    # from the current beat (irrespective if it's been played recently) and go there. Ideally
+                    # we'd like to jump to a beat that is not in the same quartile of the song as the currently
+                    # playing section. That way we maximize our chances of avoiding a long local loop -- such as
+                    # might be found in the section preceeding the outro of a song.
+
+                    non_quartile_candidates = [c for c in beat['jump_candidates'] if beats[c]['quartile'] != beat['quartile']]
+
+                    if (failed_jumps >= (.1 * len(beats))) and (len(non_quartile_candidates) > 0):
+
+                        furthest_distance = max([abs(beat['id'] - c) for c in non_quartile_candidates])
+
+                        jump_to = next(c for c in non_quartile_candidates
+                                       if abs(beat['id'] - c) == furthest_distance)
+
+                        beat = beats[jump_to]
+                        beats_since_jump = 0
+                        failed_jumps = 0
+
+                    # uh oh! That fallback hasn't worked for yet ANOTHER 20%
+                    # of the song length. Something is seriously broken. Time
+                    # to punt and just start again from the first beat.
+
+                    elif failed_jumps >= (.3 * len(beats)):
+                        beats_since_jump = 0
+                        failed_jumps = 0
+                        beat = beats[start_beat]
+
+                    # asuuming we're not in one of the failure modes but haven't found a good
+                    # candidate that hasn't been recently played, just play the next beat in the
+                    # sequence
+
+                    else:
+                        beat = beats[beat['next']]
+
+                else:
+
+                    # if it's time to jump and we have at least one good non-recent
+                    # candidate, let's just pick randomly from the list and go there
+
+                    beats_since_jump = 0
+                    failed_jumps = 0
+                    beat = beats[ random.choice(non_recent_candidates) ]
+
+                # reset our sequence position counter and pick a new target length
+                # between 16 and max_sequence_len, making sure it's evenly divisible by
+                # 4 beats
+
+                current_sequence = 0
+                min_sequence = random.randrange(16, max_sequence_len, 4)
+
+                # if we're in the place where we want to jump but can't because
+                # we haven't found any good candidates, then set current_sequence equal to
+                # min_sequence. During playback this will show up as having 00 beats remaining
+                # until we next jump. That's the signal that we'll jump as soon as we possibly can.
+                #
+                # Code that reads play_vector and sees this value can choose to visualize this in some
+                # interesting way.
+
+                if beats_since_jump >= max_beats_between_jumps:
+                    current_sequence = min_sequence
+
+                # add an entry to the play_vector
+                play_vector.append({'beat':beat['id'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
+            else:
+
+                # if we're not trying to jump then just add the next item to the play_vector
+                play_vector.append({'beat':beat['next'], 'seq_len': min_sequence, 'seq_pos': current_sequence})
+                beat = beats[beat['next']]
+                beats_since_jump += 1
+
+        return play_vector

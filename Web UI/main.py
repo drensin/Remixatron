@@ -20,6 +20,7 @@ import secrets
 import subprocess
 import soundfile as sf
 import sys
+import urllib.parse
 
 from flask import Flask, current_app, g, make_response, redirect, request, send_from_directory, session, url_for
 from flask_compress import Compress
@@ -382,8 +383,37 @@ def process_audio(url, userid, isupload=False, clusters=0):
 
     remixatron_callback(0.1, 'Audio downloaded')
 
-    # all of the core analytics and processing is done in this call
-    jukebox = InfiniteJukebox(fn, clusters=clusters, progress_callback=remixatron_callback, do_async=False)
+    cached_beatmap_fn = "/tmp/" + urllib.parse.quote(url, safe='') + ".beatmap"
+
+    beats = None
+    play_vector = None
+
+    if os.path.isfile(cached_beatmap_fn) == False:
+
+        # all of the core analytics and processing is done in this call
+
+        jukebox = InfiniteJukebox(fn, clusters=clusters, progress_callback=remixatron_callback, do_async=False)
+
+        beats = jukebox.beats
+        play_vector = jukebox.play_vector
+
+        def skip_encoder(o):
+            return ''
+
+        with open(cached_beatmap_fn, 'w') as f:
+            f.write(json.dumps(jukebox.beats, default=skip_encoder))
+
+    else:
+
+        print("Reading beatmap from disk.")
+
+        with open(cached_beatmap_fn, 'r') as f:
+            beats = json.load(f)
+
+        est_duration = beats[-1]['start'] + beats[-1]['duration']
+        est_tempo = (len(beats) / est_duration) * 60
+
+        play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats)
 
     # save off a dictionary of all the beats of the song. We care about the id, when the
     # beat starts, how long it lasts, to which segment and cluster it belongs, and which
@@ -393,7 +423,7 @@ def process_audio(url, userid, isupload=False, clusters=0):
 
     beatmap = []
 
-    for beat in jukebox.beats:
+    for beat in beats:
         b = {'id':beat['id'], 'start':beat['start'] * 1000.00, 'duration':beat['duration'] * 1000.00,
              'segment':beat['segment'], 'cluster':beat['cluster'], 'jump_candidate':beat['jump_candidates']}
 
@@ -406,7 +436,7 @@ def process_audio(url, userid, isupload=False, clusters=0):
     # generated play path through the song.
 
     with open('/tmp/' + userid + '.playvector', 'w') as f:
-        f.write(json.dumps(jukebox.play_vector))
+        f.write(json.dumps(play_vector))
 
     # signal the client that we're done processing
 
