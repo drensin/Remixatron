@@ -23,6 +23,15 @@ var segments = 0;
 var colorMap = [];
 var lastMessageID = -1;
 
+// catch and handle window resize events
+
+$(window).resize( ()=> {
+    set_dropdown_width();
+});
+
+// set the dropdown width
+set_dropdown_width();
+
 // start the session by finding out our device id and setting up our
 // socket.io channels.
 
@@ -40,6 +49,21 @@ $.get('/whoami', (data) => {
 
 // load the 'Stars' dropdown with our saved favorites
 load_history_dropdown();
+
+
+/**
+ * Sets the width of the favorites dropdown. Is called when the
+ * page loads or resizes.
+ */
+function set_dropdown_width() {
+
+    if ( window.screen.availWidth > 500 ) {
+        $('#ddhistory').css('width', 'auto');
+    }else{
+        $('#ddhistory').css('width', window.screen.availWidth - 20);
+    }
+
+}
 
 /**
  * Shows the progress bar and displays the appropriate percentage and
