@@ -406,7 +406,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
             return ''
 
         with bz2.open(cached_beatmap_fn, 'wb') as f:
-            f.write(json.dumps(jukebox.beats, default=skip_encoder))
+            f.write(json.dumps(jukebox.beats, default=skip_encoder).encode('utf-8'))
 
     else:
 
