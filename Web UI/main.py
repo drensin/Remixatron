@@ -283,9 +283,14 @@ def fetch_url():
     if 'clusters' in request.args:
         clusters = int(request.args['clusters'])
 
+    useCache = True
+
+    if 'useCache' in request.args:
+        useCache = bool(int(request.args['useCache']))
+
     deviceid = get_userid()
 
-    print( deviceid + ' asked for:', url, 'with', clusters, 'clusters')
+    print( deviceid, 'asked for:', url, 'with', clusters, 'clusters and useCache of', useCache)
 
     # if there is already a proc entry for this client, then
     # kill it if it's running.
@@ -302,7 +307,7 @@ def fetch_url():
     # start the main audio processing proc and save a pointer to it
     # for this client
 
-    procMap[deviceid] = Process(target=process_audio, args=(url, deviceid, False, clusters))
+    procMap[deviceid] = Process(target=process_audio, args=(url, deviceid, False, clusters, useCache))
     procMap[deviceid].start()
 
     return index()
@@ -352,7 +357,7 @@ def post_status_message( userid, percentage, message ):
         params={'namespace': '/' + userid, 'event':'status', 'message': payload}
     )
 
-def process_audio(url, userid, isupload=False, clusters=0):
+def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
     """ The main processing for the audio is done here. It makes heavy use of the
     InfiniteJukebox class (https://github.com/drensin/Remixatron).
 
@@ -388,7 +393,7 @@ def process_audio(url, userid, isupload=False, clusters=0):
     beats = None
     play_vector = None
 
-    if os.path.isfile(cached_beatmap_fn) == False:
+    if (os.path.isfile(cached_beatmap_fn) == False) or (useCache == False):
 
         # all of the core analytics and processing is done in this call
 

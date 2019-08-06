@@ -93,12 +93,24 @@ async function copyUrlToClipboard(url) {
 }
 
 /**
+ * Called when the user manually sets the clustering options
+ */
+function advancedFetch() {
+
+    var clusters = parseInt( $('#clusterSize').val() );
+
+    $('.navbar-collapse').collapse('hide');
+
+    fetchURL(clusters=clusters, useCache=0);
+}
+
+/**
  * This is called when the user tries to get audio from Youtube.
  */
-function fetchURL(clusters = 0) {
+function fetchURL(clusters = 0, useCache=1) {
 
     // hide the navbar
-    $('#toggler').click();
+    $('.navbar-collapse').collapse('hide');
 
     // show the prgress modal
     $('#progress-modal').modal('show');
@@ -109,14 +121,14 @@ function fetchURL(clusters = 0) {
 
     var loc = $('#ytURL').val();
 
-    var relUrl = '/fetch_url?url=' + loc + "&clusters=" + clusters;
+    var relUrl = '/fetch_url?url=' + loc + "&clusters=" + clusters + "&useCache=" + useCache;
     var newUrl = new URL(relUrl, window.location.href);
 
     copyUrlToClipboard(newUrl.href);
 
     // kick off the audio processing on the server and return
 
-    $.get('/fetch_url',"url=" + loc + "&clusters=" + clusters);
+    $.get('/fetch_url',"url=" + loc + "&clusters=" + clusters + "&useCache=" + useCache);
 
     set_progress_bar(0, "Sending request to server...");
 
@@ -502,6 +514,9 @@ function showtoast() {
 
     // set the display text to the title
     $('#nptext').text(trackinfo.title);
+
+    // set the clusters counter
+    $('#clusterSize').val(clusters);
 
     // display the panel
     $('.toast').toast('show');
