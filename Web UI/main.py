@@ -397,7 +397,9 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
         # all of the core analytics and processing is done in this call
 
-        jukebox = InfiniteJukebox(fn, clusters=clusters, progress_callback=remixatron_callback, do_async=False)
+        jukebox = InfiniteJukebox(fn, clusters=clusters,
+                                  progress_callback=remixatron_callback,
+                                  start_beat=0, do_async=False)
 
         beats = jukebox.beats
         play_vector = jukebox.play_vector
@@ -415,7 +417,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
         with bz2.open(cached_beatmap_fn, 'rb') as f:
             beats = json.load(f)
 
-        play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats)
+        play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats, start_beat=0)
 
     # save off a dictionary of all the beats of the song. We care about the id, when the
     # beat starts, how long it lasts, to which segment and cluster it belongs, and which
