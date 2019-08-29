@@ -5,7 +5,7 @@ chardet==3.0.4
 Click==7.0
 decorator==4.4.0
 dnspython==1.16.0
-eventlet==0.25.0
+eventlet==0.25.1
 Flask==1.1.1
 Flask-Compress==1.4.0
 Flask-SocketIO==4.2.1
@@ -19,7 +19,7 @@ llvmlite==0.29.0
 MarkupSafe==1.1.1
 monotonic==1.5
 numba==0.45.1
-numpy==1.17.0
+numpy==1.17.1
 pycparser==2.19
 python-engineio==3.9.3
 python-socketio==4.3.1
