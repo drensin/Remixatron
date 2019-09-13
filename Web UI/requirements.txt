@@ -1,5 +1,5 @@
 audioread==2.1.8
-certifi==2019.6.16
+certifi==2019.9.11
 cffi==1.12.3
 chardet==3.0.4
 Click==7.0
@@ -31,4 +31,4 @@ six==1.12.0
 SoundFile==0.10.2
 urllib3==1.25.3
 Werkzeug==0.15.6
-youtube-dl==2019.9.1
+youtube-dl==2019.9.12.1
