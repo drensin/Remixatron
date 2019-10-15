@@ -20,7 +20,6 @@ MarkupSafe==1.1.1
 monotonic==1.5
 numba==0.46.0
 numpy==1.17.2
-pkg-resources==0.0.0
 pycparser==2.19
 python-engineio==3.9.3
 python-socketio==4.3.1
