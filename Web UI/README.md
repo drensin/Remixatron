@@ -8,7 +8,7 @@ It groups musically similar beats of a song into clusters and then plays a rando
 This is a web ui version of the CLI found at [main page](https://github.com/drensin/Remixatron). Please see the [README.md](https://github.com/drensin/Remixatron/blob/master/README.md) at that site for a deeper explanation of how it all works under the hood.
 
 # Requirements
-You must have these installed for this wot work.
+You must have these installed for this to work.
 1) ffmpeg
 2) Python 3.6+ (Python 3.7 preferred)
 
