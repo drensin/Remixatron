@@ -177,11 +177,15 @@ def fetch_from_youtube(url, userid):
     post_status_message(userid, 0.05, "Asking Youtube for audio...")
 
     # download the file (audio only) at the highest quality and save it in /tmp
-
-    result = subprocess.run(['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', '--audio-quality', '0',
-                                           '-o','/tmp/' + userid + '.tmp', url], stdout=subprocess.PIPE)
-    print(result.stdout.decode('utf-8'))
-
+    try:
+        cmd = ['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', 
+               '--audio-quality', '0', '-o','/tmp/' + userid + '.tmp', url]
+        result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
+        print(result.stdout.decode('utf-8'))
+    except subprocess.CalledProcessError as e:
+        post_status_message(userid, 1, "Failed to download the audio from Youtube. Check the logs!")
+        raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
+                      "version (latest available at `https://yt-dl.org/downloads/latest/youtube-dl`)")
     fn = result.stdout.decode('utf-8').split(':')[-1].split('\n')[0][1:]
 
     # trim silence from the ends and save as ogg
@@ -396,7 +400,6 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
     if (os.path.isfile(cached_beatmap_fn) == False) or (useCache == False):
 
         # all of the core analytics and processing is done in this call
-
         jukebox = InfiniteJukebox(fn, clusters=clusters,
                                   progress_callback=remixatron_callback,
                                   start_beat=0, do_async=False)
