@@ -198,7 +198,7 @@ def fetch_from_youtube(url, userid):
                             stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
     # delete the downlaoded file because we don't need it anymore
-    # os.remove(fn)
+    os.remove(fn)
 
     # return the name of the trimmed file
     return of
