@@ -181,15 +181,18 @@ def fetch_from_youtube(url, userid):
         cmd = ['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', 
                '--audio-quality', '0', '-o','/tmp/' + userid + '.tmp', url]
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
-        print(result.stdout.decode('utf-8'))
+        print("Youtube-dl output [{}]".format(result))
     except subprocess.CalledProcessError as e:
         post_status_message(userid, 1, "Failed to download the audio from Youtube. Check the logs!")
         raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
                       "version (latest available at `https://yt-dl.org/downloads/latest/youtube-dl`)")
-    fn = result.stdout.decode('utf-8').split(':')[-1].split('\n')[0][1:]
+    fn = result[-2].split(":")[-1][1:]
 
     # trim silence from the ends and save as ogg
     of = '/tmp/' + userid + '.ogg'
+
+    print("Input file [{}]".format(fn))
+    print("Output file [{}]".format(of))
 
     post_status_message(userid, 0.1, "Trimming silence from the ends...")
 
