@@ -1,5 +1,5 @@
 # Remixatron Web UI
-(c) 2017-2019 - Dave Rensin - drensin@gmail.com
+(c) 2017-2021 - Dave Rensin - drensin@gmail.com
 
 Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project creaeted by Paul Lamere (paul@spotify.com)
 
