@@ -1,5 +1,5 @@
 # Remixatron
-(c) 2017-2019 - Dave Rensin - drensin@gmail.com  
+(c) 2017-2021 - Dave Rensin - drensin@gmail.com  
 
 This program attempts to recreate the wonderful Infinite Jukebox (http://www.infinitejuke.com) on the command line in Python. It groups musically similar beats of a song into clusters and then plays a random path through the song that makes musical sense, but not does not repeat. It will do this infinitely.
 ***
