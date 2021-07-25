@@ -187,7 +187,7 @@ def fetch_from_youtube(url, userid):
         post_status_message(userid, 1, "Failed to download the audio from Youtube. Check the logs!")
         raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
                       "version (latest available at `https://yt-dl.org/downloads/latest/youtube-dl`)")
-    fn = result[-2].split(":")[-1][1:]
+    fn = ":".join(result[-2].split(":")[1:])[1:]
 
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/' + userid + '.ogg'
