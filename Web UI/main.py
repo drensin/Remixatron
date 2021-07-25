@@ -21,6 +21,7 @@ import subprocess
 import soundfile as sf
 import sys
 import urllib.parse
+import tempfile
 
 from flask import Flask, current_app, g, make_response, redirect, request, send_from_directory, session, url_for
 from flask_compress import Compress
@@ -179,17 +180,17 @@ def fetch_from_youtube(url, userid):
     # download the file (audio only) at the highest quality and save it in /tmp
     try:
         cmd = ['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', 
-               '--audio-quality', '0', '-o','/tmp/' + userid + '.tmp', url]
+               '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
         print("Youtube-dl output [{}]".format(result))
     except subprocess.CalledProcessError as e:
         post_status_message(userid, 1, "Failed to download the audio from Youtube. Check the logs!")
         raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
                       "version (latest available at `https://yt-dl.org/downloads/latest/youtube-dl`)")
-    fn = result[-2].split(":")[-1][1:]
+    fn = ":".join(result[-2].split(":")[1:])[1:]
 
     # trim silence from the ends and save as ogg
-    of = '/tmp/' + userid + '.ogg'
+    of = tempfile.gettempdir() + '/' + userid + '.ogg'
 
     print("Input file [{}]".format(fn))
     print("Output file [{}]".format(of))
@@ -218,7 +219,7 @@ def fetch_from_local(fn, userid):
     """
 
     # trim silence from the ends and save as ogg
-    of = '/tmp/' + userid + '.ogg'
+    of = tempfile.gettempdir() + '/' + userid + '.ogg'
 
     post_status_message(userid, 0.1, "Trimming silence from the ends...")
 
@@ -395,7 +396,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
     remixatron_callback(0.1, 'Audio downloaded')
 
-    cached_beatmap_fn = "/tmp/" + urllib.parse.quote(url, safe='') + ".beatmap.bz2"
+    cached_beatmap_fn = tempfile.gettempdir() + '/' + urllib.parse.quote(url, safe='') + ".beatmap.bz2"
 
     beats = None
     play_vector = None
@@ -439,13 +440,13 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
         beatmap.append(b)
 
-    with open('/tmp/' + userid + '.beatmap', 'w') as f:
+    with open(tempfile.gettempdir() + '/' + userid + '.beatmap', 'w') as f:
         f.write(json.dumps(beatmap))
 
     # save off a 1024 * 1024 vector of beats to play. This is the random(ish)ly
     # generated play path through the song.
 
-    with open('/tmp/' + userid + '.playvector', 'w') as f:
+    with open(tempfile.gettempdir() + '/' + userid + '.playvector', 'w') as f:
         f.write(json.dumps(play_vector))
 
     # signal the client that we're done processing
@@ -530,7 +531,7 @@ def get_beatmap():
 
     json = ""
 
-    with open('/tmp/' + get_userid() + '.beatmap', 'r') as f:
+    with open(tempfile.gettempdir() + '/' + get_userid() + '.beatmap', 'r') as f:
         json = f.readlines()
 
     return json[0], [('Content-Type', 'application/json'),
@@ -548,7 +549,7 @@ def get_playvector():
 
     json = ""
 
-    with open('/tmp/' + get_userid() + '.playvector', 'r') as f:
+    with open(tempfile.gettempdir() + '/' + get_userid() + '.playvector', 'r') as f:
         json = f.readlines()
 
     return json[0], [('Content-Type', 'application/json'),
@@ -562,7 +563,7 @@ def get_audio():
         flask.Response: the audio file to play
     """
 
-    return send_from_directory('/tmp', get_userid() + '.ogg', cache_timeout=0)
+    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.ogg', cache_timeout=0)
 
 @app.route('/trackinfo')
 def get_trackinfo():
@@ -577,7 +578,7 @@ def get_trackinfo():
 
     json = ""
 
-    with open('/tmp/' + get_userid() + '.tmp.info.json', 'r') as f:
+    with open(tempfile.gettempdir() + '/' + get_userid() + '.tmp.info.json', 'r') as f:
         json = f.readlines()
 
     return json[0], [('Content-Type', 'application/json'),
@@ -629,7 +630,7 @@ def cleanup():
         flask.Response: HTTP 200 OK
     """
 
-    fileList = glob.glob('/tmp/' + get_userid() + '*')
+    fileList = glob.glob(tempfile.gettempdir() + '/' + get_userid() + '*')
 
     for file in fileList:
         os.remove(file)
@@ -652,14 +653,14 @@ def upload_audio():
 
     # save the uploaded file
 
-    of = '/tmp/' +deviceid + '.tmp'
+    of = tempfile.gettempdir() + '/' +deviceid + '.tmp'
     file.save(of)
 
     print( deviceid + ' uploaded: ' + file.filename )
 
     # save off the track info
 
-    with open('/tmp/' + deviceid + '.tmp.info.json', 'w') as f:
+    with open(tempfile.gettempdir() + '/' + deviceid + '.tmp.info.json', 'w') as f:
         j = {'title': file.filename, 'thumbnail':'/static/favicon.ico'}
         f.write(json.dumps(j))
 

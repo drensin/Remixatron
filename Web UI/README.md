@@ -17,6 +17,13 @@ I strongly reccommend that you setup and use a python virtual environment to run
 
     pip install --upgrade pip
     pip install -r requirements.txt
+    
+On Windows make sure you add the following directories to your Path:
+
+    # The directory where you installed ffmpeg.exe, eg:
+    C:\ffmpeg\bin 
+    # The python subdirectory where youtube-dl.exe was installed, eg:
+    C:\Users\Name\AppData\Roaming\Python\Python36\Scripts 
 
 # Running
     pip install --upgrade youtube-dl; python main.py
