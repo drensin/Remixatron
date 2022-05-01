@@ -179,7 +179,9 @@ def fetch_from_youtube(url, userid):
 
     # download the file (audio only) at the highest quality and save it in /tmp
     try:
-        cmd = ['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', 
+        # cmd = ['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', 
+        #        '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
+        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
                '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
         print("Youtube-dl output [{}]".format(result))
