@@ -1,2 +1,4 @@
 __pycache__/*
 Web UI/__pycache__/*
+Web UI/cors.cfg
+.gitignore
