@@ -418,7 +418,8 @@ class InfiniteJukebox(object):
 
             # find all the beats that (a) are in the same cluster as the NEXT oridnal beat, (b) are of the same
             # cluster position as the next ordinal beat, (c) are in the same place in the measure as the NEXT beat,
-            # (d) but AREN'T the next beat, and (e) AREN'T in the same cluster as the current beat.
+            # (d) but AREN'T the next beat, (e) AREN'T in the same cluster as the current beat, AND
+            # (f) are more than 7 beats away (to minimize weird local loops)
             #
             # THAT collection of beats contains our jump candidates
 
@@ -427,7 +428,8 @@ class InfiniteJukebox(object):
                                (bx['is'] == beats[beat['next']]['is']) and
                                (bx['id'] % 4 == beats[beat['next']]['id'] % 4) and
                                (bx['segment'] != beat['segment']) and
-                               (bx['id'] != beat['next'])]
+                               (bx['id'] != beat['next']) and
+                               (abs(bx['id'] - beats[beat['next']]['id']) > 7)]
 
             if jump_candidates:
                 beat['jump_candidates'] = jump_candidates
@@ -555,6 +557,8 @@ class InfiniteJukebox(object):
         # we need at least 3 clusters for any song and shouldn't need to calculate more than
         # 48 clusters for even a really complicated peice of music.
 
+        cluster_ratio_map = {}
+
         for n_clusters in range(48, 2, -1):
 
             self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
@@ -575,6 +579,9 @@ class InfiniteJukebox(object):
             silhouette_avg = sklearn.metrics.silhouette_score(X, cluster_labels)
 
             ratio, min_segment_len = self.__segment_stats_from_labels(cluster_labels.tolist())
+
+            if ratio > 3:
+                cluster_ratio_map[n_clusters] = round(ratio,2)
 
             # We need to grade each cluster according to how likely it is to produce a good
             # result. There are a few factors to look at.
@@ -606,7 +613,12 @@ class InfiniteJukebox(object):
 
             orphan_scaler = .5 if min_segment_len == 1 else 1
 
-            cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
+            #cluster_score = n_clusters * silhouette_avg * ratio * orphan_scaler
+            
+            # NOTE: Removing the effects of the orphan_scaler for now because it seems
+            #       to be doing more harm than good.
+
+            cluster_score = ((n_clusters/10) + ratio) * silhouette_avg
 
             #cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
 
@@ -617,6 +629,8 @@ class InfiniteJukebox(object):
                 best_cluster_score = cluster_score
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
+
+        print(cluster_ratio_map)
 
         # return the best results
         return (best_cluster_size, best_labels)
