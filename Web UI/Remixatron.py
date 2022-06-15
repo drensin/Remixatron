@@ -918,9 +918,15 @@ class InfiniteJukebox(object):
                 current_sequence = 0
                 min_sequence = random.randrange(16, max_sequence_len, 4)
 
+                # if the beats we'd like to play would make us go longer than
+                # the max number of beats we should go between jumps, then let's
+                # only try to play as many beats as it takes to get to
+                # max_beats_between_jumps. We might be in a local loop so there's
+                # no point hanging around!
+                
                 if min_sequence > (max_beats_between_jumps - beats_since_jump):
                     min_sequence = (max_beats_between_jumps - beats_since_jump)
-                    
+
                 # if we're in the place where we want to jump but can't because
                 # we haven't found any good candidates, then set current_sequence equal to
                 # min_sequence. During playback this will show up as having 00 beats remaining
