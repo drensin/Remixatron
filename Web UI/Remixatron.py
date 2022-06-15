@@ -827,12 +827,12 @@ class InfiniteJukebox(object):
         recent = collections.deque(maxlen=recent_depth)
 
         # keep track of the time since the last successful jump. If we go more than
-        # 10% of the song length since our last jump, then we will prioritize an
+        # 20% of the song length since our last jump, then we will prioritize an
         # immediate jump to a not recently played segment. Otherwise playback will
         # be boring for the listener. This also has the advantage of busting out of
         # local loops.
 
-        max_beats_between_jumps = int(round(len(beats) * .1))
+        max_beats_between_jumps = int(round(len(beats) * .2))
         beats_since_jump = 0
         failed_jumps = 0
 
@@ -886,7 +886,7 @@ class InfiniteJukebox(object):
                         beats_since_jump = 0
                         failed_jumps = 0
 
-                    # uh oh! That fallback hasn't worked for yet ANOTHER 20%
+                    # uh oh! That fallback hasn't worked for yet ANOTHER 30%
                     # of the song length. Something is seriously broken. Time
                     # to punt and just start again from the first beat.
 
@@ -918,6 +918,9 @@ class InfiniteJukebox(object):
                 current_sequence = 0
                 min_sequence = random.randrange(16, max_sequence_len, 4)
 
+                if min_sequence > (max_beats_between_jumps - beats_since_jump):
+                    min_sequence = (max_beats_between_jumps - beats_since_jump)
+                    
                 # if we're in the place where we want to jump but can't because
                 # we haven't found any good candidates, then set current_sequence equal to
                 # min_sequence. During playback this will show up as having 00 beats remaining

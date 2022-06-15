@@ -11,8 +11,11 @@
 """
 import bz2
 import collections
+from genericpath import exists
 import glob
+from importlib.resources import path
 import json
+from pickle import FALSE
 import numpy as np
 import os
 import requests
@@ -183,8 +186,11 @@ def fetch_from_youtube(url, userid):
         #        '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
         # cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
         #        '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
+        
+        tmpfile = tempfile.gettempdir() + '/' + userid + '.tmp'
+
         cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
-               '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
+               '-o', tmpfile, url]
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
         print("Youtube-dl output [{}]".format(result))
     except subprocess.CalledProcessError as e:
@@ -192,6 +198,9 @@ def fetch_from_youtube(url, userid):
         raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
                       "version (latest available at `https://yt-dl.org/downloads/latest/youtube-dl`)")
     fn = ":".join(result[-2].split(":")[1:])[1:]
+
+    if os.path.exists(fn) == False:
+        fn = tmpfile
 
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/' + userid + '.ogg'

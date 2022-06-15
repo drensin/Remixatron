@@ -1,5 +1,6 @@
+Web UI/cors.cfg
+cors.cfg
 __pycache__/*
 Web UI/__pycache__/*
-cors.cfg
 .gitignore
 Web UI/cors.cfg
