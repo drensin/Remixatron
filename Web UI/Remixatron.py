@@ -557,7 +557,8 @@ class InfiniteJukebox(object):
         # we need at least 3 clusters for any song and shouldn't need to calculate more than
         # 48 clusters for even a really complicated peice of music.
 
-        cluster_ratio_map = {}
+        cluster_ratio_map = []
+        cluster_ratio_map.append(['Clusters', 'AVG(sil)', 'MIN(seg_len)', 'Ratio', 'Cluster Score'])
 
         for n_clusters in range(48, 2, -1):
 
@@ -579,9 +580,6 @@ class InfiniteJukebox(object):
             silhouette_avg = sklearn.metrics.silhouette_score(X, cluster_labels)
 
             ratio, min_segment_len = self.__segment_stats_from_labels(cluster_labels.tolist())
-
-            if ratio > 3:
-                cluster_ratio_map[n_clusters] = round(ratio,2)
 
             # We need to grade each cluster according to how likely it is to produce a good
             # result. There are a few factors to look at.
@@ -618,9 +616,30 @@ class InfiniteJukebox(object):
             # NOTE: Removing the effects of the orphan_scaler for now because it seems
             #       to be doing more harm than good.
 
-            cluster_score = ((n_clusters/10) + ratio) * silhouette_avg
+            # NOTE: I'm playing with different fitness functions. As in all machine learning,
+            # this has become the hardest bit.
 
-            #cluster_score = ((n_clusters/48.0) * silhouette_avg * (ratio/10.0)) * orphan_scaler
+            # My first thought was simply to choose the largest clustering that had a 
+            # ratio > 3, an average silhouette score > .5, and no orphans. That didn't
+            # quite produce the outcome I wanted
+
+            # cluster_score = n_clusters if (ratio >= 3.0 and silhouette_avg > .5 and min_segment_len > 1) else 0
+
+            # My next attempt is to compute a composite score of the number of clusters 
+            # plus a scaled value of the silhouette average plus the minimum segment length.
+            # So far this is producing a better result, but I think I need to compute and 
+            # account for the maximum segment lengths, too.
+
+            cluster_score = 0.0
+
+            if ( ratio > 3.0 and silhouette_avg > .5 ):
+                cluster_score = n_clusters + (10.0 * silhouette_avg) + min_segment_len
+
+            # I'm keeping track of the basic statistics per cluster value tested so I can
+            # print them at the end of the evaluation in the hopes of discovering the optimal
+            # general fitness function.
+
+            cluster_ratio_map.append([n_clusters, round(silhouette_avg * 100, 2), min_segment_len, round(ratio,4), round(cluster_score,4)])
 
             # if this cluster count has a score that's better than the best score so far, store
             # it for later.
@@ -630,7 +649,12 @@ class InfiniteJukebox(object):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
 
-        print(cluster_ratio_map)
+        # print a nice table of the cluster metrics I stored in each iteration
+        for cr in cluster_ratio_map:
+            c, sa, msl, r, cs = cr
+            print( "{:<10} {:<10} {:<15} {:<8} {:<15}".format(c,sa,msl,r,cs))
+   
+        print ("Selected best cluster size of: {}".format(best_cluster_size))
 
         # return the best results
         return (best_cluster_size, best_labels)
@@ -923,7 +947,7 @@ class InfiniteJukebox(object):
                 # only try to play as many beats as it takes to get to
                 # max_beats_between_jumps. We might be in a local loop so there's
                 # no point hanging around!
-                
+
                 if min_sequence > (max_beats_between_jumps - beats_since_jump):
                     min_sequence = (max_beats_between_jumps - beats_since_jump)
 
