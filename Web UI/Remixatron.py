@@ -309,7 +309,7 @@ class InfiniteJukebox(object):
                                                random_state=0, n_init=20).fit_predict(X)
 
         # Get the amplitudes and beat-align them
-        self.__report_progress( .6, "getting amplitudes" )
+        self.__report_progress( .93, "getting amplitudes" )
 
         # newer versions of librosa have renamed the rmse function
 
@@ -368,7 +368,7 @@ class InfiniteJukebox(object):
 
             info.append(final_beat)
 
-        self.__report_progress( .7, "truncating to fade point..." )
+        self.__report_progress( .93, "truncating to fade point..." )
 
         # get the max amplitude of the beats
         # max_amplitude = max([float(b['amplitude']) for b in info])
@@ -391,7 +391,7 @@ class InfiniteJukebox(object):
 
         loop_bounds_begin = self.__start_beat
 
-        self.__report_progress( .8, "computing final beat array..." )
+        self.__report_progress( .93, "computing final beat array..." )
 
         # assign final beat ids
         for beat in beats:
@@ -473,7 +473,7 @@ class InfiniteJukebox(object):
         # remix of the current song.
         #
 
-        self.__report_progress(0.9, "creating play vector")
+        self.__report_progress(0.95, "creating play vector")
 
         play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats, start_beat = loop_bounds_begin)
 
@@ -562,7 +562,7 @@ class InfiniteJukebox(object):
 
         for n_clusters in range(48, 2, -1):
 
-            self.__report_progress(.51, "Testing a cluster value of %d..." % n_clusters)
+            self.__report_progress(round((95 - n_clusters)/100.00,2), "Testing a cluster value of %d..." % n_clusters)
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]

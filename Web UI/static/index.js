@@ -48,8 +48,9 @@ $.get('/whoami', (data) => {
 });
 
 // load the 'Stars' dropdown with our saved favorites
-load_history_dropdown();
+//load_history_dropdown();
 
+$.get('/globalBookmarks',on_globalBookmarks)
 
 /**
  * Sets the width of the favorites dropdown. Is called when the
@@ -376,21 +377,16 @@ function add_to_history() {
     item = {"title": trackinfo.title, "thumbnail": trackinfo.thumbnail,
             "url": $('#ytURL').val(), "clusters": clusters};
 
-    // push it to the list
-    history.push(item);
+    $.ajax({
+        url:'/addGlobalBookmark',
+        type:"POST",
+        data:JSON.stringify(item),
+        contentType:"application/json; charset=utf-8",
+        dataType:"json",
+    }).done(function(data){
+        on_globalBookmarks(data)
+    })            
 
-    // sort the list
-    history = history.sort( (a,b) => {
-        return a.title < b.title ? -1 : 1;
-    });
-
-    // save it to local storage
-    localStorage.ytHistory = JSON.stringify(history);
-
-    // re-load the dropdown in the UI and make sure the
-    // Now Playing star is lit.
-
-    load_history_dropdown();
     $('#starIcon').text('star');
 
 }
@@ -400,23 +396,10 @@ function add_to_history() {
  */
 function remove_from_history() {
 
-    // grab the list
-    var history = JSON.parse(localStorage.ytHistory);
-
-    // find the item
-    var idx = history.findIndex( (e) => {
-        return e.title == trackinfo.title;
+    $.get('/deleteGlobalBookmark', { title: trackinfo.title }, function(data) {
+        $.get('/globalBookmarks',on_globalBookmarks)
     });
 
-    // splice it out
-    history.splice(idx,1)
-
-    // re-save the list to local storage
-    localStorage.ytHistory = JSON.stringify(history);
-
-    // re-populate the dropdown list and clear
-    // the Now Playing star.
-    load_history_dropdown();
     $('#starIcon').text('star_border');
 
 }
@@ -432,6 +415,17 @@ function toggle_to_history() {
     }else{
         add_to_history();
     }
+}
+
+/**
+ * Called when /globalBookmarks returns
+ */
+function on_globalBookmarks(d){
+
+    // save it to local storage
+    localStorage.ytHistory = JSON.stringify(d);
+
+    load_history_dropdown();
 }
 
 /**
@@ -484,7 +478,7 @@ function on_history_select(idx) {
     }
 
     // start the audio processing on the server for the URL
-    fetchURL(clusters = c);
+    fetchURL(clusters = c, useCache = 0);
 }
 
 /**

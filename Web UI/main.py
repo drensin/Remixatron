@@ -32,6 +32,8 @@ from flask_socketio import SocketIO, emit, send
 
 from multiprocessing import Process
 
+from sympy import false
+
 from Remixatron import InfiniteJukebox
 
 # supress warnings from any of the imported libraries. This will keep the
@@ -596,6 +598,86 @@ def get_trackinfo():
 
     return json[0], [('Content-Type', 'application/json'),
                      ('Cache-Control', 'no-store')]
+
+def loadGlobalBookmarks() -> str:
+    """ Return any bookmarks stored on the server. They are a simple ordered JSON
+        array stored in /tmp/remixatron.global.bookmarks
+
+    Returns:
+        JSON string of the track info
+    """
+
+    j = ""
+
+    globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
+
+    if os.path.exists(globalBookmarksFn) == False:
+        with open(globalBookmarksFn, 'w') as f:
+            j = json.dumps([])
+            f.write(j)
+            f.flush()
+            f.close()
+
+    with open(globalBookmarksFn, 'r') as f:
+        j = f.read()
+        print("json len: {}".format(len(j)))
+
+    return j
+
+def saveGlobalBookmarks(json_string : str):
+    """ Save an array bookmarks to /tmp/remixatron.global.bookmarks
+    """
+
+    globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
+
+    with open(globalBookmarksFn, 'w') as f:
+        f.write(json_string)
+        f.flush()
+        f.close()
+
+@app.route('/globalBookmarks')
+def get_globalBookmarks():
+
+    """ Return any bookmarks stored on the server. They are a simple ordered JSON
+        array stored in /tmp/remixatron.global.bookmarks
+
+    Returns:
+        flask.Response: JSON of the track info
+    """
+
+    return loadGlobalBookmarks(), [('Content-Type', 'application/json'),
+                     ('Cache-Control', 'no-store')]
+
+@app.route('/addGlobalBookmark', methods=['POST'])
+def addGlobalBookmark():
+    """ Adds an item to the Global Bookmarks. Sorts the bookmarks before writing
+    """
+
+    json_item = request.get_json()
+
+    print(json.dumps(json_item))
+
+    bookmarks = json.loads(loadGlobalBookmarks())
+    bookmarks.append(json_item)
+    bookmarks.sort(key=lambda x: x["title"])
+
+    saveGlobalBookmarks(json.dumps(bookmarks))
+
+    return json.dumps(bookmarks), [('Content-Type', 'application/json'), 
+                       ('Cache-Control', 'no-store')]
+
+@app.route('/deleteGlobalBookmark')
+def deleteGlobalBookmark():
+
+    title = request.args['title']
+
+    print( "Deleting: " + title)
+
+    bookmarks = json.loads(loadGlobalBookmarks())
+    filtered_bookmarks = [i for i in bookmarks if not (i['title'] == title)] 
+    saveGlobalBookmarks(json.dumps(filtered_bookmarks))
+
+    return "OK"
 
 @app.route('/whoami')
 def whoami():
