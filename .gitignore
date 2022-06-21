@@ -4,3 +4,4 @@ __pycache__/*
 Web UI/__pycache__/*
 .gitignore
 Web UI/cors.cfg
+Web UI/remixatron.global.bookmarks
