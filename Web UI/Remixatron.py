@@ -562,7 +562,8 @@ class InfiniteJukebox(object):
 
         for n_clusters in range(48, 2, -1):
 
-            self.__report_progress(round((95 - n_clusters)/100.00,2), "Testing a cluster value of %d..." % n_clusters)
+            report_pct = .95 - (n_clusters/100.00)
+            self.__report_progress(round(report_pct,2), "Testing a cluster value of %d..." % n_clusters)
 
             # compute a matrix of the Eigen-vectors / their normalized values
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]

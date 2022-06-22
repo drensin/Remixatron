@@ -406,7 +406,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
     # (See https://bit.ly/2YOKm16 for more about how this works)
 
     def remixatron_callback(percentage, message):
-        print( str(percentage * 100) + "%: " + message )
+        print( str(round(percentage * 100,0)) + "%: " + message )
         post_status_message(userid, percentage, message)
 
     remixatron_callback(0.1, 'Audio downloaded')
