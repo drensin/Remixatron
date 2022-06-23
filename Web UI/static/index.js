@@ -332,7 +332,7 @@ function is_in_history(title) {
 
     // get the item if it's already there
     var item = history.find( (e) => {
-        return e.title == title;
+        return e.title == titleCase(title);
     });
 
     // if we found the item, return true. Otherwise, false
