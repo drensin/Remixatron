@@ -422,10 +422,28 @@ function toggle_to_history() {
  */
 function on_globalBookmarks(d){
 
+    // make sure all the titles are in title case and sort
+    // the list alphabetically
+
+    d = d.map( (i) => {i.title=titleCase(i.title); return i;} );
+    d = d.sort( (x,y) => {return x.title.localeCompare(y.title);} );
+
     // save it to local storage
     localStorage.ytHistory = JSON.stringify(d);
 
     load_history_dropdown();
+}
+
+/**
+ * Utility function to convert a string to title case. 
+ * (I can't believe Javascript doesn't have this in the 
+ * standard library!!)
+ */
+
+function titleCase(str) {
+return str.toLowerCase().split(' ').map(function(word) {
+    return (word.charAt(0).toUpperCase() + word.slice(1));
+}).join(' ');
 }
 
 /**
@@ -478,7 +496,7 @@ function on_history_select(idx) {
     }
 
     // start the audio processing on the server for the URL
-    fetchURL(clusters = c, useCache = 0);
+    fetchURL(clusters = c, useCache = 1);
 }
 
 /**
