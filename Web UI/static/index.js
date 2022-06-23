@@ -76,7 +76,7 @@ function set_dropdown_width() {
 function set_progress_bar(percentage, message) {
     $('#progress-modal').modal('show');
     $('#progress-message').text(message);
-    $('#progress').text(String(percentage) + '%');
+    $('#progress').text(percentage.toFixed() + '%');
     $('#progress').css('width', String(percentage) + '%');
 }
 
@@ -732,7 +732,7 @@ function drawViz() {
         if (isSameSegment || isJumpCandidate) {
             ctx.globalAlpha = 1.0;
         }else{
-            ctx.globalAlpha = .1;
+            ctx.globalAlpha = .2;
         }
 
         // draw this beat on the screen at the right location and with the correct
