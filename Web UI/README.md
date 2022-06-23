@@ -22,13 +22,13 @@ On Windows make sure you add the following directories to your Path:
 
     # The directory where you installed ffmpeg.exe, eg:
     C:\ffmpeg\bin 
-    # The python subdirectory where youtube-dl.exe was installed, eg:
+    # The python subdirectory where yt-dlp.exe was installed, eg:
     C:\Users\Name\AppData\Roaming\Python\Python36\Scripts 
 
 # Running
-    pip install --upgrade youtube-dl; python main.py
+    python3 main.py
 
-**NOTE:**  This program uses the [youtube-dl](https://ytdl-org.github.io/youtube-dl/index.html) python module, which is updated A LOT. I strongly reccommend that you run the above command to make sure that you have the latest and greatest youtube-dl module before launching the server each time.
+**NOTE:**  This program uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) - a more performant fork of youtube-dl, which is updated A LOT. I strongly reccommend that you periodically make sure that you have the latest and greatest yt-dlp installed before launching the server each time.
 
 # Connecting
 
