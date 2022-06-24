@@ -332,7 +332,7 @@ function is_in_history(title) {
 
     // get the item if it's already there
     var item = history.find( (e) => {
-        return e.title == titleCase(title);
+        return e.title == title;
     });
 
     // if we found the item, return true. Otherwise, false
@@ -422,28 +422,14 @@ function toggle_to_history() {
  */
 function on_globalBookmarks(d){
 
-    // make sure all the titles are in title case and sort
-    // the list alphabetically
+    // sort the list alphabetically
 
-    d = d.map( (i) => {i.title=titleCase(i.title); return i;} );
     d = d.sort( (x,y) => {return x.title.localeCompare(y.title);} );
 
     // save it to local storage
     localStorage.ytHistory = JSON.stringify(d);
 
     load_history_dropdown();
-}
-
-/**
- * Utility function to convert a string to title case. 
- * (I can't believe Javascript doesn't have this in the 
- * standard library!!)
- */
-
-function titleCase(str) {
-return str.toLowerCase().split(' ').map(function(word) {
-    return (word.charAt(0).toUpperCase() + word.slice(1));
-}).join(' ');
 }
 
 /**

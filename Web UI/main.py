@@ -591,12 +591,21 @@ def get_trackinfo():
         flask.Response: JSON of the track info
     """
 
-    json = ""
+    jsonStr = ""
 
     with open(tempfile.gettempdir() + '/' + get_userid() + '.tmp.info.json', 'r') as f:
-        json = f.readlines()
+        jsonStr = f.readlines()
 
-    return json[0], [('Content-Type', 'application/json'),
+    json_data = json.loads(jsonStr[0])
+
+    title = json_data['title']
+
+    if title[0].islower():
+        title.title()
+
+    json_data['title'] = json_data['title'].title()
+
+    return json.dumps(json_data), [('Content-Type', 'application/json'),
                      ('Cache-Control', 'no-store')]
 
 def loadGlobalBookmarks() -> str:
