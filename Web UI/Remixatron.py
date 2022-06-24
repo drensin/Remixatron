@@ -225,7 +225,7 @@ class InfiniteJukebox(object):
         beat_times = librosa.frames_to_time(librosa.util.fix_frames(btz,
                                                                     x_min=0,
                                                                     x_max=C.shape[1]),
-                                            sr=sr)
+                                                                    sr=sr)
 
         self.__report_progress( .4, "building recurrence matrix..." )
         #####################################################################
@@ -332,7 +332,8 @@ class InfiniteJukebox(object):
 
         info = []
 
-        bytes_per_second = int(round(len(self.raw_audio) / self.duration))
+        # bytes_per_second = int(round(len(self.raw_audio) / self.duration))
+        bytes_per_second = len(self.raw_audio) / self.duration
 
         last_cluster = -1
         current_segment = -1
@@ -360,12 +361,14 @@ class InfiniteJukebox(object):
             else:
                 final_beat['duration'] = beat_tuples[i+1][1] - beat_tuples[i][1]
 
-            if ( (final_beat['start'] * bytes_per_second) % 2 > 1.5 ):
-                final_beat['start_index'] = int(math.ceil(final_beat['start'] * bytes_per_second))
-            else:
-                final_beat['start_index'] = int(final_beat['start'] * bytes_per_second)
+            # if ( (final_beat['start'] * bytes_per_second) % 2 > 1.5 ):
+            #     final_beat['start_index'] = int(math.ceil(final_beat['start'] * bytes_per_second))
+            # else:
+            #     final_beat['start_index'] = int(final_beat['start'] * bytes_per_second)
 
-            final_beat['stop_index'] = int(math.ceil((final_beat['start'] + final_beat['duration']) * bytes_per_second))
+            final_beat['start_index'] = int(final_beat['start'] * bytes_per_second)
+            # final_beat['stop_index'] = int(math.ceil((final_beat['start'] + final_beat['duration']) * bytes_per_second))
+            final_beat['stop_index'] = int( (final_beat['start'] + final_beat['duration']) * bytes_per_second )
 
             # save pointers to the raw bytes for each beat with each beat.
             final_beat['buffer'] = self.raw_audio[ final_beat['start_index'] : final_beat['stop_index'] ]
