@@ -206,15 +206,25 @@ class InfiniteJukebox(object):
         cqt = librosa.cqt(y=y, sr=sr, bins_per_octave=BINS_PER_OCTAVE, n_bins=N_OCTAVES * BINS_PER_OCTAVE)
         C = librosa.amplitude_to_db( np.abs(cqt), ref=np.max)
 
-        self.__report_progress( .3, "Finding beats..." )
+        self.__report_progress( .3, "Prepating to fnd beats..." )
 
         ##########################################################
         # To reduce dimensionality, we'll beat-synchronous the CQT
         # tempo, btz = librosa.beat.beat_track(y=y, sr=sr, trim=False)
-        onset_env = librosa.onset.onset_strength(y=y, sr=sr,
-                                         aggregate=np.median)
 
-        tempo, btz = librosa.beat.beat_track( onset_envelope=onset_env, sr=sr)        
+        # onset_env = librosa.onset.onset_strength(y=y, sr=sr,
+        #                                  aggregate=np.median)
+
+        # tempo, btz = librosa.beat.beat_track( onset_envelope=onset_env, sr=sr)        
+
+        self.__report_progress( .33, "Separating precussion from harmonics..." )
+        D = librosa.stft(y)
+        _, P = librosa.decompose.hpss(D, margin=(1.0,5.0))
+
+        y_perc = librosa.istft(P)
+
+        self.__report_progress( .35, "Finding beats on just the percussive bits..." )
+        tempo, btz = librosa.beat.beat_track(y=y_perc, sr=sr, trim=False)
         
         Csync = librosa.util.sync(C, btz, aggregate=np.median)
 
@@ -641,7 +651,7 @@ class InfiniteJukebox(object):
             cluster_score = 0.0
 
             if ( ratio > 3.0 and silhouette_avg > .5 ):
-                cluster_score = n_clusters + (10.0 * silhouette_avg) + min_segment_len
+                cluster_score = n_clusters + (10.0 * silhouette_avg) + min_segment_len + ratio
 
             # I'm keeping track of the basic statistics per cluster value tested so I can
             # print them at the end of the evaluation in the hopes of discovering the optimal
