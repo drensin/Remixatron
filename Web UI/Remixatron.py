@@ -651,7 +651,10 @@ class InfiniteJukebox(object):
             cluster_score = 0.0
 
             if ( ratio > 3.0 and silhouette_avg > .5 ):
-                cluster_score = n_clusters + (10.0 * silhouette_avg) + min_segment_len + ratio
+                cluster_score = n_clusters + \
+                                (10.0 * silhouette_avg) + \
+                                (1.0 * min_segment_len) + \
+                                ratio
 
             # I'm keeping track of the basic statistics per cluster value tested so I can
             # print them at the end of the evaluation in the hopes of discovering the optimal
@@ -889,7 +892,8 @@ class InfiniteJukebox(object):
             # current sequence. Also, if we've gone more than 10% of the length of the song
             # without jumping we need to immediately prioritze jumping to a non-recent segment.
 
-            will_jump = (current_sequence == min_sequence) or (beats_since_jump >= max_beats_between_jumps)
+            will_jump = (current_sequence == min_sequence) or \
+                        (beats_since_jump >= max_beats_between_jumps)
 
             # since it's time to jump, let's find the most musically pleasing place
             # to go
