@@ -124,7 +124,7 @@ class InfiniteJukebox(object):
 
     """
 
-    def __init__(self, filename, start_beat=1, clusters=0, progress_callback=None,
+    def __init__(self, filename, start_beat=0, clusters=0, progress_callback=None,
                  do_async=False, use_v1=False):
 
         """ The constructor for the class. Also starts the processing thread.
@@ -185,7 +185,7 @@ class InfiniteJukebox(object):
         #
 
         y, sr = librosa.core.load(self.__filename, mono=False, sr=None)
-        y, _ = librosa.effects.trim(y)
+        # y, _ = librosa.effects.trim(y)
 
         self.duration = librosa.core.get_duration(y,sr)
         self.raw_audio = (y * np.iinfo(np.int16).max).astype(np.int16).T.copy(order='C')
@@ -877,7 +877,7 @@ class InfiniteJukebox(object):
         # be boring for the listener. This also has the advantage of busting out of
         # local loops.
 
-        max_beats_between_jumps = int(round(len(beats) * .2))
+        max_beats_between_jumps = int(round(len(beats) * .1))
         beats_since_jump = 0
         failed_jumps = 0
 
@@ -901,7 +901,11 @@ class InfiniteJukebox(object):
             if ( will_jump ):
 
                 # find the jump candidates that haven't been recently played
-                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
+
+                non_recent_candidates=[]
+
+                if beat['id'] % 4 == 0:
+                    non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
                 # if there aren't any good jump candidates, then we need to fall back
                 # to another selection scheme.
