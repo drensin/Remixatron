@@ -653,7 +653,7 @@ class InfiniteJukebox(object):
             if ( ratio > 3.0 and silhouette_avg > .5 ):
                 cluster_score = n_clusters + \
                                 (10.0 * silhouette_avg) + \
-                                (1.0 * min_segment_len) + \
+                                min_segment_len if min_segment_len <=4 else 4 + \
                                 ratio
 
             # I'm keeping track of the basic statistics per cluster value tested so I can
@@ -904,7 +904,7 @@ class InfiniteJukebox(object):
 
                 non_recent_candidates=[]
 
-                if beat['id'] % 4 == 0:
+                if beat['id'] % 3 == 0:
                     non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
                 # if there aren't any good jump candidates, then we need to fall back
