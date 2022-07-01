@@ -439,7 +439,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
         with bz2.open(cached_beatmap_fn, 'rb') as f:
             beats = json.load(f)
 
-        play_vector = InfiniteJukebox.CreatePlayVectorFromBeats(beats, start_beat=0)
+        play_vector = InfiniteJukebox.CreatePlayVectorFromBeatsMadmom(beats, start_beat=0)
 
     # save off a dictionary of all the beats of the song. We care about the id, when the
     # beat starts, how long it lasts, to which segment and cluster it belongs, and which
