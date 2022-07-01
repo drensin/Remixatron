@@ -577,7 +577,7 @@ class InfiniteJukebox(object):
         cluster_ratio_map = []
         cluster_ratio_map.append(['Clusters', 'AVG(sil)', 'MIN(seg_len)', 'Ratio', 'Cluster Score'])
 
-        for n_clusters in range(48, 2, -1):
+        for n_clusters in range(48, 3, -1):
 
             report_pct = .95 - (n_clusters/100.00)
             self.__report_progress(round(report_pct,2), "Testing a cluster value of %d..." % n_clusters)
@@ -653,7 +653,7 @@ class InfiniteJukebox(object):
             if ( ratio > 3.0 and silhouette_avg > .5 ):
                 cluster_score = n_clusters + \
                                 (10.0 * silhouette_avg) + \
-                                min_segment_len if min_segment_len <=4 else 4 + \
+                                min(min_segment_len, 8) + \
                                 ratio
 
             # I'm keeping track of the basic statistics per cluster value tested so I can
@@ -878,6 +878,8 @@ class InfiniteJukebox(object):
         # local loops.
 
         max_beats_between_jumps = int(round(len(beats) * .1))
+        acceptable_jump_amounts = [x for x in [8, 16, 24, 32, 48, 64] if x <= max_beats_between_jumps]
+
         beats_since_jump = 0
         failed_jumps = 0
 
@@ -902,10 +904,7 @@ class InfiniteJukebox(object):
 
                 # find the jump candidates that haven't been recently played
 
-                non_recent_candidates=[]
-
-                if beat['id'] % 3 == 0:
-                    non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
+                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
                 # if there aren't any good jump candidates, then we need to fall back
                 # to another selection scheme.
@@ -966,7 +965,8 @@ class InfiniteJukebox(object):
                 # 4 beats
 
                 current_sequence = 0
-                min_sequence = random.randrange(16, max_sequence_len, 4)
+                # min_sequence = random.randrange(16, max_sequence_len, 4)
+                min_sequence = random.choice(acceptable_jump_amounts)
 
                 # if the beats we'd like to play would make us go longer than
                 # the max number of beats we should go between jumps, then let's
