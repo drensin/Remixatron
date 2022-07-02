@@ -1411,7 +1411,7 @@ class InfiniteJukebox(object):
         # local loops.
 
         max_beats_between_jumps = int(round(len(beats) * .1))
-        acceptable_jump_amounts = [x for x in [8, 16, 24, 32, 48, 64] if x <= max_beats_between_jumps]
+        acceptable_jump_amounts = [x for x in [16, 24, 32, 48, 64, 72, 96, 128] if x <= max_beats_between_jumps]
 
         beats_since_jump = 0
         failed_jumps = 0
