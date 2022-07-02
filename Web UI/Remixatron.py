@@ -940,9 +940,10 @@ class InfiniteJukebox(object):
             X = evecs[:, :n_clusters] / Cnorm[:, n_clusters-1:n_clusters]
 
             # create the candidate clusters and fit them
-            clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=150,
-                                               random_state=0, n_init=20)
+            # clusterer = sklearn.cluster.KMeans(n_clusters=n_clusters, max_iter=300,
+            #                                    random_state=0, n_init=20)
 
+            clusterer = sklearn.cluster.MiniBatchKMeans(n_clusters=n_clusters)
             cluster_labels = clusterer.fit_predict(X)
 
             # get some key statistics, including how well each beat in the cluster resemble
