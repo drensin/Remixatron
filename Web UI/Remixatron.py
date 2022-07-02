@@ -320,8 +320,10 @@ class InfiniteJukebox(object):
 
             X = evecs[:, :k] / Cnorm[:, k-1:k]
 
-            seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=300,
-                                               random_state=0, n_init=20).fit_predict(X)
+            # seg_ids = sklearn.cluster.KMeans(n_clusters=k, max_iter=300,
+            #                                    random_state=0, n_init=20).fit_predict(X)
+
+            seg_ids = sklearn.cluster.MiniBatchKMeans(n_clusters=k).fit_predict(X)
 
         # Get the amplitudes and beat-align them
         self.__report_progress( .93, "getting amplitudes" )
