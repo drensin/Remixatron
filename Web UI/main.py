@@ -189,21 +189,23 @@ def fetch_from_youtube(url, userid):
 
     # download the file (audio only) at the highest quality and save it in /tmp
     try:
-        # cmd = ['youtube-dl', '--write-info-json', '-x', '--audio-format', 'best', 
-        #        '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
-        # cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
-        #        '--audio-quality', '0', '-o', tempfile.gettempdir() + '/' + userid + '.tmp', url]
-        
+
         tmpfile = tempfile.gettempdir() + '/' + userid + '.tmp'
 
         cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
                '-o', tmpfile, url]
+
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
-        print("Youtube-dl output [{}]".format(result))
+
+        print("###### yt-dlp output ######\n\n[{}]".format(result))
+
     except subprocess.CalledProcessError as e:
+
         post_status_message(userid, 1, "Failed to download the audio from Youtube. Check the logs!")
+
         raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
-                      "version (latest available at `https://yt-dl.org/downloads/latest/youtube-dl`)")
+                      "version (latest available at `https://github.com/yt-dlp/yt-dlp`)")
+
     fn = ":".join(result[-2].split(":")[1:])[1:]
 
     if os.path.exists(fn) == False:
@@ -416,7 +418,6 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
     remixatron_callback(0.1, 'Audio downloaded')
 
-    # cached_beatmap_fn = tempfile.gettempdir() + '/' + urllib.parse.quote(url, safe='') + ".beatmap.bz2"
     cached_beatmap_fn = ( remixatron_dir / (urllib.parse.quote(url, safe='') + '.beatmap.bz2') )
 
     beats = None
@@ -449,10 +450,10 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
             with bz2.open(cached_beatmap_fn, 'rb') as f:
                 beats = json.load(f)
 
-        # # if we're going to use it then just create the play vector without re-clustering
-        # if useCache == True:
-        #     play_vector = InfiniteJukebox.CreatePlayVectorFromBeatsMadmom(beats, start_beat=0)
-        # else: #otherwise, pass the cached beats into the constructor but as for a re-clustering
+        # pass the beat cache into the constructor. The code will use the existing
+        # beat cache instead of running a high precision beat finding process. This
+        # will save ~60s of processing.
+
         jukebox = InfiniteJukebox(fn, clusters=clusters,
                                     progress_callback=remixatron_callback,
                                     start_beat=0, do_async=False, starting_beat_cache=beats)
@@ -496,7 +497,7 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 def relay():
 
     """ The audio processing sub-process will need to send messages back to the client. In
-    order to use socket.io, however, you have to be in the main Flaks context. So, the process
+    order to use socket.io, however, you have to be in the main Flask context. So, the process
     will call this endpoint and this function will then use socket.io to pass the message along
     to the client.
 
@@ -620,9 +621,8 @@ def get_trackinfo():
     title = json_data['title']
 
     if title[0].islower():
-        title.title()
-
-    json_data['title'] = json_data['title'].title()
+        title = title.title()
+        json_data['title'] = title
 
     return json.dumps(json_data), [('Content-Type', 'application/json'),
                      ('Cache-Control', 'no-store')]
@@ -638,7 +638,6 @@ def loadGlobalBookmarks() -> str:
     j = ""
 
     globalBookmarksFn = (remixatron_dir / "remixatron.global.bookmarks")
-    # globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
 
     if os.path.exists(globalBookmarksFn) == False:
         with open(globalBookmarksFn, 'w') as f:
@@ -657,7 +656,6 @@ def saveGlobalBookmarks(json_string : str):
     """ Save an array bookmarks to /tmp/remixatron.global.bookmarks
     """
 
-    # globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
     globalBookmarksFn = (remixatron_dir / 'remixatron.global.bookmarks')
 
     with open(globalBookmarksFn, 'w') as f:
@@ -676,7 +674,7 @@ def get_globalBookmarks():
     """
 
     return loadGlobalBookmarks(), [('Content-Type', 'application/json'),
-                     ('Cache-Control', 'no-store')]
+                                   ('Cache-Control', 'no-store')]
 
 @app.route('/addGlobalBookmark', methods=['POST'])
 def addGlobalBookmark():
@@ -694,7 +692,7 @@ def addGlobalBookmark():
     saveGlobalBookmarks(json.dumps(bookmarks))
 
     return json.dumps(bookmarks), [('Content-Type', 'application/json'), 
-                       ('Cache-Control', 'no-store')]
+                                   ('Cache-Control', 'no-store')]
 
 @app.route('/deleteGlobalBookmark')
 def deleteGlobalBookmark():
@@ -770,7 +768,7 @@ def upload_audio():
     """ The client uploads audio to process to this endpoint
 
     Returns:
-        falsk.Response: a redirect to the index.html page
+        flask.Response: a redirect to the index.html page
     """
 
     file = request.files['file']
