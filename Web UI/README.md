@@ -10,7 +10,8 @@ This is a web ui version of the CLI found at [main page](https://github.com/dren
 # Requirements
 You must have these installed for this to work.
 1) ffmpeg
-2) Python 3.6+ (Python 3.7 preferred)
+2) yt-dlp
+3) Python 3.6+ (Python 3.7 preferred)
 
 # Installation
 I strongly reccommend that you setup and use a python virtual environment to run this server. Once you do that, you can install with just:
