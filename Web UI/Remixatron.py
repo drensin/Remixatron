@@ -563,7 +563,7 @@ class InfiniteJukebox(object):
         cqt = librosa.cqt(y=y, sr=sr, bins_per_octave=BINS_PER_OCTAVE, n_bins=N_OCTAVES * BINS_PER_OCTAVE)
         C = librosa.amplitude_to_db( np.abs(cqt), ref=np.max)
 
-        self.__report_progress( .3, "Runnign a high precision beat finding algorithm. This could take as long as 60s..." )
+        self.__report_progress( .3, "Running a high precision beat finding algorithm. This could take as long as 60s..." )
 
         ##########################################################
         # To reduce dimensionality, we'll beat-synchronous the CQT
