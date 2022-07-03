@@ -102,7 +102,7 @@ function advancedFetch() {
 
     $('.navbar-collapse').collapse('hide');
 
-    fetchURL(clusters=clusters, useCache=0);
+    fetchURL(clusters=clusters, useCache=1);
 }
 
 /**

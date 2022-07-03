@@ -15,7 +15,6 @@ from genericpath import exists
 import glob
 from importlib.resources import path
 import json
-from pickle import FALSE
 import numpy as np
 import os
 import requests
@@ -31,9 +30,7 @@ from flask_compress import Compress
 from flask_socketio import SocketIO, emit, send
 
 from multiprocessing import Process
-
-from sympy import false
-
+from pathlib import Path
 from Remixatron import InfiniteJukebox
 
 # supress warnings from any of the imported libraries. This will keep the
@@ -74,6 +71,14 @@ messageQueues = {}
 # for each client. No client should have more than one process working at a
 # time
 procMap = {}
+
+# make sure the .remixatron directory exists in the home dir of the running
+# user. If not, create it. Then store it for later.
+
+remixatron_dir = (Path.home() / '.remixatron')
+
+if remixatron_dir.exists() == False:
+    os.mkdir(remixatron_dir)
 
 def get_userid():
     """ Returns the device id of the connected user form their cookies.
@@ -411,12 +416,15 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
     remixatron_callback(0.1, 'Audio downloaded')
 
-    cached_beatmap_fn = tempfile.gettempdir() + '/' + urllib.parse.quote(url, safe='') + ".beatmap.bz2"
+    # cached_beatmap_fn = tempfile.gettempdir() + '/' + urllib.parse.quote(url, safe='') + ".beatmap.bz2"
+    cached_beatmap_fn = ( remixatron_dir / (urllib.parse.quote(url, safe='') + '.beatmap.bz2') )
 
     beats = None
     play_vector = None
 
-    if (os.path.isfile(cached_beatmap_fn) == False) or (useCache == False):
+    has_cached_beatmap = os.path.isfile(cached_beatmap_fn)
+
+    if ( has_cached_beatmap == False) or (useCache == False):
 
         # all of the core analytics and processing is done in this call
         jukebox = InfiniteJukebox(fn, clusters=clusters,
@@ -436,10 +444,21 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
         print("Reading beatmap from disk.")
 
-        with bz2.open(cached_beatmap_fn, 'rb') as f:
-            beats = json.load(f)
+        # if there's a saved beats cache on disk, load it
+        if has_cached_beatmap == True:          
+            with bz2.open(cached_beatmap_fn, 'rb') as f:
+                beats = json.load(f)
 
-        play_vector = InfiniteJukebox.CreatePlayVectorFromBeatsMadmom(beats, start_beat=0)
+        # # if we're going to use it then just create the play vector without re-clustering
+        # if useCache == True:
+        #     play_vector = InfiniteJukebox.CreatePlayVectorFromBeatsMadmom(beats, start_beat=0)
+        # else: #otherwise, pass the cached beats into the constructor but as for a re-clustering
+        jukebox = InfiniteJukebox(fn, clusters=clusters,
+                                    progress_callback=remixatron_callback,
+                                    start_beat=0, do_async=False, starting_beat_cache=beats)
+
+        beats = jukebox.beats
+        play_vector = jukebox.play_vector
 
     # save off a dictionary of all the beats of the song. We care about the id, when the
     # beat starts, how long it lasts, to which segment and cluster it belongs, and which
@@ -618,7 +637,8 @@ def loadGlobalBookmarks() -> str:
 
     j = ""
 
-    globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
+    globalBookmarksFn = (remixatron_dir / "remixatron.global.bookmarks")
+    # globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
 
     if os.path.exists(globalBookmarksFn) == False:
         with open(globalBookmarksFn, 'w') as f:
@@ -637,7 +657,8 @@ def saveGlobalBookmarks(json_string : str):
     """ Save an array bookmarks to /tmp/remixatron.global.bookmarks
     """
 
-    globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
+    # globalBookmarksFn = tempfile.gettempdir() + '/remixatron.global.bookmarks'
+    globalBookmarksFn = (remixatron_dir / 'remixatron.global.bookmarks')
 
     with open(globalBookmarksFn, 'w') as f:
         f.write(json_string)

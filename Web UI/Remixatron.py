@@ -126,7 +126,7 @@ class InfiniteJukebox(object):
     """
 
     def __init__(self, filename, start_beat=0, clusters=0, progress_callback=None,
-                 do_async=False, use_v1=False):
+                 do_async=False, use_v1=False, starting_beat_cache=None):
 
         """ The constructor for the class. Also starts the processing thread.
 
@@ -155,6 +155,7 @@ class InfiniteJukebox(object):
         self.clusters = clusters
         self._extra_diag = ""
         self._use_v1 = use_v1
+        self._starting_beat_cache = starting_beat_cache
 
         if do_async == True:
             self.play_ready = threading.Event()
@@ -571,9 +572,18 @@ class InfiniteJukebox(object):
         # self.__report_progress( .35, "Finding beats on just the percussive bits..." )
         # tempo, btz = librosa.beat.beat_track(y=y_perc, sr=sr, trim=False)
 
-        proc = madmom.features.DBNDownBeatTrackingProcessor(beats_per_bar=[3, 4], fps=100)
-        act = madmom.features.RNNDownBeatProcessor()(y)
-        downbeats = proc(act)
+        downbeats = []
+
+        if self._starting_beat_cache == None:
+            proc = madmom.features.DBNDownBeatTrackingProcessor(beats_per_bar=[3, 4], fps=100)
+            act = madmom.features.RNNDownBeatProcessor()(y)
+            downbeats = proc(act)
+        else:
+            for beat in self._starting_beat_cache:
+                downbeats.append( [beat['start'], 
+                                   beat['bar_position']] )
+
+            downbeats = np.array(downbeats)
 
         btz = librosa.time_to_frames(downbeats[:,0], sr=sr)
 
