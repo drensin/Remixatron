@@ -32,10 +32,8 @@ be signaled when the processing is complete. The default mode is to run synchron
 """
 
 import collections
-from turtle import down
 import librosa
 import madmom
-import math
 import random
 import scipy
 import threading
