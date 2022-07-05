@@ -73,9 +73,7 @@ def fetch_from_youtube(url:str) -> str:
     except subprocess.CalledProcessError as e:
 
         print( "Failed to download the audio from Youtube. Check the logs!" )
-
-        raise IOError("Failed to download the audio from Youtube. Please check you're running the latest "
-                      "version (latest available at `https://github.com/yt-dlp/yt-dlp`)")
+        return None
 
     fn = ":".join(result[-2].split(":")[1:])[1:]
 
@@ -128,6 +126,11 @@ def process_audio(url, clusters=0):
     """
 
     fn = fetch_from_youtube(url)
+
+    if fn == None:
+        print("uh oh.. Downloading failed. Moving on..")
+        return
+        
     print('fetch complete')
 
     # The constructor of the InfiniteJukebox class takes a callback to which to
