@@ -9,9 +9,7 @@
 """
 
 import bz2
-import collections
 from genericpath import exists
-import glob
 from importlib.resources import path
 import json
 import os
@@ -20,7 +18,6 @@ import sys
 import urllib.parse
 import tempfile
 
-from multiprocessing import Process
 from pathlib import Path
 from Remixatron import InfiniteJukebox
 
@@ -130,7 +127,7 @@ def process_audio(url, clusters=0):
     if fn == None:
         print("uh oh.. Downloading failed. Moving on..")
         return
-        
+
     print('fetch complete')
 
     # The constructor of the InfiniteJukebox class takes a callback to which to
