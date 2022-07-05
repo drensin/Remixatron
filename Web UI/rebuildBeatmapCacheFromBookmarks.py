@@ -91,7 +91,7 @@ def fetch_from_youtube(url:str) -> str:
 
 def loadGlobalBookmarks() -> str:
     """ Return any bookmarks stored on the server. They are a simple ordered JSON
-        array stored in /tmp/remixatron.global.bookmarks
+        array stored in $USER/.remixatron/remixatron.global.bookmarks
 
     Returns:
         JSON string of the track info
