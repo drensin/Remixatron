@@ -6,6 +6,9 @@
 
     Normally, you should have to run this, but it's here in case the .bz2 files in your
     .remixatron dir get deleted/corrupted/etc.
+
+    If you want to force re-generate all the beat cache files, delete
+    $USER/.remixatron/*.bz2. Then run this utility.
 """
 
 import bz2
@@ -55,7 +58,7 @@ def fetch_from_youtube(url:str) -> str:
         tmpfile = tempfile.gettempdir() + '/audio.tmp'
 
         cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
-               '-no-playlist', '-o', tmpfile, url]
+               '--no-playlist', '-o', tmpfile, url]
 
         result = [] 
         cmdOutput = ''
@@ -73,6 +76,10 @@ def fetch_from_youtube(url:str) -> str:
         return None
 
     fn = ":".join(result[-2].split(":")[1:])[1:]
+
+    if os.path.exists(fn) == False:
+        # uh oh. there was a problem. Let's skip this.
+        return None
 
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/audio.ogg'
@@ -122,6 +129,13 @@ def process_audio(url, clusters=0):
         url (string): the URL to fetch or the file uploaded
     """
 
+    cached_beatmap_fn = ( remixatron_dir / (urllib.parse.quote(url, safe='') + '.beatmap.bz2') )
+
+    # if the cache is already there, return.
+    if os.path.exists(cached_beatmap_fn):
+        print('Beat cache for this url already present. Skipping...')
+        return
+
     fn = fetch_from_youtube(url)
 
     if fn == None:
@@ -139,8 +153,6 @@ def process_audio(url, clusters=0):
         print( str(round(percentage * 100,0)) + "%: " + message )
 
     remixatron_callback(0.1, 'Audio downloaded')
-
-    cached_beatmap_fn = ( remixatron_dir / (urllib.parse.quote(url, safe='') + '.beatmap.bz2') )
 
     # all of the core analytics and processing is done in this call
     jukebox = InfiniteJukebox(fn, clusters=clusters,
