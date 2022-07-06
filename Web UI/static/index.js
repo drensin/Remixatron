@@ -129,7 +129,8 @@ function fetchURL(clusters = 0, useCache=1) {
 
     // kick off the audio processing on the server and return
 
-    $.get('/fetch_url',"url=" + loc + "&clusters=" + clusters + "&useCache=" + useCache);
+    
+    $.get('/fetch_url',"url=" + encodeURIComponent(loc) + "&clusters=" + clusters + "&useCache=" + useCache);
 
     set_progress_bar(0, "Sending request to server...");
 
