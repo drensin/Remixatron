@@ -193,7 +193,7 @@ def fetch_from_youtube(url, userid):
         tmpfile = tempfile.gettempdir() + '/' + userid + '.tmp'
 
         cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
-               '-o', tmpfile, url]
+               '-no-playlist', '-o', tmpfile, url]
 
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
 

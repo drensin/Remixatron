@@ -55,7 +55,7 @@ def fetch_from_youtube(url:str) -> str:
         tmpfile = tempfile.gettempdir() + '/audio.tmp'
 
         cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
-               '-o', tmpfile, url]
+               '-no-playlist', '-o', tmpfile, url]
 
         result = [] 
         cmdOutput = ''
