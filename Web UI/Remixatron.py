@@ -563,8 +563,6 @@ class InfiniteJukebox(object):
         cqt = librosa.cqt(y=y, sr=sr, bins_per_octave=BINS_PER_OCTAVE, n_bins=N_OCTAVES * BINS_PER_OCTAVE)
         C = librosa.amplitude_to_db( np.abs(cqt), ref=np.max)
 
-        self.__report_progress( .3, "Running a high precision beat finding algorithm. This could take up to 2 minutes..." )
-
         ##########################################################
         # To reduce dimensionality, we'll beat-synchronous the CQT
 
@@ -574,6 +572,9 @@ class InfiniteJukebox(object):
         # detection via madmom
 
         if self._starting_beat_cache == None:
+    
+            self.__report_progress( .3, "Running a high precision beat finding algorithm. This could take up to 2 minutes..." )
+    
             proc = madmom.features.DBNDownBeatTrackingProcessor(beats_per_bar=[3, 4], fps=100)
             act = madmom.features.RNNDownBeatProcessor()(y)
             downbeats = proc(act)
@@ -581,7 +582,8 @@ class InfiniteJukebox(object):
             # the rest of this code expects downbeats to be a 2d numpy array of
             # [beat_time_in_sec, bar_position]
 
-            downbeats = np.array( [[beat['start'], beat['bar_position']] for beat in self._starting_beat_cache] )
+           self.__report_progress( .3, "Using local beat cache for this file..." )
+           downbeats = np.array( [[beat['start'], beat['bar_position']] for beat in self._starting_beat_cache] )
 
         btz = librosa.time_to_frames(downbeats[:,0], sr=sr)
 
