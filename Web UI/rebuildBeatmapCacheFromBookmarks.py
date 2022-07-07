@@ -1,10 +1,10 @@
 """ rebuildBeatmapCacheFromBookmarks
 
     This utility will read the global bookmarks file ($USER/.remixatron/remixatron.global.bookmarks)
-    and create and beat cache .bz2 files for each of them. Having these cached handy
+    and create and beat cache .bz2 files for each of them. Having these cached 
     will shortcut the lengthy beat finding algorithm when a user asks to play a bookmark.
 
-    Normally, you should have to run this, but it's here in case the .bz2 files in your
+    Normally, you should not have to run this, but it's here in case the .bz2 files in your
     .remixatron dir get deleted/corrupted/etc.
 
     If you want to force re-generate all the beat cache files, delete
