@@ -1095,12 +1095,20 @@ class InfiniteJukebox(object):
         # for popular music. Find that value and round down to the nearest
         # multiple of 4. (There almost always are 4 beats per measure in Western music).
 
+        beats_per_bar = max([ b['bar_position'] for b in beats ])
+
         max_sequence_len = int(round((tempo / 120.0) * 48.0))
         max_sequence_len = max_sequence_len - (max_sequence_len % 4)
 
-        min_sequence = max(random.randrange(16, max_sequence_len, 4), start_beat)
+        acceptable_jump_amounts = [x for x in [16, 24, 32, 48, 64, 72, 96, 128] if x <= max_sequence_len]
 
-        beats_per_bar = max([ b['bar_position'] for b in beats ])
+        if beats_per_bar == 3:
+            acceptable_jump_amounts = [(a * .75) for a in acceptable_jump_amounts]
+
+        # min_sequence = max(random.randrange(16, max_sequence_len, 4), start_beat) + 1
+
+        min_sequence = random.choice(acceptable_jump_amounts) + 1
+
         current_sequence = 0
         beat = beats[0]
 
@@ -1130,7 +1138,7 @@ class InfiniteJukebox(object):
         # local loops.
 
         max_beats_between_jumps = int(round(len(beats) * .1))
-        acceptable_jump_amounts = [x for x in [16, 24, 32, 48, 64, 72, 96, 128] if x <= max_beats_between_jumps]
+        acceptable_jump_amounts = [x for x in acceptable_jump_amounts if x <= max_beats_between_jumps]
 
         beats_since_jump = 0
         failed_jumps = 0
@@ -1220,7 +1228,7 @@ class InfiniteJukebox(object):
                 # 4 beats
 
                 current_sequence = 0
-                min_sequence = random.choice(acceptable_jump_amounts)
+                min_sequence = random.choice(acceptable_jump_amounts) + 1
 
                 # if the beats we'd like to play would make us go longer than
                 # the max number of beats we should go between jumps, then let's

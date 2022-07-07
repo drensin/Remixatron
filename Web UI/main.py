@@ -217,10 +217,13 @@ def fetch_from_youtube(url, userid):
     print("Input file [{}]".format(fn))
     print("Output file [{}]".format(of))
 
-    post_status_message(userid, 0.1, "Trimming silence from the ends...")
+    post_status_message(userid, 0.1, "Converting to .ogg format for better playback...")
 
-    filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
-    result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
+    # filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
+    # result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
+    #                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
+    result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
                             stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
     # delete the downlaoded file because we don't need it anymore

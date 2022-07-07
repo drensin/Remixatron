@@ -84,10 +84,13 @@ def fetch_from_youtube(url:str) -> str:
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/audio.ogg'
 
-    print( "Trimming silence from the ends...")
+    # print( "Converting to .ogg format...")
 
-    filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
-    result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
+    # filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
+    # result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
+    #                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
+    result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
                             stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
     # delete the downlaoded file because we don't need it anymore
@@ -175,7 +178,12 @@ def main():
     print( "Found {} bookmarks to process.".format(len(bookmarksJSON)))
 
     for bookmark in bookmarksJSON:
-        print( 'Building beat cache for: ' + bookmark['title'])
+        print( os.linesep + os.linesep + \
+               '############################################################################' + os.linesep + \
+               '# Building beat cache for: ' + bookmark['title'] + os.linesep + \
+               '############################################################################' + \
+               os.linesep + os.linesep)
+
         process_audio(bookmark['url'], bookmark['clusters'])
 
     print('done')
