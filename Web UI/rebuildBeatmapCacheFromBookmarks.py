@@ -124,7 +124,18 @@ def loadGlobalBookmarks() -> str:
 
     return j
 
-def process_audio(url, clusters=0):
+def saveGlobalBookmarks(json_string : str):
+    """ Save an array bookmarks to /tmp/remixatron.global.bookmarks
+    """
+
+    globalBookmarksFn = (remixatron_dir / 'remixatron.global.bookmarks')
+
+    with open(globalBookmarksFn, 'w') as f:
+        f.write(json_string)
+        f.flush()
+        f.close()
+
+def process_audio(url, clusters=0) -> InfiniteJukebox:
     """ The main processing for the audio is done here. It makes heavy use of the
     InfiniteJukebox class (https://github.com/drensin/Remixatron).
 
@@ -137,13 +148,13 @@ def process_audio(url, clusters=0):
     # if the cache is already there, return.
     if os.path.exists(cached_beatmap_fn):
         print('Beat cache for this url already present. Skipping...')
-        return
+        return None
 
     fn = fetch_from_youtube(url)
 
     if fn == None:
         print("uh oh.. Downloading failed. Moving on..")
-        return
+        return None
 
     print('fetch complete')
 
@@ -170,12 +181,16 @@ def process_audio(url, clusters=0):
 
     os.remove(fn)
 
+    return jukebox
+
 def main():
 
     bookmarksStr = loadGlobalBookmarks()
     bookmarksJSON = json.loads(bookmarksStr)
 
     print( "Found {} bookmarks to process.".format(len(bookmarksJSON)))
+
+    newBookmarks = []
 
     for bookmark in bookmarksJSON:
         print( os.linesep + os.linesep + \
@@ -184,7 +199,18 @@ def main():
                '############################################################################' + \
                os.linesep + os.linesep)
 
-        process_audio(bookmark['url'], bookmark['clusters'])
+        # jukebox = process_audio(bookmark['url'], bookmark['clusters'])
+
+        # re-find the opitmal cluster
+        jukebox = process_audio(bookmark['url'], 0)
+
+        if jukebox != None:
+            bookmark['clusters'] = jukebox.clusters
+        
+        newBookmarks.append(bookmark)
+
+    # write the new bookmarks with the new optimal cluster values
+    saveGlobalBookmarks(json.dumps(newBookmarks))
 
     print('done')
 
