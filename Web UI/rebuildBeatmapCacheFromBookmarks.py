@@ -84,18 +84,13 @@ def fetch_from_youtube(url:str) -> str:
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/audio.ogg'
 
-    # print( "Converting to .ogg format...")
-
-    # filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
-    # result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
+    # result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
     #                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-    result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
-                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-
     # delete the downlaoded file because we don't need it anymore
-    os.remove(fn)
+    # os.remove(fn)
 
+    os.ren(fn, of)
     # return the name of the trimmed file
     return of
 

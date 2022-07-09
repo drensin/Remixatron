@@ -214,6 +214,9 @@ def fetch_from_youtube(url, userid):
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/' + userid + '.ogg'
 
+    os.rename( fn, of )
+    return of
+
     print("Input file [{}]".format(fn))
     print("Output file [{}]".format(of))
 

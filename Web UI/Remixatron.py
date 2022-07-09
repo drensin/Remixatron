@@ -1109,7 +1109,7 @@ class InfiniteJukebox(object):
 
         # min_sequence = max(random.randrange(16, max_sequence_len, 4), start_beat) + 1
 
-        min_sequence = random.choice(acceptable_jump_amounts) + 1
+        min_sequence = random.choice(acceptable_jump_amounts) - (beats[1]['bar_position'] + 2)
 
         current_sequence = 0
         beat = beats[0]
@@ -1168,8 +1168,8 @@ class InfiniteJukebox(object):
 
                 non_recent_candidates = []
 
-                if beat['bar_position'] == beats_per_bar:
-                    non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
+                # if beat['bar_position'] == beats_per_bar:
+                non_recent_candidates = [c for c in beat['jump_candidates'] if beats[c]['segment'] not in recent]
 
                 # if there aren't any good jump candidates, then we need to fall back
                 # to another selection scheme.
@@ -1230,7 +1230,8 @@ class InfiniteJukebox(object):
                 # 4 beats
 
                 current_sequence = 0
-                min_sequence = random.choice(acceptable_jump_amounts) + 1
+
+                min_sequence = random.choice(acceptable_jump_amounts) - (beat['bar_position'] + 2)
 
                 # if the beats we'd like to play would make us go longer than
                 # the max number of beats we should go between jumps, then let's
