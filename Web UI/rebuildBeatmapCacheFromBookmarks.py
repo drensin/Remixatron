@@ -102,7 +102,7 @@ def loadGlobalBookmarks() -> str:
         JSON string of the track info
     """
 
-    j = ""
+    j = ''
 
     globalBookmarksFn = (remixatron_dir / "remixatron.global.bookmarks")
 
