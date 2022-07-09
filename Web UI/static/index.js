@@ -259,14 +259,6 @@ function on_ready_message(data) {
 function on_get_beatmap(d) {
     beatmap = d;
 
-    // fix durations
-
-    beatmap.forEach( (beat) => {
-        if (beat.id < (beatmap.length -1 )) {
-            beat.duration = beatmap[beat.id + 1].start - beat.start + 0.0;
-        }
-    });
-
     // how many clusters are there?
     clusters = beatmap.reduce( (a,c) => {
         return a>c.cluster ? a : c.cluster;
@@ -279,7 +271,7 @@ function on_get_beatmap(d) {
 
     // save a color map with a unique color per cluster
     for ( var i = 0; i < clusters; i++ ) {
-        colorMap = colorMap.concat( rainbowStop(i/clusters) );
+        colorMap = colorMap.concat( rainbowStop(i/(clusters+1)) );
     }
 
     set_progress_bar(100, 'Requesting play vector...');

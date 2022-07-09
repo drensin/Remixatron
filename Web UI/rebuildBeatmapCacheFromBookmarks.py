@@ -205,7 +205,7 @@ def main():
         newBookmarks.append(bookmark)
 
     # write the new bookmarks with the new optimal cluster values
-    saveGlobalBookmarks(json.dumps(newBookmarks))
+    saveGlobalBookmarks(json.dumps(newBookmarks, indent=3, sort_keys=True))
 
     print('done')
 

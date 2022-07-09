@@ -15,6 +15,7 @@ from genericpath import exists
 import glob
 from importlib.resources import path
 import json
+from textwrap import indent
 import numpy as np
 import os
 import requests
@@ -695,7 +696,7 @@ def addGlobalBookmark():
     bookmarks.append(json_item)
     bookmarks.sort(key=lambda x: x["title"])
 
-    saveGlobalBookmarks(json.dumps(bookmarks))
+    saveGlobalBookmarks(json.dumps(bookmarks, indent=3, sort_keys=True))
 
     return json.dumps(bookmarks), [('Content-Type', 'application/json'), 
                                    ('Cache-Control', 'no-store')]
@@ -709,7 +710,7 @@ def deleteGlobalBookmark():
 
     bookmarks = json.loads(loadGlobalBookmarks())
     filtered_bookmarks = [i for i in bookmarks if not (i['title'] == title)] 
-    saveGlobalBookmarks(json.dumps(filtered_bookmarks))
+    saveGlobalBookmarks(json.dumps(filtered_bookmarks, indent=3, sort_keys=True))
 
     return "OK"
 
