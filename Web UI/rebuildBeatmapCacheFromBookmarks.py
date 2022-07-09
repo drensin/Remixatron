@@ -90,7 +90,7 @@ def fetch_from_youtube(url:str) -> str:
     # delete the downlaoded file because we don't need it anymore
     # os.remove(fn)
 
-    os.ren(fn, of)
+    os.rename(fn, of)
     # return the name of the trimmed file
     return of
 
