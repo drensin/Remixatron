@@ -53,13 +53,30 @@ compress = Compress(app)
 
 socketio = None
 
+# make sure the .remixatron directory exists in the home dir of the running
+# user. If not, create it. Then store it for later.
+
+remixatron_dir = (Path.home() / '.remixatron')
+
+if remixatron_dir.exists() == False:
+    os.mkdir(remixatron_dir)
+
 # the cors.cfg file defines which domains will be trusted for connections. The
 # default entry of localhost:8000 will be fine if you are running the web
 # browser on the same host as this server. Otherwise, you'll have to modify
 # accordingly. See the README.MD for this project for more info.
 
-if os.path.isfile('cors.cfg'):
-    with open('cors.cfg') as cors_file:
+cors_file = None
+
+if (remixatron_dir / 'cors.cfg').exists():
+    cors_file = str(remixatron_dir / 'cors.cfg')
+elif os.path.isfile("cors.cfg"):
+    cors_file = 'cors.cfg'
+
+print(cors_file)
+
+if cors_file != None:
+    with open(cors_file) as cors_file:
         origins = json.load(cors_file)
         # socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'], logger=True, engineio_logger=True)
         socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'])
