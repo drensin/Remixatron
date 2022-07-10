@@ -62,7 +62,7 @@ if os.path.isfile('cors.cfg'):
     with open('cors.cfg') as cors_file:
         origins = json.load(cors_file)
         # socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'], logger=True, engineio_logger=True)
-        socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'], logger=True, engineio_logger=True)
+        socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'])
 else:
     socketio = SocketIO(app)
 
