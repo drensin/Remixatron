@@ -28,7 +28,7 @@ import tempfile
 
 from flask import Flask, current_app, g, make_response, redirect, request, send_from_directory, session, url_for
 from flask_compress import Compress
-from flask_socketio import SocketIO, emit, send
+from flask_socketio import SocketIO, emit, send, join_room, leave_room
 
 from multiprocessing import Process
 from pathlib import Path
@@ -61,7 +61,7 @@ socketio = None
 if os.path.isfile('cors.cfg'):
     with open('cors.cfg') as cors_file:
         origins = json.load(cors_file)
-        socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'])
+        socketio = SocketIO(app, cors_allowed_origins = origins['ORIGINS'], logger=True, engineio_logger=True)
 else:
     socketio = SocketIO(app)
 
@@ -164,8 +164,11 @@ def on_connect():
 
         return resp
 
+    join_room(deviceid)
+
     print( deviceid + ' has connected')
 
+    
     # make sure there's an entry for this device in the messageQueues dictionary
 
     if deviceid not in messageQueues:
@@ -389,9 +392,14 @@ def post_status_message( userid, percentage, message ):
 
     payload = json.dumps({'percentage': percentage, 'message':message})
 
+    # requests.get(
+    #     'http://localhost:8000/relay',
+    #     params={'namespace': '/' + userid, 'event':'status', 'message': payload}
+    # )
+
     requests.get(
         'http://localhost:8000/relay',
-        params={'namespace': '/' + userid, 'event':'status', 'message': payload}
+        params={'namespace': userid, 'event':'status', 'message': payload}
     )
 
 def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
@@ -495,9 +503,14 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
     ready_msg = {'message':'ready'}
 
+    # requests.get(
+    #     'http://localhost:8000/relay',
+    #     params={'namespace': '/' + userid, 'event':'ready', 'message': json.dumps(ready_msg)}
+    # )
+
     requests.get(
         'http://localhost:8000/relay',
-        params={'namespace': '/' + userid, 'event':'ready', 'message': json.dumps(ready_msg)}
+        params={'namespace': userid, 'event':'ready', 'message': json.dumps(ready_msg)}
     )
 
 @app.route('/relay')
@@ -517,7 +530,8 @@ def relay():
     event_name = request.args['event']
 
     # get the message queue for this client
-    q = messageQueues[namespace[1:]]
+    # q = messageQueues[namespace[1:]]
+    q = messageQueues[namespace]
 
     # compute the next message id.
     id = 0
@@ -537,7 +551,8 @@ def relay():
         j = json.loads(message)
         j['id'] = id
 
-    socketio.emit(event_name, json.dumps(j), namespace=namespace)
+    # socketio.emit(event_name, json.dumps(j), namespace=namespace)
+    socketio.emit(event_name, json.dumps(j), to=namespace)
     return 'OK', [('Content-Type', 'text/plain')]
 
 @app.route('/getQueue')
@@ -748,6 +763,7 @@ def whoami():
     if deviceid not in procMap:
         procMap[deviceid] = None
 
+    
     return deviceid
 
 @app.route('/cleanup')

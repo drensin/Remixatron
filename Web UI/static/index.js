@@ -40,7 +40,7 @@ $.get('/whoami', (data) => {
     console.log('I am:' + data);
     userID = data;
 
-    mychannel = io('/' + data);
+    mychannel = io();
     mychannel.on('status', on_status_message);
     mychannel.on('ready', on_ready_message);
     mychannel.on('reconnect', on_reconnect)
