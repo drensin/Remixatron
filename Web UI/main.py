@@ -225,28 +225,10 @@ def fetch_from_youtube(url, userid):
     if os.path.exists(fn) == False:
         fn = tmpfile
 
-    # trim silence from the ends and save as ogg
+    # save as ogg
     of = tempfile.gettempdir() + '/' + userid + '.ogg'
 
     os.rename( fn, of )
-    return of
-
-    print("Input file [{}]".format(fn))
-    print("Output file [{}]".format(of))
-
-    post_status_message(userid, 0.1, "Converting to .ogg format for better playback...")
-
-    # filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
-    # result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
-    #                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-
-    result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
-                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-
-    # delete the downlaoded file because we don't need it anymore
-    os.remove(fn)
-
-    # return the name of the trimmed file
     return of
 
 def fetch_from_local(fn, userid):
@@ -263,11 +245,10 @@ def fetch_from_local(fn, userid):
     # trim silence from the ends and save as ogg
     of = tempfile.gettempdir() + '/' + userid + '.ogg'
 
-    post_status_message(userid, 0.1, "Trimming silence from the ends...")
+    post_status_message(userid, 0.1, "Saving as .ogg file...")
 
-    filter = "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse"
-    result = subprocess.run(['ffmpeg', '-y', '-i', fn, '-af', filter, of],
-                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    subprocess.run(['ffmpeg', '-y', '-i', fn, of],
+                    stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
     # delete the uploaded file
     os.remove(fn)
@@ -402,11 +383,6 @@ def post_status_message( userid, percentage, message ):
 
     payload = json.dumps({'percentage': percentage, 'message':message})
 
-    # requests.get(
-    #     'http://localhost:8000/relay',
-    #     params={'namespace': '/' + userid, 'event':'status', 'message': payload}
-    # )
-
     requests.get(
         'http://localhost:8000/relay',
         params={'namespace': userid, 'event':'status', 'message': payload}
@@ -513,11 +489,6 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
 
     ready_msg = {'message':'ready'}
 
-    # requests.get(
-    #     'http://localhost:8000/relay',
-    #     params={'namespace': '/' + userid, 'event':'ready', 'message': json.dumps(ready_msg)}
-    # )
-
     requests.get(
         'http://localhost:8000/relay',
         params={'namespace': userid, 'event':'ready', 'message': json.dumps(ready_msg)}
@@ -540,7 +511,6 @@ def relay():
     event_name = request.args['event']
 
     # get the message queue for this client
-    # q = messageQueues[namespace[1:]]
     q = messageQueues[namespace]
 
     # compute the next message id.
@@ -561,7 +531,6 @@ def relay():
         j = json.loads(message)
         j['id'] = id
 
-    # socketio.emit(event_name, json.dumps(j), namespace=namespace)
     socketio.emit(event_name, json.dumps(j), to=namespace)
     return 'OK', [('Content-Type', 'text/plain')]
 
@@ -578,10 +547,7 @@ def getQueue():
 
     q = messageQueues[get_userid()]
 
-    items = []
-
-    for i in q:
-        items.append(i)
+    items = [i for i in q]
 
     return json.dumps(items), [('Content-Type', 'application/json'),
                                ('Cache-Control', 'no-store')]
@@ -702,7 +668,7 @@ def get_globalBookmarks():
         array stored in /tmp/remixatron.global.bookmarks
 
     Returns:
-        flask.Response: JSON of the track info
+        flask.Response: JSON of global bookmarks
     """
 
     return loadGlobalBookmarks(), [('Content-Type', 'application/json'),
