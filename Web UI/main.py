@@ -91,14 +91,6 @@ messageQueues = {}
 # time
 procMap = {}
 
-# make sure the .remixatron directory exists in the home dir of the running
-# user. If not, create it. Then store it for later.
-
-remixatron_dir = (Path.home() / '.remixatron')
-
-if remixatron_dir.exists() == False:
-    os.mkdir(remixatron_dir)
-
 def get_userid():
     """ Returns the device id of the connected user form their cookies.
 
