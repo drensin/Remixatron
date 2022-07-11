@@ -508,7 +508,8 @@ function showtoast() {
     $('#npimg').attr('src', trackinfo.thumbnail);
 
     // set the display text to the title
-    $('#nptext').text(trackinfo.title);
+    // $('#nptext').text(trackinfo.title);
+    $('#np-header-text').text(trackinfo.title);
 
     // set the clusters counter
     $('#clusterSize').val(clusters);
