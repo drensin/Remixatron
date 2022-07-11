@@ -23,6 +23,8 @@ var segments = 0;
 var colorMap = [];
 var lastMessageID = -1;
 
+var selectedBookmark = null;
+
 // catch and handle window resize events
 
 $(window).resize( ()=> {
@@ -75,6 +77,7 @@ function set_dropdown_width() {
  */
 function set_progress_bar(percentage, message) {
     $('#progress-modal').modal('show');
+    $('#progress-title').text( selectedBookmark.title );
     $('#progress-message').text(message);
     $('#progress').text(percentage.toFixed() + '%');
     $('#progress').css('width', String(percentage) + '%');
@@ -466,7 +469,8 @@ function on_history_select(idx) {
     // populate the UI with the correct URL
     $('#ytURL').val(item.url);
 
-    console.log(history[idx]);
+    selectedBookmark = item
+    console.log(item);
 
     var c = 0;
 
