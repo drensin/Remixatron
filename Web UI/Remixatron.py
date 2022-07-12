@@ -939,7 +939,7 @@ class InfiniteJukebox(object):
             cluster_labels = sklearn.cluster.KMeans(n_clusters=n_clusters, 
                                                     max_iter=300,
                                                     random_state=10, 
-                                                    n_init=100).fit_predict(X)
+                                                    n_init=50).fit_predict(X)
 
             # get some key statistics, including how well each beat in the cluster resemble
             # each other (the silhouette average), the ratio of segments to clusters, and the
@@ -1000,7 +1000,7 @@ class InfiniteJukebox(object):
 
             cluster_score = 0.0
 
-            if ( ratio > 3.0 and silhouette_avg > .5 ):
+            if ( ratio >= 3.0 and silhouette_avg > .5 ):
                 cluster_score = n_clusters + \
                                 (10.0 * silhouette_avg) + \
                                 min(min_segment_len, 8) + \
