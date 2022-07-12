@@ -55,9 +55,9 @@ def fetch_from_youtube(url:str) -> str:
     # download the file (audio only) at the highest quality and save it in /tmp
     try:
 
-        tmpfile = tempfile.gettempdir() + '/audio.tmp'
+        tmpfile = tempfile.gettempdir() + '/audio.ogg'
 
-        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
+        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'ogg', 
                '--no-playlist', '-o', tmpfile, url]
 
         result = [] 
@@ -81,8 +81,8 @@ def fetch_from_youtube(url:str) -> str:
         # uh oh. there was a problem. Let's skip this.
         return None
 
-    # trim silence from the ends and save as ogg
-    of = tempfile.gettempdir() + '/audio.ogg'
+    # # trim silence from the ends and save as ogg
+    # of = tempfile.gettempdir() + '/audio.ogg'
 
     # result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
     #                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -90,9 +90,9 @@ def fetch_from_youtube(url:str) -> str:
     # delete the downlaoded file because we don't need it anymore
     # os.remove(fn)
 
-    os.rename(fn, of)
+    # os.rename(fn, of)
     # return the name of the trimmed file
-    return of
+    return fn
 
 def loadGlobalBookmarks() -> str:
     """ Return any bookmarks stored on the server. They are a simple ordered JSON
