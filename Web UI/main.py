@@ -206,7 +206,7 @@ def fetch_from_youtube(url, userid):
 
         tmpfile = tempfile.gettempdir() + '/' + userid + '.tmp'
 
-        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'best', 
+        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'mp3', 
                '--no-playlist', '-o', tmpfile, url]
 
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
@@ -225,11 +225,13 @@ def fetch_from_youtube(url, userid):
     if os.path.exists(fn) == False:
         fn = tmpfile
 
-    # save as ogg
-    of = tempfile.gettempdir() + '/' + userid + '.ogg'
+    # # save as ogg
+    # of = tempfile.gettempdir() + '/' + userid + '.ogg'
 
-    os.rename( fn, of )
-    return of
+    # os.rename( fn, of )
+    # return of
+
+    return fn
 
 def fetch_from_local(fn, userid):
     """ Trim and prepare an audio file uploaded from the user
@@ -285,6 +287,16 @@ def icon():
     """
 
     return redirect_https('static', 'favicon.ico')
+
+@app.route('/mobile-icon.png')
+def mobile_icon():
+    """ Return the application icon suitable for an iOS desktop
+
+    Returns:
+        flask.Response: a redirect to the application icon
+    """
+
+    return redirect_https('static', 'mobile-icon.png')
 
 @app.route('/icon.png')
 def png():
@@ -596,7 +608,7 @@ def get_audio():
         flask.Response: the audio file to play
     """
 
-    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.ogg', cache_timeout=0)
+    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.mp3', cache_timeout=0)
 
 @app.route('/trackinfo')
 def get_trackinfo():

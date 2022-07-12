@@ -158,6 +158,8 @@ function cancel_fetch() {
     $('#toggler').click();
 
     $('#progress-modal').modal('hide');
+
+    selectedBookmark = undefined
 }
 
 /**
@@ -592,10 +594,16 @@ function playback(createNew = true){
 
     sound = new Howl({
         src: ['/getaudio?' + Math.random()],
-        format: ['ogg'],
+        format: ['mp3'],
         sprite: spritedef,
         onload: onSoundLoad,
-        onplay: onSoundPlay
+        onplay: onSoundPlay,
+        onplayerror: function() {
+            sound.once('unlock', function() {
+              sound.play();
+            });
+        }
+        
     });
 }
 
