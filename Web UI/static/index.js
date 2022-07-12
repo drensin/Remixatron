@@ -77,7 +77,13 @@ function set_dropdown_width() {
  */
 function set_progress_bar(percentage, message) {
     $('#progress-modal').modal('show');
-    $('#progress-title').text( selectedBookmark.title );
+
+    if (selectedBookmark != undefined) {
+        $('#progress-title').text( selectedBookmark.title );
+    }else{
+        $('#progress-title').text( "Progress" );
+    }
+
     $('#progress-message').text(message);
     $('#progress').text(percentage.toFixed() + '%');
     $('#progress').css('width', String(percentage) + '%');
@@ -309,6 +315,7 @@ function on_get_playvector(d) {
  */
 function on_get_trackinfo(d) {
     trackinfo = d;
+    selectedBookmark = undefined
 }
 
 /**
