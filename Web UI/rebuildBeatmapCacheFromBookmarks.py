@@ -57,8 +57,8 @@ def fetch_from_youtube(url:str) -> str:
 
         tmpfile = tempfile.gettempdir() + '/audio.ogg'
 
-        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'vorbis', 
-               '--no-playlist', '-o', tmpfile, url]
+        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'mp3', 
+               '-f', 'bestaudio+bestvideo', '--no-playlist', '-o', tmpfile, url]
 
         result = [] 
         cmdOutput = ''
@@ -81,17 +81,6 @@ def fetch_from_youtube(url:str) -> str:
         # uh oh. there was a problem. Let's skip this.
         return None
 
-    # # trim silence from the ends and save as ogg
-    # of = tempfile.gettempdir() + '/audio.ogg'
-
-    # result = subprocess.run(['ffmpeg', '-y', '-i', fn, of],
-    #                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-
-    # delete the downlaoded file because we don't need it anymore
-    # os.remove(fn)
-
-    # os.rename(fn, of)
-    # return the name of the trimmed file
     return fn
 
 def loadGlobalBookmarks() -> str:
