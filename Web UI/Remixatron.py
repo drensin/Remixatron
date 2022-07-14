@@ -937,9 +937,9 @@ class InfiniteJukebox(object):
             # create the candidate clusters and fit them
 
             cluster_labels = sklearn.cluster.KMeans(n_clusters=n_clusters, 
-                                                    max_iter=300,
+                                                    max_iter=600,
                                                     random_state=10, 
-                                                    n_init=50).fit_predict(X)
+                                                    n_init=10).fit_predict(X)
 
             # get some key statistics, including how well each beat in the cluster resemble
             # each other (the silhouette average), the ratio of segments to clusters, and the
