@@ -207,7 +207,10 @@ def fetch_from_youtube(url, userid):
         tmpfile = tempfile.gettempdir() + '/' + userid + '.tmp'
 
         cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'mp3', 
-               '-f', 'bestaudio+bestvideo', '--no-playlist', '-o', tmpfile, url]
+               '-f', 'bestaudio', '--no-playlist', '-o', tmpfile, url]
+
+        # cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'mp3', 
+        #        '--no-playlist', '-o', tmpfile, url]
 
         result = [line.decode(encoding="utf-8") for line in subprocess.check_output(cmd).splitlines()]
 
@@ -615,7 +618,7 @@ def get_audio():
         flask.Response: the audio file to play
     """
 
-    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.tmp.mp3', cache_timeout=0)
+    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.mp3', cache_timeout=0)
 
 @app.route('/trackinfo')
 def get_trackinfo():
@@ -671,7 +674,7 @@ def get_lastClusterScores():
 
     output_string += os.linesep
     output_string += "Chosen Cluster Size: {}".format(json_data['best_cluster_size'])
-    
+
     return output_string, [('Content-Type', 'application/json'),
                      ('Cache-Control', 'no-store')]
 
