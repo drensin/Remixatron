@@ -445,6 +445,10 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
                                   progress_callback=remixatron_callback,
                                   start_beat=0, do_async=False)
 
+
+        with open(tempfile.gettempdir() + '/' + userid + '.clusterscores', 'w') as f:
+            f.write(json.dumps(jukebox.cluster_ratio_log))
+
         beats = jukebox.beats
         play_vector = jukebox.play_vector
 
@@ -470,6 +474,9 @@ def process_audio(url, userid, isupload=False, clusters=0, useCache=True):
         jukebox = InfiniteJukebox(fn, clusters=clusters,
                                     progress_callback=remixatron_callback,
                                     start_beat=0, do_async=False, starting_beat_cache=beats)
+        if clusters == 0:
+            with open(tempfile.gettempdir() + '/' + userid + '.clusterscores', 'w') as f:
+                f.write(json.dumps(jukebox.cluster_ratio_log))
 
         beats = jukebox.beats
         play_vector = jukebox.play_vector
@@ -637,6 +644,37 @@ def get_trackinfo():
     return json.dumps(json_data), [('Content-Type', 'application/json'),
                      ('Cache-Control', 'no-store')]
 
+@app.route('/lastclusterscores')
+def get_lastClusterScores():
+
+    """ Return the scores from the last optimal cluster finding exercise.
+
+    Returns:
+        flask.Response: Formatted string
+    """
+
+    jsonStr = ""
+
+    with open(tempfile.gettempdir() + '/' + get_userid() + '.clusterscores', 'r') as f:
+        jsonStr = f.readlines()
+
+    json_data = json.loads(jsonStr[0])
+
+    cluster_ratio_map = json_data['cluster_scores']
+
+    output_string = ""
+
+    for cr in cluster_ratio_map:
+        c, sa, msl, r, cs = cr
+        msg = "{:<10} {:<10} {:<15} {:<8} {:<15}".format(c,sa,msl,r,cs)
+        output_string += msg + os.linesep
+
+    output_string += os.linesep
+    output_string += "Chosen Cluster Size: {}".format(json_data['best_cluster_size'])
+    
+    return output_string, [('Content-Type', 'application/json'),
+                     ('Cache-Control', 'no-store')]
+
 def loadGlobalBookmarks() -> str:
     """ Return any bookmarks stored on the server. They are a simple ordered JSON
         array stored in /tmp/remixatron.global.bookmarks
@@ -767,6 +805,10 @@ def cleanup():
     fileList = glob.glob(tempfile.gettempdir() + '/' + get_userid() + '*')
 
     for file in fileList:
+
+        if str(file).endswith('.clusterscores'):
+            continue
+
         os.remove(file)
 
     messageQueues[get_userid()].clear()

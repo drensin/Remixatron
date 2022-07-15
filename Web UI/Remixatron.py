@@ -1020,12 +1020,16 @@ class InfiniteJukebox(object):
                 best_cluster_size = n_clusters
                 best_labels = cluster_labels
 
+        self.cluster_ratio_log = {'best_cluster_size': best_cluster_size, 'cluster_scores': cluster_ratio_map}
+
         # print a nice table of the cluster metrics I stored in each iteration
         for cr in cluster_ratio_map:
             c, sa, msl, r, cs = cr
-            print( "{:<10} {:<10} {:<15} {:<8} {:<15}".format(c,sa,msl,r,cs))
+            msg = "{:<10} {:<10} {:<15} {:<8} {:<15}".format(c,sa,msl,r,cs)
+            print(msg)
    
-        print ("Selected best cluster size of: {}".format(best_cluster_size))
+        msg = "Selected best cluster size of: {}".format(best_cluster_size)
+        print (msg)
 
         # return the best results
         return (best_cluster_size, best_labels)
