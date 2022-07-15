@@ -304,7 +304,7 @@ function on_get_beatmap(d) {
  */
 function on_get_playvector(d) {
     playvector = d;
-    set_progress_bar(100, 'Starting playback...')
+    set_progress_bar(100, 'Downloading audio for playback...')
 
     // 100ms, start playing the audio
     window.setTimeout(playback, 100);

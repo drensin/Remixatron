@@ -206,7 +206,7 @@ def fetch_from_youtube(url, userid):
 
         tmpfile = tempfile.gettempdir() + '/' + userid + '.tmp'
 
-        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'mp3', 
+        cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'wav', 
                '-f', 'bestaudio', '--no-playlist', '-o', tmpfile, url]
 
         # cmd = ['yt-dlp', '--write-info-json', '-x', '--audio-format', 'mp3', 
@@ -617,6 +617,12 @@ def get_audio():
     Returns:
         flask.Response: the audio file to play
     """
+
+    input_file = tempfile.gettempdir() + '/' + get_userid() + '.wav'
+    output_file = tempfile.gettempdir() + '/' + get_userid() + '.mp3'
+
+    cmd = ['ffmpeg', '-i', input_file, '-b:a', '192K', output_file]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.mp3', cache_timeout=0)
 

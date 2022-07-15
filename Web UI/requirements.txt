@@ -12,6 +12,7 @@ dbus-python
 decorator
 dnspython
 eventlet
+ffmpeg-python
 Flask
 Flask-Compress
 Flask-SocketIO
