@@ -107,6 +107,25 @@ async function copyUrlToClipboard(url) {
  */
 function advancedFetch() {
 
+    /**
+     * The progress bar uses the variable 'selectedBookmark' to
+     * set its title, etc. So we need to lookup the current item
+     * from history to get its title so the progress bar can use it.
+     */
+    
+    if (trackinfo != undefined) {
+        // de-serialize the list from local storage
+        var history = JSON.parse(localStorage.ytHistory);
+
+        // get the item from its title
+        var item = history.find( (e) => {
+            return e.title == trackinfo.title;
+        });
+
+        // save it off for the progress bar
+        selectedBookmark = item;
+    }
+
     var clusters = parseInt( $('#clusterSize').val() );
 
     $('.navbar-collapse').collapse('hide');
@@ -306,6 +325,8 @@ function on_get_playvector(d) {
     playvector = d;
     set_progress_bar(100, 'Downloading audio for playback...')
 
+    selectedBookmark = undefined
+
     // 100ms, start playing the audio
     window.setTimeout(playback, 100);
 }
@@ -317,7 +338,6 @@ function on_get_playvector(d) {
  */
 function on_get_trackinfo(d) {
     trackinfo = d;
-    selectedBookmark = undefined
 }
 
 /**
