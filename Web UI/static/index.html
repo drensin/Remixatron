@@ -122,12 +122,13 @@
 
         <div class="vl"></div>
 
-        <input class="form-control" style="width: 60px;" type="number" id="clusterSize" placeholder="0" value="0" min="0"/>
+        <input class="form-control" style="width: 60px;" type="number" id="clusterSize" 
+               placeholder="0" value="0" min="0" 
+               onchange="clusters=parseInt(this.value); clusters = isNaN(clusters) ? 0: clusters; console.log(clusters);"/>
         <button class="btn btn-sm" type="button" onclick="advancedFetch();">
           <i id='redoIcon' class="material-icons">redo</i>
         </button>
       </div>
-      <!-- <div id="nptext" class="toast-body"></div> -->
     </div>
 
     <script src="index.js"></script>

@@ -126,8 +126,6 @@ function advancedFetch() {
         selectedBookmark = item;
     }
 
-    var clusters = parseInt( $('#clusterSize').val() );
-
     $('.navbar-collapse').collapse('hide');
 
     fetchURL(clusters=clusters, useCache=1);
@@ -323,7 +321,7 @@ function on_get_beatmap(d) {
  */
 function on_get_playvector(d) {
     playvector = d;
-    set_progress_bar(100, 'Downloading audio for playback...')
+    set_progress_bar(100, 'Loading audio for playback...')
 
     selectedBookmark = undefined
 
@@ -700,7 +698,7 @@ function drawViz() {
 
     // set/get the right height/width
     var width = screen.availWidth;
-    var height = 400;
+    var height = 300;
 
     // set the canvas height/width
     $('#viz').prop('width', width);
