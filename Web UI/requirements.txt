@@ -41,7 +41,8 @@ python-engineio
 python-socketio
 pyxattr
 requests
-resampy==0.2.2
+#resampy==0.2.2
+resampy
 scikit-learn
 scipy
 six
