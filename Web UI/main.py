@@ -618,10 +618,14 @@ def get_audio():
         flask.Response: the audio file to play
     """
 
-    input_file = tempfile.gettempdir() + '/' + get_userid() + '.wav'
+    # input_file = tempfile.gettempdir() + '/' + get_userid() + '.wav'
+    input_file = tempfile.gettempdir() + '/' + get_userid() + '.tmp.wav'
     output_file = tempfile.gettempdir() + '/' + get_userid() + '.mp3'
 
     cmd = ['ffmpeg', '-i', input_file, '-b:a', '192K', output_file]
+
+    print('Getaudio(): {}', cmd)
+
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.mp3', cache_timeout=0)
