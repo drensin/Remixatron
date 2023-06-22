@@ -543,7 +543,7 @@ class InfiniteJukebox(object):
 
         y, sr = librosa.core.load(self.__filename, mono=False, sr=44100)
 
-        self.duration = librosa.core.get_duration(y,sr)
+        self.duration = librosa.core.get_duration(y=y,sr=sr)
         self.raw_audio = (y * np.iinfo(np.int16).max).astype(np.int16).T.copy(order='C')
         self.sample_rate = sr
 
@@ -589,7 +589,7 @@ class InfiniteJukebox(object):
 
         Csync = librosa.util.sync(C, btz, aggregate=np.median)
 
-        self.tempo = librosa.beat.tempo(y, sr)
+        self.tempo = librosa.feature.tempo(y=y, sr=sr)
 
         # For alignment purposes, we'll need the timing of the beats
         # we fix_frames to include non-beat frames 0 and C.shape[1] (final frame)
