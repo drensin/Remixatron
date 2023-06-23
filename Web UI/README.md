@@ -31,6 +31,15 @@ On Windows make sure you add the following directories to your Path:
 
 **NOTE:**  This program uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) - a more performant fork of youtube-dl, which is updated A LOT. I strongly reccommend that you periodically make sure that you have the latest and greatest yt-dlp installed before launching the server each time.
 
+# Docker Installation
+
+Alternatively, a dockerfile is provided.
+
+## Instalation
+    docker build -t remixatron -f dockerfile .
+## Running
+    docker run -p 8000:8000 remixatron
+
 # Connecting
 
 Just navigate to http://localhost:8000 with a browser running on the same machine as the server. If you want to connect from another machine on your LAN, then you'll need to edit the cors.cfg file to allow it. For example, suppose your computer is named *mymachine.local*, the correct CORS config to allow it and localhost will be:

@@ -628,7 +628,7 @@ def get_audio():
 
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.mp3', cache_timeout=0)
+    return send_from_directory(tempfile.gettempdir() + '/', get_userid() + '.mp3')
 
 @app.route('/trackinfo')
 def get_trackinfo():
