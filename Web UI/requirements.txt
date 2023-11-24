@@ -1,3 +1,5 @@
+Cython
+numpy
 appdirs
 audioread
 bidict
@@ -7,7 +9,6 @@ cffi
 chardet
 charset-normalizer
 click
-Cython
 dbus-python
 decorator
 dnspython
@@ -23,14 +24,13 @@ Jinja2
 joblib
 librosa
 llvmlite
-madmom
+#madmom
 MarkupSafe
 mido
 monotonic
 mpmath
 mutagen
 numba
-numpy
 packaging
 pooch
 pycparser

@@ -1,0 +1,27 @@
+# Use the official Python 3.7 image as the base image
+FROM python:3.7
+
+# Install the required system packages
+RUN apt-get update
+RUN apt-get install -y ffmpeg git cmake libdbus-1-dev libgirepository1.0-dev
+RUN apt-get clean
+
+# Install pip dependencies
+RUN pip install --upgrade pip
+RUN pip install --upgrade yt-dlp cython numpy
+
+# Create a working directory
+WORKDIR /app
+
+# Install the Python packages from the requirements.txt file
+COPY requirements.txt /app/requirements.txt
+RUN pip install -r requirements.txt
+
+# Copy the repository data
+COPY . .
+
+# Expose the port used by the server
+EXPOSE 8000
+
+# Set the entrypoint to run the main.py script
+ENTRYPOINT ["python3", "main.py"]
