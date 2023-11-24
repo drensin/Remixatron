@@ -16,16 +16,26 @@ You must have these installed for this to work.
 # Installation
 The easiest way to run Remixatron is via a Docker container (see below). If you want to install it locally, then please use a virtual environment system like conda. Go to https://www.anaconda.com/download and download the installer for your platform then do the following:
 
-1) conda create -n Remixatron python=3.10  # anything above 3.10 will break
-2) conda activate Remixatron # activate the environment
-3) run these commands:
+```
+# create a new environment with Python 3.10, because anything 
+# above it will break
 
-    git clone https://github.com/drensin/Remixatron.git  
-    cd "Remixatron/Web UI"  
-    git clone --recursive https://github.com/CPJKU/madmom.git  
-    pip install --upgrade pip  
-    pip install -r requirements.txt  
-    
+conda create -n Remixatron python=3.10  
+
+# activate it
+
+conda activate Remixatron
+
+```
+next, run these commands:
+
+```
+git clone https://github.com/drensin/Remixatron.git  
+cd "Remixatron/Web UI"  
+git clone --recursive https://github.com/CPJKU/madmom.git  
+pip install --upgrade pip  
+pip install -r requirements.txt  
+```    
 On Windows make sure you add the following directories to your Path:
 
     # The directory where you installed ffmpeg.exe, eg:
