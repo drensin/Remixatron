@@ -1,5 +1,5 @@
 # Remixatron Web UI
-(c) 2017-2021 - Dave Rensin - drensin@gmail.com
+(c) 2017-2023 - Dave Rensin - drensin@gmail.com
 
 Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project creaeted by Paul Lamere (paul@spotify.com)
 
@@ -11,7 +11,7 @@ This is a web ui version of the CLI found at [main page](https://github.com/dren
 You must have these installed for this to work.
 1) ffmpeg
 2) yt-dlp
-3) Python 3.6+ (Python 3.7 preferred)
+3) Python >=3.6 <= 3.10
 
 # Installation
 The easiest way to run Remixatron is via a Docker container (see below). If you want to install it locally, then please use a virtual environment system like conda. Go to https://www.anaconda.com/download and download the installer for your platform then do the following:
