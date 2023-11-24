@@ -14,8 +14,15 @@ You must have these installed for this to work.
 3) Python 3.6+ (Python 3.7 preferred)
 
 # Installation
-I strongly reccommend that you setup and use a python virtual environment to run this server. Once you do that, you can install with just:
+The easiest way to run Remixatron is via a Docker container (see below). If you want to install it locally, then please use a virtual environment system like conda. Go to https://www.anaconda.com/download and download the installer for your platform then do the following:
 
+1) conda create -n Remixatron python=3.10  # anything above 3.10 will break
+2) conda activate Remixatron # activate the environment
+3) run these commands:
+
+    git clone https://github.com/drensin/Remixatron.git
+    cd "Remixatron/Web UI"
+    git clone --recursive https://github.com/CPJKU/madmom.git
     pip install --upgrade pip
     pip install -r requirements.txt
     
