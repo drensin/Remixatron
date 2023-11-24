@@ -20,11 +20,11 @@ The easiest way to run Remixatron is via a Docker container (see below). If you 
 2) conda activate Remixatron # activate the environment
 3) run these commands:
 
-    git clone https://github.com/drensin/Remixatron.git
-    cd "Remixatron/Web UI"
-    git clone --recursive https://github.com/CPJKU/madmom.git
-    pip install --upgrade pip
-    pip install -r requirements.txt
+    git clone https://github.com/drensin/Remixatron.git  
+    cd "Remixatron/Web UI"  
+    git clone --recursive https://github.com/CPJKU/madmom.git  
+    pip install --upgrade pip  
+    pip install -r requirements.txt  
     
 On Windows make sure you add the following directories to your Path:
 
