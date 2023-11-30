@@ -18,6 +18,7 @@ import signal
 import soundfile as sf
 import sys
 import time
+from pydub import AudioSegment
 
 from Remixatron import InfiniteJukebox
 from pygame import mixer
@@ -257,6 +258,19 @@ if __name__ == "__main__":
 
     window = curses.initscr()
     curses.curs_set(0)
+    
+    if os.path.isdir(args.filename):
+        music_files_array = []
+        music_files = [f for f in os.listdir(args.filename) if os.path.isfile(os.path.join(args.filename, f))]
+        for music_path in music_files :
+            print(args.filename + "/" + music_path)
+            print(music_path.split(".")[-1])
+            music_files_array.append(AudioSegment.from_file(args.filename + "/" + music_path, music_path.split(".")[-1]))
+        concatenated_musics = music_files_array[0]
+        for music in music_files_array:
+            concatenated_musics += music
+        concatenated_musics.export("tempfile.mp3", format="mp3")
+        args.filename = "tempfile.mp3"
 
     # do the clustering. Run synchronously. Post status messages to MyCallback()
     jukebox = InfiniteJukebox(filename=args.filename, start_beat=args.start, clusters=args.clusters,
