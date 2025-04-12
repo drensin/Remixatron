@@ -1,5 +1,5 @@
-# Use the official Python 3.7 image as the base image
-FROM python:3.7
+# Use the official Python 3.10 image as the base image
+FROM python:3.10
 
 # Install the required system packages
 RUN apt-get update
@@ -8,7 +8,7 @@ RUN apt-get clean
 
 # Install pip dependencies
 RUN pip install --upgrade pip
-RUN pip install --upgrade yt-dlp cython numpy
+RUN pip install --upgrade yt-dlp cython 
 
 # Create a working directory
 WORKDIR /app
