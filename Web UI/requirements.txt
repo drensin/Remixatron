@@ -1,5 +1,5 @@
 Cython
-numpy
+numpy==1.26.4
 appdirs
 audioread
 bidict
@@ -9,7 +9,6 @@ cffi
 chardet
 charset-normalizer
 click
-#dbus-python
 decorator
 dnspython
 eventlet
@@ -30,18 +29,14 @@ monotonic
 mpmath
 mutagen
 numba
-numpy==1.26.4
 packaging
 pooch
 pycparser
 pycryptodomex
-#PyGObject
 pyparsing
 python-engineio
 python-socketio
-#pyxattr
 requests
-#resampy==0.2.2
 resampy
 scikit-learn
 scipy
@@ -52,5 +47,4 @@ threadpoolctl
 urllib3
 websockets
 Werkzeug
-#youtube-dl
 yt-dlp
