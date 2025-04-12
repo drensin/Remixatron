@@ -9,7 +9,7 @@ cffi
 chardet
 charset-normalizer
 click
-dbus-python
+#dbus-python
 decorator
 dnspython
 eventlet
@@ -30,15 +30,16 @@ monotonic
 mpmath
 mutagen
 numba
+numpy==1.26.4
 packaging
 pooch
 pycparser
 pycryptodomex
-PyGObject
+#PyGObject
 pyparsing
 python-engineio
 python-socketio
-pyxattr
+#pyxattr
 requests
 #resampy==0.2.2
 resampy
@@ -51,5 +52,5 @@ threadpoolctl
 urllib3
 websockets
 Werkzeug
-youtube-dl
+#youtube-dl
 yt-dlp
