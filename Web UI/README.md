@@ -47,9 +47,15 @@ On Windows make sure you add the following directories to your Path:
 
 **NOTE:**  This program uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) - a more performant fork of youtube-dl, which is updated A LOT. I strongly reccommend that you periodically make sure that you have the latest and greatest yt-dlp installed before launching the server each time.
 
-# Docker Installation
+# Running from a Prebuilt Docker Conatiner
 
-Alternatively, a dockerfile is provided.
+Managing python dependencies is a pain, so I built a public Remixatron container. If you're comfortable running docker, then you can just run this command:
+
+    docker run -p 8000:8000 drensin/remixatron:latest
+
+# Building Your Own Docker Image
+
+Alternatively, a dockerfile is provided in case you want to build your own.
 
 ## Instalation
     docker build -t remixatron -f dockerfile .
