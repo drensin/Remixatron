@@ -1,0 +1,17 @@
+# onsets detected by the SuperFlux program with default settings
+0.010
+0.085
+0.275
+0.445
+0.610
+0.795
+0.980
+1.115
+1.365
+1.475
+1.620
+1.795
+2.140
+2.330
+2.485
+2.665

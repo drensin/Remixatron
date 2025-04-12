@@ -1,0 +1,639 @@
+Metadata-Version: 2.2
+Name: madmom
+Version: 0.17.dev0
+Summary: Python audio signal processing library
+Home-page: https://github.com/CPJKU/madmom
+Author: Department of Computational Perception, Johannes Kepler University, Linz, Austria and Austrian Research Institute for Artificial Intelligence (OFAI), Vienna, Austria
+Author-email: madmom-users@googlegroups.com
+License: BSD, CC BY-NC-SA
+Classifier: Development Status :: 3 - Beta
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Environment :: Console
+Classifier: License :: OSI Approved :: BSD License
+Classifier: License :: Free for non-commercial use
+Classifier: Topic :: Multimedia :: Sound/Audio :: Analysis
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+License-File: LICENSE
+Requires-Dist: numpy>=1.13.4
+Requires-Dist: scipy>=1.13
+Requires-Dist: mido>=1.2.6
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: home-page
+Dynamic: license
+Dynamic: requires-dist
+Dynamic: summary
+
+======
+madmom
+======
+
+Madmom is an audio signal processing library written in Python with a strong
+focus on music information retrieval (MIR) tasks.
+
+The library is internally used by the Department of Computational Perception,
+Johannes Kepler University, Linz, Austria (http://www.cp.jku.at) and the
+Austrian Research Institute for Artificial Intelligence (OFAI), Vienna, Austria
+(http://www.ofai.at).
+
+Possible acronyms are:
+
+- Madmom Analyzes Digitized Music Of Musicians
+- Mostly Audio / Dominantly Music Oriented Modules
+
+It includes reference implementations for some music information retrieval
+algorithms, please see the `References`_ section.
+
+
+Documentation
+=============
+
+Documentation of the package can be found online http://madmom.readthedocs.org
+
+
+License
+=======
+
+The package has two licenses, one for source code and one for model/data files.
+
+Source code
+-----------
+
+Unless indicated otherwise, all source code files are published under the BSD
+license. For details, please see the `LICENSE <LICENSE>`_ file.
+
+Model and data files
+--------------------
+
+Unless indicated otherwise, all model and data files are distributed under the
+`Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+<http://creativecommons.org/licenses/by-nc-sa/4.0/legalcode>`_ license.
+
+If you want to include any of these files (or a variation or modification
+thereof) or technology which utilises them in a commercial product, please
+contact `Gerhard Widmer <http://www.cp.jku.at/people/widmer/>`_.
+
+
+Installation
+============
+
+Please do not try to install from the .zip files provided by GitHub. Rather
+install it from package (if you just want to use it) or source (if you plan to
+use it for development) by following the instructions below. Whichever variant
+you choose, please make sure that all prerequisites are installed.
+
+Prerequisites
+-------------
+
+To install the ``madmom`` package, you must have either Python 2.7 or Python
+3.5 or newer and the following packages installed:
+
+- `numpy <http://www.numpy.org>`_
+- `scipy <http://www.scipy.org>`_
+- `cython <http://www.cython.org>`_
+- `mido <https://github.com/olemb/mido>`_
+
+In order to test your installation, process live audio input, or have improved
+FFT performance, additionally install these packages:
+
+- `pytest <https://www.pytest.org/>`_
+- `pyaudio <http://people.csail.mit.edu/hubert/pyaudio/>`_
+- `pyfftw <https://github.com/pyFFTW/pyFFTW/>`_
+
+If you need support for audio files other than ``.wav`` with a sample rate of
+44.1kHz and 16 bit depth, you need ``ffmpeg`` (``avconv`` on Ubuntu Linux has
+some decoding bugs, so we advise not to use it!).
+
+Please refer to the `requirements.txt <requirements.txt>`_ file for the minimum
+required versions and make sure that these modules are up to date, otherwise it
+can result in unexpected errors or false computations!
+
+Install from package
+--------------------
+
+The instructions given here should be used if you just want to install the
+package, e.g. to run the bundled programs or use some functionality for your
+own project. If you intend to change anything within the `madmom` package,
+please follow the steps in the next section.
+
+The easiest way to install the package is via ``pip`` from the `PyPI (Python
+Package Index) <https://pypi.python.org/pypi>`_::
+
+    pip install madmom
+
+This includes the latest code and trained models and will install all
+dependencies automatically.
+
+You might need higher privileges (use su or sudo) to install the package, model
+files and scripts globally. Alternatively you can install the package locally
+(i.e. only for you) by adding the ``--user`` argument::
+
+    pip install --user madmom
+
+This will also install the executable programs to a common place (e.g.
+``/usr/local/bin``), which should be in your ``$PATH`` already. If you
+installed the package locally, the programs will be copied to a folder which
+might not be included in your ``$PATH`` (e.g. ``~/Library/Python/2.7/bin``
+on Mac OS X or ``~/.local/bin`` on Ubuntu Linux, ``pip`` will tell you). Thus
+the programs need to be called explicitely or you can add their install path
+to your ``$PATH`` environment variable::
+
+    export PATH='path/to/scripts':$PATH
+
+Install from source
+-------------------
+
+If you plan to use the package as a developer, clone the Git repository::
+
+    git clone --recursive https://github.com/CPJKU/madmom.git
+
+Since the pre-trained model/data files are not included in this repository but
+rather added as a Git submodule, you either have to clone the repo recursively.
+This is equivalent to these steps::
+
+    git clone https://github.com/CPJKU/madmom.git
+    cd madmom
+    git submodule update --init --remote
+
+Then you can simply install the package in development mode::
+
+    python setup.py develop --user
+
+To run the included tests::
+
+    python setup.py pytest
+
+Upgrade of existing installations
+---------------------------------
+
+To upgrade the package, please use the same mechanism (pip vs. source) as you
+did for installation. If you want to change from package to source, please
+uninstall the package first.
+
+Upgrade a package
+~~~~~~~~~~~~~~~~~
+
+Simply upgrade the package via pip::
+
+    pip install --upgrade madmom [--user]
+
+If some of the provided programs or models changed (please refer to the
+CHANGELOG) you should first uninstall the package and then reinstall::
+
+    pip uninstall madmom
+    pip install madmom [--user]
+
+Upgrade from source
+~~~~~~~~~~~~~~~~~~~
+
+Simply pull the latest sources::
+
+    git pull
+
+To update the models contained in the submodule::
+
+    git submodule update
+
+If any of the ``.pyx`` or ``.pxd`` files changed, you have to recompile the
+modules with Cython::
+
+    python setup.py build_ext --inplace
+
+Package structure
+-----------------
+
+The package has a very simple structure, divided into the following folders:
+
+`/bin <bin>`_
+  this folder includes example programs (i.e. executable algorithms)
+`/docs <docs>`_
+  package documentation
+`/madmom <madmom>`_
+  the actual Python package
+`/madmom/audio <madmom/audio>`_
+  low level features (e.g. audio file handling, STFT)
+`/madmom/evaluation <madmom/evaluation>`_
+  evaluation code
+`/madmom/features <madmom/features>`_
+  higher level features (e.g. onsets, beats)
+`/madmom/ml <madmom/ml>`_
+  machine learning stuff (e.g. RNNs, HMMs)
+`/madmom/models <../../../madmom_models>`_
+  pre-trained model/data files (see the License section)
+`/madmom/utils <madmom/utils>`_
+  misc stuff (e.g. MIDI and general file handling)
+`/tests <tests>`_
+  tests
+
+Executable programs
+-------------------
+
+The package includes executable programs in the `/bin <bin>`_ folder.
+If you installed the package, they were copied to a common place.
+
+All scripts can be run in different modes: in ``single`` file mode to process
+a single audio file and write the output to STDOUT or the given output file::
+
+    DBNBeatTracker single [-o OUTFILE] INFILE
+
+If multiple audio files should be processed, the scripts can also be run in
+``batch`` mode to write the outputs to files with the given suffix::
+
+    DBNBeatTracker batch [-o OUTPUT_DIR] [-s OUTPUT_SUFFIX] FILES
+
+If no output directory is given, the program writes the output files to the
+same location as the audio files.
+
+Some programs can also be run in ``online`` mode, i.e. operate on live audio
+signals. This requires `pyaudio <http://people.csail.mit.edu/hubert/pyaudio/>`_
+to be installed::
+
+    DBNBeatTracker online [-o OUTFILE] [INFILE]
+
+The ``pickle`` mode can be used to store the used parameters to be able to
+exactly reproduce experiments.
+
+Please note that the program itself as well as the modes have help messages::
+
+    DBNBeatTracker -h
+
+    DBNBeatTracker single -h
+
+    DBNBeatTracker batch -h
+
+    DBNBeatTracker online -h
+
+    DBNBeatTracker pickle -h
+
+will give different help messages.
+
+
+Additional resources
+====================
+
+Mailing list
+------------
+
+The `mailing list <https://groups.google.com/d/forum/madmom-users>`_ should be
+used to get in touch with the developers and other users.
+
+Wiki
+----
+
+The wiki can be found here: https://github.com/CPJKU/madmom/wiki
+
+FAQ
+---
+
+Frequently asked questions can be found here:
+https://github.com/CPJKU/madmom/wiki/FAQ
+
+Citation
+========
+
+If you use madmom in your work, please consider citing it:
+
+.. code-block:: latex
+
+   @inproceedings{madmom,
+      Title = {{madmom: a new Python Audio and Music Signal Processing Library}},
+      Author = {B{\"o}ck, Sebastian and Korzeniowski, Filip and Schl{\"u}ter, Jan and Krebs, Florian and Widmer, Gerhard},
+      Booktitle = {Proceedings of the 24th ACM International Conference on
+      Multimedia},
+      Month = {10},
+      Year = {2016},
+      Pages = {1174--1178},
+      Address = {Amsterdam, The Netherlands},
+      Doi = {10.1145/2964284.2973795}
+   }
+
+References
+==========
+
+.. [1] Florian Eyben, Sebastian Böck, Björn Schuller and Alex Graves,
+    *Universal Onset Detection with bidirectional Long Short-Term Memory
+    Neural Networks*,
+    Proceedings of the 11th International Society for Music Information
+    Retrieval Conference (ISMIR), 2010.
+.. [2] Sebastian Böck and Markus Schedl,
+    *Enhanced Beat Tracking with Context-Aware Neural Networks*,
+    Proceedings of the 14th International Conference on Digital Audio Effects
+    (DAFx), 2011.
+.. [3] Sebastian Böck and Markus Schedl,
+    *Polyphonic Piano Note Transcription with Recurrent Neural Networks*,
+    Proceedings of the 37th International Conference on Acoustics, Speech and
+    Signal Processing (ICASSP), 2012.
+.. [4] Sebastian Böck, Andreas Arzt, Florian Krebs and Markus Schedl,
+    *Online Real-time Onset Detection with Recurrent Neural Networks*,
+    Proceedings of the 15th International Conference on Digital Audio Effects
+    (DAFx), 2012.
+.. [5] Sebastian Böck, Florian Krebs and Markus Schedl,
+    *Evaluating the Online Capabilities of Onset Detection Methods*,
+    Proceedings of the 13th International Society for Music Information
+    Retrieval Conference (ISMIR), 2012.
+.. [6] Sebastian Böck and Gerhard Widmer,
+    *Maximum Filter Vibrato Suppression for Onset Detection*,
+    Proceedings of the 16th International Conference on Digital Audio Effects
+    (DAFx), 2013.
+.. [7] Sebastian Böck and Gerhard Widmer,
+    *Local Group Delay based Vibrato and Tremolo Suppression for Onset
+    Detection*,
+    Proceedings of the 13th International Society for Music Information
+    Retrieval Conference (ISMIR), 2013.
+.. [8] Florian Krebs, Sebastian Böck and Gerhard Widmer,
+    *Rhythmic Pattern Modelling for Beat and Downbeat Tracking in Musical
+    Audio*,
+    Proceedings of the 14th International Society for Music Information
+    Retrieval Conference (ISMIR), 2013.
+.. [9] Sebastian Böck, Jan Schlüter and Gerhard Widmer,
+    *Enhanced Peak Picking for Onset Detection with Recurrent Neural Networks*,
+    Proceedings of the 6th International Workshop on Machine Learning and
+    Music (MML), 2013.
+.. [10] Sebastian Böck, Florian Krebs and Gerhard Widmer,
+    *A Multi-Model Approach to Beat Tracking Considering Heterogeneous Music
+    Styles*,
+    Proceedings of the 15th International Society for Music Information
+    Retrieval Conference (ISMIR), 2014.
+.. [11] Filip Korzeniowski, Sebastian Böck and Gerhard Widmer,
+    *Probabilistic Extraction of Beat Positions from a Beat Activation
+    Function*,
+    Proceedings of the 15th International Society for Music Information
+    Retrieval Conference (ISMIR), 2014.
+.. [12] Sebastian Böck, Florian Krebs and Gerhard Widmer,
+    *Accurate Tempo Estimation based on Recurrent Neural Networks and
+    Resonating Comb Filters*,
+    Proceedings of the 16th International Society for Music Information
+    Retrieval Conference (ISMIR), 2015.
+.. [13] Florian Krebs, Sebastian Böck and Gerhard Widmer,
+    *An Efficient State Space Model for Joint Tempo and Meter Tracking*,
+    Proceedings of the 16th International Society for Music Information
+    Retrieval Conference (ISMIR), 2015.
+.. [14] Sebastian Böck, Florian Krebs and Gerhard Widmer,
+    *Joint Beat and Downbeat Tracking with Recurrent Neural Networks*,
+    Proceedings of the 17th International Society for Music Information
+    Retrieval Conference (ISMIR), 2016.
+.. [15] Filip Korzeniowski and Gerhard Widmer,
+    *Feature Learning for Chord Recognition: The Deep Chroma Extractor*,
+    Proceedings of the 17th International Society for Music Information
+    Retrieval Conference (ISMIR), 2016.
+.. [16] Florian Krebs, Sebastian Böck, Matthias Dorfer and Gerhard Widmer,
+    *Downbeat Tracking Using Beat-Synchronous Features and Recurrent Networks*,
+    Proceedings of the 17th International Society for Music Information
+    Retrieval Conference (ISMIR), 2016.
+.. [17] Filip Korzeniowski and Gerhard Widmer,
+    *A Fully Convolutional Deep Auditory Model for Musical Chord Recognition*,
+    Proceedings of IEEE International Workshop on Machine Learning for Signal
+    Processing (MLSP), 2016.
+.. [18] Filip Korzeniowski and Gerhard Widmer,
+    *Genre-Agnostic Key Classification with Convolutional Neural Networks*,
+    Proceedings of the 19th International Society for Music Information
+    Retrieval Conference (ISMIR), 2018.
+.. [19] Rainer Kelz, Sebastian Böck and Gerhard Widmer,
+    *Deep Polyphonic ADSR Piano Note Transcription*,
+    Proceedings of the 44th International Conference on Acoustics, Speech and
+    Signal Processing (ICASSP), 2019.
+
+Acknowledgements
+================
+
+Supported by the European Commission through the `GiantSteps project
+<http://www.giantsteps-project.eu>`_ (FP7 grant agreement no. 610591) and the
+`Phenicx project <http://phenicx.upf.edu>`_ (FP7 grant agreement no. 601166)
+as well as the `Austrian Science Fund (FWF) <https://www.fwf.ac.at>`_ project
+Z159.
+
+Release Notes
+=============
+
+Version 0.17.dev0
+-----------------
+
+New features:
+
+* `PyFFTW` is used to speed up FFT computation (#363)
+* Sustain information of MIDI files is honoured (#370)
+* Python 3.7 support (#374)
+* Volume changes according to `ReplayGain` tags can be applied (#400)
+* ICASSP 2019 ADSR Piano Note Transcription (#445)
+
+Bug fixes:
+
+* Respect `num_channels` when creating `Signal` from array (#368)
+* Fix erroneously applied smoothing for DBN tempo estimation (#376)
+* `DBNBarTrackingProcessor` can model a single bar length (#394)
+* `BufferProcessor` can handle data longer than buffer length (#398)
+* Fix hanging batch processing when loading non-audio files (#443)
+
+Other changes:
+
+* Volume changes according to `ReplayGain` tags can be applied (#400)
+* Allow selection of channel when loading audio file in mono (#409)
+* Allow reading audio from file objects created in memory (#418)
+* Add `pad` option to `signal_frame()` (#441)
+
+
+Version 0.16.1 (release date: 2017-11-14)
+-----------------------------------------
+
+This is a maintenance release.
+
+* Include .pyx files in source distribution
+
+Version 0.16 (release date: 2017-11-13)
+---------------------------------------
+
+New features:
+
+* `TempoDetector` can operate on live audio signals  (#292)
+* Added chord evaluation (#309)
+* Bar tracking functionality (#316)
+* Added `quantize_notes` function (#327)
+* Added global key evaluation (#336)
+* Added key recognition feature and program (#345, #381)
+
+Bug fixes:
+
+* Fix `TransitionModel` number of states when last state is unreachable (#287)
+* Fix double beat detections in `BeatTrackingProcessor` (#298)
+* Fix ffmpeg unicode filename handling (#305)
+* Fix STFT zero padding (#319)
+* Fix memory leak when accessing signal frames (#322)
+* Quantization of events does not alter them (#327)
+
+API relevant changes:
+
+* `BufferProcessor` uses `data` instead of `buffer` for data storage (#292)
+* `DBNBeatTrackingProcessor` expects 1D inputs (#299)
+* Moved downbeat and pattern tracking to `features.downbeats` (#316)
+* Write/load functions moved to `io` module (#346)
+* Write functions do not return any data (#346)
+* Evaluation classes expect annotations/detections, cannot handle files (#346)
+* New MIDI module (io.midi) replacing (utils.midi) based on mido (#46)
+
+Other changes:
+
+* Viterbi decoding of `HMM` raises a warning if no valid path is found (#279)
+* Add option to include Nyquist frequency in `STFT` (#280)
+* Use `pyfftw` to compute FFT (#363)
+* Python 3.7 support (#374)
+* Use pytest instead of nose to run tests (#385)
+* Removed obsolete code (#385)
+
+
+Version 0.15.1 (release date: 2017-07-07)
+-----------------------------------------
+
+This is a maintenance release.
+
+* NumPy boolean subtract fix (#296)
+
+
+Version 0.15 (release date: 2017-04-25)
+---------------------------------------
+
+New features:
+
+* Streaming mode allows framewise processing of live audio input (#185)
+* Exponential linear unit (ELU) activation function (#232)
+* `DBNBeatTracker` can operate on live audio signals (#238)
+* `OnsetDetectorLL` can operate on live audio signals (#256)
+
+Bug fixes:
+
+* Fix downbeat evaluation failure with a single annotation / detection (#216)
+* Fix tempo handling of multi-track MIDI files (#219)
+* Fix error loading unicode filenames (#223)
+* Fix ffmpeg unicode filename handling (#236)
+* Fix smoothing for `peak_picking` (#247)
+* Fix combining onsets/notes (#255)
+
+API relevant changes:
+
+* `NeuralNetwork` expect 2D inputs; activation can be computed stepwise (#244)
+* Reorder `GRUCell` parameters, to be consistent with all other layers (#243)
+* Rename `GRULayer` parameters, to be consistent with all other layers (#243)
+
+Other changes:
+
+* SPL and RMS can be computed on `Signal` and `FramedSignal` (#208)
+* `num_threads` is passed to `ParallelProcessor` in single mode (#217)
+* Use `install_requires` in `setup.py` to specify dependencies (#226)
+* Use new Cython build system to build extensions (#227)
+* Allow initialisation of previous/hidden states in RNNs (#243)
+* Forward path of `HMM` can be computed stepwise (#244)
+
+
+Version 0.14.1 (release date: 2016-08-01)
+-----------------------------------------
+
+This is a maintenance release.
+
+* `RNNDownBeatProcessor` returns only beat and downbeat activations (#197)
+* Update programs to reflect MIREX 2016 submissions (#198)
+
+Version 0.14 (release date: 2016-07-28)
+---------------------------------------
+
+New features:
+
+* Downbeat tracking based on Recurrent Neural Network (RNN) and Dynamic
+  Bayesian Network (DBN) (#130)
+* Convolutional Neural Networks (CNN) and CNN onset detection (#133)
+* Linear-Chain Conditional Random Field (CRF) implementation (#144)
+* Deep Neural Network (DNN) based chroma vector extraction (#148)
+* CRF chord recognition using DNN chroma vectors (#148)
+* CNN chord recognition using CRF decoding (#152)
+* Initial Windows support (Python 2.7 only, no pip packages yet) (#157)
+* Gated Recurrent Unit (GRU) network layer (#167)
+
+Bug fixes:
+
+* Fix downbeat output bug (#128)
+* MIDI file creation bug (#166)
+
+API relevant changes:
+
+* Refactored the `ml.rnn` to `ml.nn` and converted the models to pickles (#110)
+* Reordered the dimensions of comb_filters to time, freq, tau (#135)
+* `write_notes` uses `delimiter` instead of `sep` to separate columns (#155)
+* `LSTMLayer` takes `Gate` as arguments, all layers are callable (#161)
+* Replaced `online` parameter of `FramedSignalProcessor` by `origin` (#169)
+
+Other changes:
+
+* Added classes for onset/note/beat detection with RNNs to `features.*` (#118)
+* Add examples to docstrings of classes (#119)
+* Converted `madmom.modules` into a Python package (#125)
+* `match_files` can handle inexact matches (#137)
+* Updated beat tracking models to MIREX 2015 ones (#146)
+* Tempo and time signature can be set for created MIDI files (#166)
+
+
+Version 0.13.2 (release date: 2016-06-09)
+-----------------------------------------
+
+This is a bugfix release.
+
+* Fix custom filterbank in FilteredSpectrogram (#142)
+
+Version 0.13.1 (release date: 2016-03-14)
+-----------------------------------------
+
+This is a bugfix release.
+
+* Fix beat evaluation argument parsing (#116)
+
+Version 0.13 (release date: 2016-03-07)
+---------------------------------------
+
+New features:
+
+* Python 3 support (3.3+) (#15)
+* Online documentation available at http://madmom.readthedocs.org (#60)
+
+Bug fixes:
+
+* Fix nasty unsigned indexing bug (#88)
+* MIDI note timing could get corrupted if `note_ticks_to_beats()` was called
+  multiple times (#90)
+
+API relevant changes:
+
+* Renamed `DownBeatTracker` and all relevant classes to `PatternTracker` (#25)
+* Complete refactoring of the `features.beats_hmm` module (#52)
+* Unified negative index behaviour of `FramedSignal` (#72)
+* Removed pickling of data classes since it was not tested thoroughly (#81)
+* Reworked stacking of spectrogram differences (#82)
+* Renamed `norm_bands` argument of `MultiBandSpectrogram` to `norm_filters`
+  (#83)
+
+Other changes:
+
+* Added alignment evaluation (#12)
+* Added continuous integration testing (#16)
+* Added `-o` option to both `single`/`batch` processing mode to not overwrite
+  files accidentally in `single` mode (#18)
+* Removed `block_size` parameter from `FilteredSpectrogram` (#22)
+* Sample rate is always integer (#23)
+* Converted all docstrings to the numpydoc format (#48)
+* Batch processing continues if non-audio files are given (#53)
+* Added code quality checks (#61)
+* Added coverage measuring (#74)
+* Added `--down`` option to evaluate only downbeats (#76)
+* Removed option to normalise the observations (#95)
+* Moved filterbank related argument parser to `FilterbankProcessor` (#96)
+
+Version 0.12.1 (release date: 2016-01-22)
+-----------------------------------------
+
+Added Python 3 compatibility to setup.py (needed for the tutorials to work)
+
+Version 0.12 (release date: 2015-10-16)
+---------------------------------------
+
+Initial public release of madmom

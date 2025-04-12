@@ -1,0 +1,2 @@
+# tempo detected by the TempoDetector.2015 program with default settings
+176.47	117.65	0.73

@@ -1,0 +1,118 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""
+Spectral onset detection script.
+
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import argparse
+
+from madmom.audio import (FramedSignalProcessor,
+                          LogarithmicSpectrogramProcessor, SignalProcessor,
+                          SpectrogramDifferenceProcessor)
+from madmom.audio.filters import FilterbankProcessor, LogarithmicFilterbank
+from madmom.features import (ActivationsProcessor, OnsetPeakPickingProcessor,
+                             SpectralOnsetProcessor)
+from madmom.io import write_onsets
+from madmom.processors import IOProcessor, io_arguments
+
+
+def main():
+    """SpectralOnsetDetection"""
+
+    # define parser
+    p = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter, description='''
+    The SpectralOnsetDetection program detects all onsets in an audio file
+    with selectable algorithms. The parameters have to be set accordingly.
+    The different algorithms are described in:
+
+    "Evaluating the Online Capabilities of Onset Detection Methods"
+    Sebastian Böck, Florian Krebs and Markus Schedl.
+    Proceedings of the 13th International Society for Music Information
+    Retrieval Conference (ISMIR), 2012.
+
+    This program can be run in 'single' file mode to process a single audio
+    file and write the detected onsets to STDOUT or the given output file.
+
+      $ SpectralOnsetDetection single INFILE [-o OUTFILE]
+
+    If multiple audio files should be processed, the program can also be run
+    in 'batch' mode to save the detected onsets to files with the given suffix.
+
+      $ SpectralOnsetDetection batch [-o OUTPUT_DIR] [-s OUTPUT_SUFFIX] FILES
+
+    If no output directory is given, the program writes the files with the
+    detected onsets to the same location as the audio files.
+
+    The 'pickle' mode can be used to store the used parameters to be able to
+    exactly reproduce experiments.
+
+    ''')
+    # version
+    p.add_argument('--version', action='version',
+                   version='SpectralOnsetDetection')
+    # add arguments
+    io_arguments(p, output_suffix='.onsets.txt')
+    ActivationsProcessor.add_arguments(p)
+    SignalProcessor.add_arguments(p, norm=False, gain=0)
+    FramedSignalProcessor.add_arguments(p, fps=100, online=False)
+    FilterbankProcessor.add_arguments(p, filterbank=LogarithmicFilterbank,
+                                      num_bands=12, fmin=30, fmax=17000,
+                                      norm_filters=False)
+    LogarithmicSpectrogramProcessor.add_arguments(p, log=True, mul=1, add=1)
+    SpectrogramDifferenceProcessor.add_arguments(p, diff_ratio=0.5,
+                                                 positive_diffs=True)
+    SpectralOnsetProcessor.add_arguments(p, onset_method='spectral_flux')
+    OnsetPeakPickingProcessor.add_arguments(p, threshold=1.6, pre_max=0.01,
+                                            post_max=0.05, pre_avg=0.15,
+                                            post_avg=0, combine=0.03, delay=0)
+    # parse arguments
+    args = p.parse_args()
+
+    # set online mode parameters
+    if args.origin == 'online':
+        args.post_avg = 0
+        args.post_max = 0
+
+    # add circular shift for correct phase and remove filterbank if needed
+    if args.onset_method in ('phase_deviation', 'weighted_phase_deviation',
+                             'normalized_weighted_phase_deviation',
+                             'complex_domain', 'rectified_complex_domain'):
+        args.circular_shift = True
+        args.filterbank = None
+    if args.onset_method in ('superflux', 'complex_flux'):
+        raise SystemExit('Please use the dedicated onset detection script for '
+                         '%s.' % args.onset_method)
+    # print arguments
+    if args.verbose:
+        print(args)
+
+    # input processor
+    if args.load:
+        # load the activations from file
+        in_processor = ActivationsProcessor(mode='r', **vars(args))
+    else:
+        # define a spectral onset processor
+        in_processor = SpectralOnsetProcessor(**vars(args))
+
+    # output processor
+    if args.save:
+        # save the onset activations to file
+        out_processor = ActivationsProcessor(mode='w', **vars(args))
+    else:
+        # detect the onsets and output them
+        peak_picking = OnsetPeakPickingProcessor(**vars(args))
+        out_processor = [peak_picking, write_onsets]
+
+    # create an IOProcessor
+    processor = IOProcessor(in_processor, out_processor)
+
+    # and call the processing function
+    args.func(processor, **vars(args))
+
+
+if __name__ == '__main__':
+    main()

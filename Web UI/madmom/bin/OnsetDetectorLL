@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""
+OnsetDetectorLL online onset detection algorithm.
+
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import argparse
+
+from madmom.audio import SignalProcessor
+from madmom.features import (ActivationsProcessor, OnsetPeakPickingProcessor,
+                             RNNOnsetProcessor)
+from madmom.io import write_onsets
+from madmom.processors import IOProcessor, io_arguments
+
+
+def main():
+    """OnsetDetectorLL"""
+
+    # define parser
+    p = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter, description='''
+    The OnsetDetectorLL Program detects all onsets in an audio file according
+    to the algorithm described in:
+
+    "Online Real-time Onset Detection with Recurrent Neural Networks"
+    Sebastian Böck, Andreas Arzt, Florian Krebs and Markus Schedl.
+    Proceedings of the 15th International Conference on Digital Audio Effects
+    (DAFx), 2012.
+
+    The paper includes an error in Section 2.2.1, 2nd paragraph:
+    The targets of the training examples have been annotated 1 frame shifted to
+    the future, thus the results given in Table 2 are off by 10ms. Given the
+    fact that the delayed reporting (as outlined in Section 2.3) is not
+    needed, an extra shift of 5ms needs to be added to the mean errors given in
+    Table 2.
+
+    This implementation takes care of this error is is modified in this way:
+    - a logarithmic frequency spacing is used for the spectrograms instead of
+      the Bark scale
+    - targets are annotated at the next frame for neural network training
+    - post processing reports the onset instantaneously instead of delayed.
+
+    This program can be run in 'single' file mode to process a single audio
+    file and write the detected onsets to STDOUT or the given output file.
+
+      $ OnsetDetectorLL single INFILE [-o OUTFILE]
+
+    If multiple audio files should be processed, the program can also be run
+    in 'batch' mode to save the detected onsets to files with the given suffix.
+
+      $ OnsetDetectorLL batch [-o OUTPUT_DIR] [-s OUTPUT_SUFFIX] FILES
+
+    If no output directory is given, the program writes the files with the
+    detected onsets to the same location as the audio files.
+
+    Furthermore, it is able to process live audio input frame by frame when
+    operated in 'online' mode.
+
+      $ OnsetDetectorLL online [INFILE]
+
+    If an input file is given, it is used instead of the system's audio input.
+
+    The 'pickle' mode can be used to store the used parameters to be able to
+    exactly reproduce experiments.
+
+      $ OnsetDetectorLL pickle
+
+    ''')
+    # version
+    p.add_argument('--version', action='version',
+                   version='OnsetDetectorLL.2016')
+    # input/output options
+    io_arguments(p, output_suffix='.onsets.txt', online=True)
+    ActivationsProcessor.add_arguments(p)
+    # signal processing arguments
+    SignalProcessor.add_arguments(p, gain=0)
+    # peak picking arguments
+    OnsetPeakPickingProcessor.add_arguments(p, threshold=0.23)
+
+    # parse arguments
+    args = p.parse_args()
+
+    # set immutable defaults
+    args.fps = 100
+    args.pre_max = 1. / args.fps
+    args.post_max = 0
+    args.post_avg = 0
+    args.online = True
+
+    # print arguments
+    if args.verbose:
+        print(args)
+
+    # input processor
+    if args.load:
+        # load the activations from file
+        in_processor = ActivationsProcessor(mode='r', **vars(args))
+    else:
+        # use a RNN to predict the onsets
+        in_processor = RNNOnsetProcessor(**vars(args))
+
+    # output processor
+    if args.save:
+        # save the RNN onset activations to file
+        out_processor = ActivationsProcessor(mode='w', **vars(args))
+    else:
+        # detect the onsets and output them
+        peak_picking = OnsetPeakPickingProcessor(**vars(args))
+        out_processor = [peak_picking, write_onsets]
+
+    # create an IOProcessor
+    processor = IOProcessor(in_processor, out_processor)
+
+    # and call the processing function
+    args.func(processor, **vars(args))
+
+
+if __name__ == '__main__':
+    main()

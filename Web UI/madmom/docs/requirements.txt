@@ -1,0 +1,4 @@
+# fake requirements for readthedocs
+cython
+mido
+numpydoc

@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""
+PickleProcessor.
+
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import argparse
+import pickle
+
+from madmom.processors import io_arguments
+
+
+def main():
+    """PickleProcessor."""
+    # define parser
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter, description='''
+    This program runs previously pickled Processors in either 'single' or
+    'batch' mode.
+
+      $ PickleProcessor PROCESSOR single INFILE [-o OUTFILE]
+
+      $ PickleProcessor PROCESSOR batch FILES
+
+    To obtain a pickled Processor, either run the respective program with the
+    'pickle' option or call the 'dump()' method of the Processor.
+
+    ''')
+    # add options
+    parser.add_argument('processor', type=argparse.FileType('rb'),
+                        help='pickled processor')
+    parser.add_argument('--version', action='version',
+                        version='PickleProcessor v0.1')
+    io_arguments(parser, output_suffix='.txt', pickle=False)
+
+    # parse arguments
+    args = parser.parse_args()
+    kwargs = vars(args)
+
+    # create a processor
+    processor = pickle.load(kwargs.pop('processor'))
+    # and call the processing function
+    args.func(processor, **kwargs)
+
+
+if __name__ == '__main__':
+    main()
