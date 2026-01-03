@@ -1,0 +1,14 @@
+{
+    "name": "remixatron",
+    "version": "0.0.0",
+    "description": "",
+    "scripts": {
+        "tauri": "tauri",
+        "dev": "tauri dev",
+        "build": "tauri build"
+    },
+    "license": "MIT",
+    "devDependencies": {
+        "@tauri-apps/cli": "^2"
+    }
+}

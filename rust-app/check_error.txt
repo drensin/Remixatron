@@ -1,0 +1,183 @@
+    Checking remixatron v0.1.0 (/home/rensin/Projects/Remixatron/rust-app/src-tauri)
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `rand`
+ --> src/playback_engine.rs:3:5
+  |
+3 | use rand::seq::SliceRandom;
+  |     ^^^^ use of unresolved module or unlinked crate `rand`
+  |
+  = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `rand`
+ --> src/playback_engine.rs:4:5
+  |
+4 | use rand::Rng;
+  |     ^^^^ use of unresolved module or unlinked crate `rand`
+  |
+  = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+warning: unused imports: `Array3` and `Axis`
+ --> src/analysis/features.rs:2:23
+  |
+2 | use ndarray::{Array2, Array3, Axis, s};
+  |                       ^^^^^^  ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Axis`
+ --> src/analysis/structure.rs:1:31
+  |
+1 | use ndarray::{Array2, Array1, Axis, s};
+  |                               ^^^^
+
+warning: unused import: `Array1`
+ --> src/analysis/cqt.rs:2:23
+  |
+2 | use ndarray::{Array2, Array1};
+  |                       ^^^^^^
+
+warning: unused import: `std::f32::consts::PI`
+ --> src/analysis/cqt.rs:3:5
+  |
+3 | use std::f32::consts::PI;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Context`
+ --> src/beat_tracker/inference.rs:1:22
+  |
+1 | use anyhow::{Result, Context};
+  |                      ^^^^^^^
+
+warning: unused imports: `Array2` and `ArrayView2`
+ --> src/beat_tracker/inference.rs:2:15
+  |
+2 | use ndarray::{Array2, Array3, ArrayView2, Axis};
+  |               ^^^^^^          ^^^^^^^^^^
+
+warning: unused import: `std::fs::File`
+ --> src/audio_backend/decoder.rs:1:5
+  |
+1 | use std::fs::File;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `CODEC_TYPE_NULL`
+ --> src/audio_backend/decoder.rs:4:47
+  |
+4 | use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+  |                                               ^^^^^^^^^^^^^^^
+
+warning: unused import: `StandardTagKey`
+ --> src/audio_backend/decoder.rs:8:46
+  |
+8 | use symphonia::core::meta::{MetadataOptions, StandardTagKey};
+  |                                              ^^^^^^^^^^^^^^
+
+warning: unused import: `SegmentationResult`
+ --> src/workflow.rs:7:53
+  |
+7 | use crate::analysis::structure::{StructureAnalyzer, SegmentationResult};
+  |                                                     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Array2`
+ --> src/workflow.rs:8:21
+  |
+8 | use ndarray::{Axis, Array2};
+  |                     ^^^^^^
+
+warning: unused import: `std::path::Path`
+ --> src/workflow.rs:9:5
+  |
+9 | use std::path::Path;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src/playback_engine.rs:2:5
+  |
+2 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0282]: type annotations needed for `Vec<_>`
+  --> src/workflow.rs:91:13
+   |
+91 |         let mut segments = Vec::new();
+   |             ^^^^^^^^^^^^   ---------- type must be known at this point
+   |
+help: consider giving `segments` an explicit type, where the type for type parameter `T` is specified
+   |
+91 |         let mut segments: Vec<T> = Vec::new();
+   |                         ++++++++
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `rand`
+  --> src/playback_engine.rs:46:23
+   |
+46 |         let mut rng = rand::rng();
+   |                       ^^^^ use of unresolved module or unlinked crate `rand`
+   |
+   = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+error[E0599]: no method named `choose` found for struct `Vec<usize>` in the current scope
+  --> src/playback_engine.rs:78:68
+   |
+78 |                      next_beat_idx = *current_beat.jump_candidates.choose(&mut rng).unwrap();
+   |                                                                    ^^^^^^
+   |
+   = help: items from traits can only be used if the trait is in scope
+help: trait `SliceRandom` which provides `choose` is implemented but not in scope; perhaps you want to import it
+   |
+ 1 + use rand::seq::SliceRandom;
+   |
+help: there is a method `choose_mut` with a similar name
+   |
+78 |                      next_beat_idx = *current_beat.jump_candidates.choose_mut(&mut rng).unwrap();
+   |                                                                          ++++
+
+warning: variable does not need to be mutable
+   --> src/analysis/spectrogram.rs:195:13
+    |
+195 |         let mut processed_diff = diff.mapv(|x| (x * 0.5).max(0.0));
+    |             ----^^^^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `num_bands`
+  --> src/analysis/spectrogram.rs:87:13
+   |
+87 |         let num_bands = self.filterbank.ncols();
+   |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_bands`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `k_final` is never read
+   --> src/analysis/structure.rs:119:27
+    |
+119 |         let mut k_final = 0;
+    |                           ^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `x`
+   --> src/analysis/structure.rs:377:13
+    |
+377 |         let x = -d[[p, q]];
+    |             ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: value assigned to `theta` is never read
+   --> src/analysis/structure.rs:375:25
+    |
+375 |         let mut theta = 0.0;
+    |                         ^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `pad_right`
+  --> src/beat_tracker/inference.rs:72:18
+   |
+72 |              let pad_right = chunk_size - current_len - pad_left;
+   |                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pad_right`
+
+Some errors have detailed explanations: E0282, E0432, E0433, E0599.
+For more information about an error, try `rustc --explain E0282`.
+warning: `remixatron` (lib) generated 19 warnings
+error: could not compile `remixatron` (lib) due to 5 previous errors; 19 warnings emitted
