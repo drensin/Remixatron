@@ -110,9 +110,11 @@ impl Remixatron {
         }
         
         let analyzer = StructureAnalyzer::new();
-        let result = analyzer.compute_segments_checkerboard(&mfcc, &chroma, &bar_positions, None); // Auto-K with Snapping
+        // SOTA PIVOT: Use Bottom-Up k-NN Clusterng
+        let result = analyzer.compute_segments_knn(&mfcc, &chroma, None); 
         
         // Convert labels to Segments
+        // Even though we prioritize beat-level similarity, Segments are useful for UI visualization.
 
         
         // Create Beats and Segments
@@ -148,6 +150,14 @@ impl Remixatron {
                 
                 let duration = beats_extended[i+1] - start_time;
                 
+                // Retrieve Jumps for this beat
+                // result.jumps[i] contains list of destination beat indices
+                let candidates = if i < result.jumps.len() {
+                    result.jumps[i].clone()
+                } else {
+                    Vec::new()
+                };
+
                 beat_structs.push(Beat {
                     id: i,
                     start: start_time,
@@ -157,7 +167,7 @@ impl Remixatron {
                     segment: current_segment_id,
                     intra_segment_index,
                     quartile: 0, // Calculated in playback_engine
-                    jump_candidates: Vec::new(),
+                    jump_candidates: candidates, // Populated from k-NN
                 });
                 
                 intra_segment_index += 1;

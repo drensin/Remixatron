@@ -57,9 +57,9 @@ async fn analyze_track(
     // 2. Initialize Jukebox Engine
     let mut jukebox = JukeboxEngine::new(analysis_result.beat_structs.clone(), analysis_result.k_optimal);
     
-    // 3. Compute Jump Candidates (The Graph)
-    println!("Identifying Jump Candidates...");
-    jukebox.identify_jump_candidates();
+    // 3. Compute Jump Candidates (Pre-calculated in Analysis)
+    // println!("Identifying Jump Candidates...");
+    // jukebox.identify_jump_candidates();
     
     // 4. Load Audio for Playback
     println!("Loading Audio into Engine...");

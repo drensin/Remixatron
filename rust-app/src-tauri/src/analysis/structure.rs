@@ -21,9 +21,130 @@ pub struct SegmentationResult {
     pub eigenvalues: Vec<f32>,
     pub novelty_curve: Vec<f32>,
     pub peaks: Vec<usize>,
+    pub jumps: Vec<Vec<usize>>, // NEW: Pre-calculated Jumps per beat
 }
 
 impl StructureAnalyzer {
+    /// SOTA "Bottom-Up" Segmentation Pipelne
+    /// 1. Z-Score Normalize Features
+    /// 2. Compute Lag Embedding (Structure Features)
+    /// 3. Construct k-NN Affinity Graph
+    /// 4. Spectral Clustering on Graph
+    pub fn compute_segments_knn(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, k_force: Option<usize>) -> SegmentationResult {
+        let n_beats = mfcc.nrows();
+        
+        // 1. Preprocessing (Z-Score)
+        let mut mfcc_norm = mfcc.clone();
+        z_score_normalize(&mut mfcc_norm);
+        
+        let mut chroma_norm = chroma.clone();
+        z_score_normalize(&mut chroma_norm);
+        
+        // 2. Feature Fusion (Equal Weight)
+        // Just concatenate them
+        let (_, n_mfcc) = mfcc_norm.dim();
+        let (_, n_chroma) = chroma_norm.dim();
+        let mut fused = Array2::<f32>::zeros((n_beats, n_mfcc + n_chroma));
+        
+        for i in 0..n_beats {
+            for j in 0..n_mfcc {
+                fused[[i, j]] = mfcc_norm[[i, j]];
+            }
+            for j in 0..n_chroma {
+                fused[[i, n_mfcc + j]] = chroma_norm[[i, j]];
+            }
+        }
+        
+        // 3. Lag Embedding (Structure Features)
+        // Lag = 8 Beats (Expert Recommendation)
+        let structure_features = compute_lag_features(&fused, 8);
+        
+        // 4. k-NN Affinity Graph
+        // Construct Adjacency Matrix from k-NN
+        println!("    Computing k-NN Jump Graph (k=10, thresh=0.9)...");
+        let jumps = compute_jump_graph(&structure_features, 10, 0.9);
+        
+        // Convert Jump Graph to Dense Laplacian for Spectral Clustering (Or Sparse?)
+        // Our 'jacobi_eigenvalue' expects Dense Array2.
+        // For N=5000, Dense is 25M floats = 100MB. totally fine.
+        let mut adjacency = Array2::<f32>::zeros((n_beats, n_beats));
+        
+        // Fill from jumps (symmetry is not guaranteed by k-NN, but needed for Spectral)
+        // We make it symmetric: A[i,j] = 1 if i->j OR j->i exist?
+        // Or weighted?
+        // Let's use weighted cosine similarity from the graph calculation if we can,
+        // but `compute_jump_graph` returns indices only.
+        // Let's re-use the standard logic: If i is neighbor of j, link them.
+        for (i, neighbors) in jumps.iter().enumerate() {
+            for &j in neighbors {
+                adjacency[[i, j]] = 1.0;
+                adjacency[[j, i]] = 1.0;
+            }
+        }
+        
+        // Add minimal continuity? (i connected to i+1)
+        // Standard Spectral Clustering often includes temporal connectivity.
+        // Let's add diagonal neighbors.
+        for i in 0..n_beats-1 {
+            adjacency[[i, i+1]] = 1.0;
+            adjacency[[i+1, i]] = 1.0;
+        }
+
+        // 5. Laplacian & Eigen Decomposition
+        let n_s = n_beats;
+        let mut d_inv_sqrt = Array1::<f32>::zeros(n_s);
+        for i in 0..n_s {
+            let sum: f32 = adjacency.row(i).sum();
+            d_inv_sqrt[i] = if sum > 0.0 { 1.0 / sum.sqrt() } else { 0.0 };
+        }
+        
+        let mut laplacian = Array2::<f32>::eye(n_s);
+        for i in 0..n_s {
+            for j in 0..n_s {
+                let val = adjacency[[i, j]] * d_inv_sqrt[i] * d_inv_sqrt[j];
+                laplacian[[i, j]] -= val;
+            }
+        }
+        
+        let (evals, evecs) = jacobi_eigenvalue(&laplacian, 100);
+        
+        // Sort eigenvalues
+        let mut indices: Vec<usize> = (0..n_beats).collect();
+        indices.sort_by(|&a, &b| evals[a].partial_cmp(&evals[b]).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // 6. Spectral Clustering (Auto-K or Forced)
+        // Use the same logic as before (Legacy Composite or simple)
+        // Let's replicate the Auto-K logic simply.
+        
+        let k_final = k_force.unwrap_or(4); // Fallback to 4 if user didn't force
+        
+        // Extract features
+        let mut embedding = Array2::<f32>::zeros((n_beats, k_final));
+        for i in 0..n_beats {
+            for j in 0..k_final {
+                let col_idx = indices[j];
+                embedding[[i, j]] = evecs[[i, col_idx]];
+            }
+        }
+        let embed_norm = normalize_rows(&embedding);
+        
+        let model = KMeans::params(k_final)
+            .max_n_iterations(100)
+            .fit(&DatasetBase::from(embed_norm.clone()))
+            .expect("KMeans failed");
+            
+        let labels = model.predict(&embed_norm).into_raw_vec_and_offset().0;
+        
+        SegmentationResult {
+            labels,
+            k_optimal: k_final,
+            eigenvalues: evals,
+            novelty_curve: vec![],
+            peaks: vec![],
+            jumps, // Return optimal jumps
+        }
+    }
+
     /// Compute segmentation from beat-synchronous features.
     /// Returns: List of cluster labels for each beat.
     /// If k=0, auto-detects K using Eigengap heuristic (max 14 eigenvalues).
@@ -240,6 +361,7 @@ impl StructureAnalyzer {
             eigenvalues: evals, // Return Segment Eigenvalues
             novelty_curve: vec![],
             peaks: vec![],
+            jumps: vec![],
         }
     }
 
@@ -599,6 +721,105 @@ fn find_peaks(curve: &[f32], window: usize, alpha: f32, min_dist: usize) -> Vec<
         }
     }
     peaks
+}
+
+/// Z-Score Normalization (Standardization)
+/// Independently normalizes each column (feature dimension) to Mean=0, Std=1.
+fn z_score_normalize(features: &mut Array2<f32>) {
+    let (n, d) = features.dim();
+    
+    for j in 0..d {
+        // Calculate Mean
+        let mut sum = 0.0;
+        for i in 0..n {
+            sum += features[[i, j]];
+        }
+        let mean = sum / n as f32;
+        
+        // Calculate StdDev
+        let mut var_sum = 0.0;
+        for i in 0..n {
+            var_sum += (features[[i, j]] - mean).powi(2);
+        }
+        let std_dev = (var_sum / n as f32).sqrt();
+        
+        // Apply Z-Score
+        if std_dev > 1e-6 {
+            for i in 0..n {
+                features[[i, j]] = (features[[i, j]] - mean) / std_dev;
+            }
+        }
+    }
+}
+
+/// Time-Delay Embedding (Lag Features)
+/// Stacks features of [t, t+1, ... t+lag-1] into a super-vector.
+fn compute_lag_features(features: &Array2<f32>, lag: usize) -> Array2<f32> {
+    let (n, d) = features.dim();
+    // Output size will be (n, d * lag).
+    // Note: We need to pad the end? Or truncate?
+    // Standard is truncate or pad with zeros. Padding with zeros is safer for shape.
+    let d_new = d * lag;
+    let mut stacked = Array2::<f32>::zeros((n, d_new));
+    
+    for i in 0..n {
+        for l in 0..lag {
+            let t_idx = i + l;
+            if t_idx < n {
+                for j in 0..d {
+                    stacked[[i, l * d + j]] = features[[t_idx, j]];
+                }
+            } else {
+                // Pad with zeros (implied by initialization)
+            }
+        }
+    }
+    stacked
+}
+
+/// k-Nearest Neighbors Jump Graph
+/// Returns a sparse adjacency list: graph[i] = vec![j1, j2, ...]
+/// Filtering criteria:
+/// 1. Top-K neighbors (by Cosine Similarity)
+/// 2. Similarity > Threshold
+fn compute_jump_graph(features: &Array2<f32>, k: usize, threshold: f32) -> Vec<Vec<usize>> {
+    let n = features.nrows();
+    let mut graph = vec![Vec::new(); n];
+    
+    // Normalize rows for Cosine Sim
+    let feat_norm = normalize_rows(features);
+    
+    // For each beat, find neighbors
+    // Parallelizing this is good for performance
+    let results: Vec<Vec<usize>> = (0..n).into_par_iter().map(|i| {
+        let mut candidates = Vec::new();
+        let target = feat_norm.row(i);
+        
+        // Scan all other beats (Naive k-NN is O(N^2), acceptable for N < 5000)
+        // Optimization: Don't compare with self or immediate neighbors (+/- 4 beats) to avoid trivial jumps?
+        // SOTA: Yes, exclude "Too Close" beats.
+        let exclusion_radius = 4; // 1 Bar
+        
+        for j in 0..n {
+            if (i as isize - j as isize).abs() <= exclusion_radius { continue; }
+            
+            let other = feat_norm.row(j);
+            let sim = target.dot(&other);
+            
+            if sim > threshold {
+                 candidates.push((j, sim));
+            }
+        }
+        
+        // Sort by similarity descending
+        candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Take top K
+        candidates.into_iter().take(k).map(|(idx, _)| idx).collect()
+    }).collect();
+    
+    graph = results;
+    graph
 }
 
 impl StructureAnalyzer {
@@ -1017,6 +1238,7 @@ impl StructureAnalyzer {
             eigenvalues: evals,
             novelty_curve: novelty,
             peaks: snapped_peaks,
+            jumps: vec![],
         }
     }
 }
