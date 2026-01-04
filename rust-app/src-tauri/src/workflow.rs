@@ -151,9 +151,13 @@ impl Remixatron {
                 let duration = beats_extended[i+1] - start_time;
                 
                 // Retrieve Jumps for this beat
-                // result.jumps[i] contains list of destination beat indices
-                let candidates = if i < result.jumps.len() {
-                    result.jumps[i].clone()
+                // SOTA Logic: "Look Ahead"
+                // To avoid stutters, we want to jump to a beat that sounds like the NEXT beat (i+1).
+                // So we look up the neighbors of (i+1).
+                let next_beat_idx = if i + 1 < result.labels.len() { i + 1 } else { 0 };
+                
+                let candidates = if next_beat_idx < result.jumps.len() {
+                    result.jumps[next_beat_idx].clone()
                 } else {
                     Vec::new()
                 };

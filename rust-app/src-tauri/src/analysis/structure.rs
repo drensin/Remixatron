@@ -25,126 +25,6 @@ pub struct SegmentationResult {
 }
 
 impl StructureAnalyzer {
-    /// SOTA "Bottom-Up" Segmentation Pipelne
-    /// 1. Z-Score Normalize Features
-    /// 2. Compute Lag Embedding (Structure Features)
-    /// 3. Construct k-NN Affinity Graph
-    /// 4. Spectral Clustering on Graph
-    pub fn compute_segments_knn(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, k_force: Option<usize>) -> SegmentationResult {
-        let n_beats = mfcc.nrows();
-        
-        // 1. Preprocessing (Z-Score)
-        let mut mfcc_norm = mfcc.clone();
-        z_score_normalize(&mut mfcc_norm);
-        
-        let mut chroma_norm = chroma.clone();
-        z_score_normalize(&mut chroma_norm);
-        
-        // 2. Feature Fusion (Equal Weight)
-        // Just concatenate them
-        let (_, n_mfcc) = mfcc_norm.dim();
-        let (_, n_chroma) = chroma_norm.dim();
-        let mut fused = Array2::<f32>::zeros((n_beats, n_mfcc + n_chroma));
-        
-        for i in 0..n_beats {
-            for j in 0..n_mfcc {
-                fused[[i, j]] = mfcc_norm[[i, j]];
-            }
-            for j in 0..n_chroma {
-                fused[[i, n_mfcc + j]] = chroma_norm[[i, j]];
-            }
-        }
-        
-        // 3. Lag Embedding (Structure Features)
-        // Lag = 8 Beats (Expert Recommendation)
-        let structure_features = compute_lag_features(&fused, 8);
-        
-        // 4. k-NN Affinity Graph
-        // Construct Adjacency Matrix from k-NN
-        println!("    Computing k-NN Jump Graph (k=10, thresh=0.9)...");
-        let jumps = compute_jump_graph(&structure_features, 10, 0.9);
-        
-        // Convert Jump Graph to Dense Laplacian for Spectral Clustering (Or Sparse?)
-        // Our 'jacobi_eigenvalue' expects Dense Array2.
-        // For N=5000, Dense is 25M floats = 100MB. totally fine.
-        let mut adjacency = Array2::<f32>::zeros((n_beats, n_beats));
-        
-        // Fill from jumps (symmetry is not guaranteed by k-NN, but needed for Spectral)
-        // We make it symmetric: A[i,j] = 1 if i->j OR j->i exist?
-        // Or weighted?
-        // Let's use weighted cosine similarity from the graph calculation if we can,
-        // but `compute_jump_graph` returns indices only.
-        // Let's re-use the standard logic: If i is neighbor of j, link them.
-        for (i, neighbors) in jumps.iter().enumerate() {
-            for &j in neighbors {
-                adjacency[[i, j]] = 1.0;
-                adjacency[[j, i]] = 1.0;
-            }
-        }
-        
-        // Add minimal continuity? (i connected to i+1)
-        // Standard Spectral Clustering often includes temporal connectivity.
-        // Let's add diagonal neighbors.
-        for i in 0..n_beats-1 {
-            adjacency[[i, i+1]] = 1.0;
-            adjacency[[i+1, i]] = 1.0;
-        }
-
-        // 5. Laplacian & Eigen Decomposition
-        let n_s = n_beats;
-        let mut d_inv_sqrt = Array1::<f32>::zeros(n_s);
-        for i in 0..n_s {
-            let sum: f32 = adjacency.row(i).sum();
-            d_inv_sqrt[i] = if sum > 0.0 { 1.0 / sum.sqrt() } else { 0.0 };
-        }
-        
-        let mut laplacian = Array2::<f32>::eye(n_s);
-        for i in 0..n_s {
-            for j in 0..n_s {
-                let val = adjacency[[i, j]] * d_inv_sqrt[i] * d_inv_sqrt[j];
-                laplacian[[i, j]] -= val;
-            }
-        }
-        
-        let (evals, evecs) = jacobi_eigenvalue(&laplacian, 100);
-        
-        // Sort eigenvalues
-        let mut indices: Vec<usize> = (0..n_beats).collect();
-        indices.sort_by(|&a, &b| evals[a].partial_cmp(&evals[b]).unwrap_or(std::cmp::Ordering::Equal));
-        
-        // 6. Spectral Clustering (Auto-K or Forced)
-        // Use the same logic as before (Legacy Composite or simple)
-        // Let's replicate the Auto-K logic simply.
-        
-        let k_final = k_force.unwrap_or(4); // Fallback to 4 if user didn't force
-        
-        // Extract features
-        let mut embedding = Array2::<f32>::zeros((n_beats, k_final));
-        for i in 0..n_beats {
-            for j in 0..k_final {
-                let col_idx = indices[j];
-                embedding[[i, j]] = evecs[[i, col_idx]];
-            }
-        }
-        let embed_norm = normalize_rows(&embedding);
-        
-        let model = KMeans::params(k_final)
-            .max_n_iterations(100)
-            .fit(&DatasetBase::from(embed_norm.clone()))
-            .expect("KMeans failed");
-            
-        let labels = model.predict(&embed_norm).into_raw_vec_and_offset().0;
-        
-        SegmentationResult {
-            labels,
-            k_optimal: k_final,
-            eigenvalues: evals,
-            novelty_curve: vec![],
-            peaks: vec![],
-            jumps, // Return optimal jumps
-        }
-    }
-
     /// Compute segmentation from beat-synchronous features.
     /// Returns: List of cluster labels for each beat.
     /// If k=0, auto-detects K using Eigengap heuristic (max 14 eigenvalues).
@@ -777,52 +657,252 @@ fn compute_lag_features(features: &Array2<f32>, lag: usize) -> Array2<f32> {
     stacked
 }
 
-/// k-Nearest Neighbors Jump Graph
-/// Returns a sparse adjacency list: graph[i] = vec![j1, j2, ...]
-/// Filtering criteria:
-/// 1. Top-K neighbors (by Cosine Similarity)
-/// 2. Similarity > Threshold
-fn compute_jump_graph(features: &Array2<f32>, k: usize, threshold: f32) -> Vec<Vec<usize>> {
-    let n = features.nrows();
-    let mut graph = vec![Vec::new(); n];
+// Basic Mode Filter for label smoothing
+fn smooth_labels(labels: &[usize], window_size: usize) -> Vec<usize> {
+    let mut smoothed = labels.to_vec();
+    let n = labels.len();
+    let radius = window_size / 2;
     
-    // Normalize rows for Cosine Sim
-    let feat_norm = normalize_rows(features);
-    
-    // For each beat, find neighbors
-    // Parallelizing this is good for performance
-    let results: Vec<Vec<usize>> = (0..n).into_par_iter().map(|i| {
-        let mut candidates = Vec::new();
-        let target = feat_norm.row(i);
+    for i in 0..n {
+        let start = i.saturating_sub(radius);
+        let end = (i + radius + 1).min(n);
+        let slice = &labels[start..end];
         
-        // Scan all other beats (Naive k-NN is O(N^2), acceptable for N < 5000)
-        // Optimization: Don't compare with self or immediate neighbors (+/- 4 beats) to avoid trivial jumps?
-        // SOTA: Yes, exclude "Too Close" beats.
-        let exclusion_radius = 4; // 1 Bar
+        let mut counts = std::collections::HashMap::new();
+        for &l in slice {
+            *counts.entry(l).or_insert(0) += 1;
+        }
         
-        for j in 0..n {
-            if (i as isize - j as isize).abs() <= exclusion_radius { continue; }
+        let mut best_l = labels[i];
+        let mut max_count = 0;
+        
+        for (&l, &c) in counts.iter() {
+            if c > max_count {
+                max_count = c;
+                best_l = l;
+            }
+        }
+        smoothed[i] = best_l;
+    }
+    smoothed
+}
+
+
+
+
+impl StructureAnalyzer {
+    fn compute_jump_graph(features: &Array2<f32>, k: usize, threshold: f32) -> Vec<Vec<(usize, f32)>> {
+        let n_beats = features.nrows();
+        let mut jumps = vec![Vec::new(); n_beats];
+        let exclusion_radius = 4; // Don't jump to neighbors (within 1 bar)
+
+        println!("DEBUG: Computing Jump Graph. Shape: {:?}, k={}, thresh={}", features.dim(), k, threshold);
+        let mut total_edges = 0;
+        let mut max_sim_overall = 0.0f32;
+
+        for i in 0..n_beats {
+            let target = features.row(i);
+            let mut candidates = Vec::new();
+
+            for j in 0..n_beats {
+                // Skip self and immediate neighbors
+                if (i as isize - j as isize).abs() <= exclusion_radius as isize {
+                    continue;
+                }
+
+                let neighbor = features.row(j);
+                
+                // Cosine Similarity: Dot product of normalized vectors
+                // (Vectors are already z-score normalized, but not unit length normalized)
+                let dot = target.dot(&neighbor);
+                let norm_i = target.dot(&target).sqrt();
+                let norm_j = neighbor.dot(&neighbor).sqrt();
+                
+                let sim = if norm_i > 0.0 && norm_j > 0.0 {
+                    dot / (norm_i * norm_j)
+                } else {
+                    0.0
+                };
+                
+                if sim > max_sim_overall { max_sim_overall = sim; }
+
+                candidates.push((j, sim));
+            }
+
+            // Sort by similarity descending
+            candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             
-            let other = feat_norm.row(j);
-            let sim = target.dot(&other);
+            // Stats for this beat
+            let top_k_sims: Vec<f32> = candidates.iter().take(k).map(|(_, s)| *s).collect();
+            let avg_sim: f32 = if !top_k_sims.is_empty() { top_k_sims.iter().sum::<f32>() / top_k_sims.len() as f32 } else { 0.0 };
             
-            if sim > threshold {
-                 candidates.push((j, sim));
+            // Filter by threshold
+            for (idx, sim) in candidates.iter().take(k) {
+                if *sim > threshold {
+                    jumps[i].push((*idx, *sim));
+                    total_edges += 1;
+                }
+            }
+            
+            if i % 100 == 0 {
+                 println!("DEBUG: Beat {}: Max Sim = {:.4}, Top-K Avg = {:.4}", i, top_k_sims.first().unwrap_or(&0.0), avg_sim);
             }
         }
         
-        // Sort by similarity descending
-        candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
-        // Take top K
-        candidates.into_iter().take(k).map(|(idx, _)| idx).collect()
-    }).collect();
-    
-    graph = results;
-    graph
-}
+        println!("DEBUG: Jump Graph Complete. Total Edges: {}, Max Sim Overall: {:.4}", total_edges, max_sim_overall);
 
-impl StructureAnalyzer {
+        jumps
+    }
+
+    /// compute_jump_graph: k-NN with Threshold + Weighted Edges
+
+
+    pub fn compute_segments_knn(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, k_force: Option<usize>) -> SegmentationResult {
+        // Step 1: Z-Score Normalize
+        let mut mfcc_norm = mfcc.clone();
+        let mut chroma_norm = chroma.clone();
+        z_score_normalize(&mut mfcc_norm);
+        z_score_normalize(&mut chroma_norm);
+        
+        // Step 2: Feature Fusion
+        let (_, n_mfcc) = mfcc_norm.dim();
+        let (_, n_chroma) = chroma_norm.dim();
+        let n_beats = mfcc.nrows();
+        
+        let mut fused = Array2::<f32>::zeros((n_beats, n_mfcc + n_chroma));
+        for i in 0..n_beats {
+            for j in 0..n_mfcc {
+                fused[[i, j]] = mfcc_norm[[i, j]];
+            }
+            for j in 0..n_chroma {
+                fused[[i, n_mfcc + j]] = chroma_norm[[i, j]];
+            }
+        }
+        
+        // Step 3: Lag Embedding (8 Beats)
+        let structure_features = compute_lag_features(&fused, 8);
+        
+        // Step 4: Jump Graph (Weighted)
+        // Threshold 0.30 ensures graph connectivity
+
+        let jump_threshold = 0.35;
+        let jumps_weighted = Self::compute_jump_graph(&structure_features, 10, jump_threshold);
+        
+        // Build Weighted Adjacency Matrix
+        let mut adjacency = Array2::<f32>::zeros((n_beats, n_beats));
+        let mut jumps_indices = vec![Vec::new(); n_beats];
+
+        for (i, neighbors) in jumps_weighted.iter().enumerate() {
+            for &(target_idx, score) in neighbors {
+                adjacency[[i, target_idx]] = score;
+                adjacency[[target_idx, i]] = score;
+                jumps_indices[i].push(target_idx); 
+            }
+        }
+
+        // --- NEW: Temporal Continuity ---
+        // Add strong diagonal links (i <-> i+1) to discourage micro-segmentation.
+        // We use a weight of 0.85 (Strong Glue).
+        for i in 0..n_beats - 1 {
+            let continuity_weight = 0.85;
+            // Only add if it doesn't overwrite a stronger existing link (unlikely)
+            if adjacency[[i, i+1]] < continuity_weight {
+                adjacency[[i, i+1]] = continuity_weight;
+                adjacency[[i+1, i]] = continuity_weight;
+            }
+        }
+        // --------------------------------
+        
+        // Step 5: Spectral Embedding (Normalized Laplacian)
+        let mut d_inv_sqrt = Array1::<f32>::zeros(n_beats);
+        for i in 0..n_beats {
+            let sum: f32 = adjacency.row(i).sum();
+            d_inv_sqrt[i] = if sum > 0.0 { 1.0 / sum.sqrt() } else { 0.0 };
+        }
+        
+        let mut laplacian = Array2::<f32>::eye(n_beats);
+        for i in 0..n_beats {
+            for j in 0..n_beats {
+                if i != j {
+                    let val = adjacency[[i, j]] * d_inv_sqrt[i] * d_inv_sqrt[j];
+                    laplacian[[i, j]] -= val;
+                }
+            }
+        }
+        
+        let (eigs, evecs) = jacobi_eigenvalue(&laplacian, 1000);
+        let mut indices: Vec<usize> = (0..n_beats).collect();
+        indices.sort_by(|&a, &b| eigs[a].partial_cmp(&eigs[b]).unwrap());
+        
+        // Step 6: Auto-K Clustering
+        let mut k_best = 4;
+        let mut labels_best = vec![0; n_beats];
+        let mut best_score = -100.0;
+
+        if let Some(k) = k_force {
+            k_best = k;
+            let mut embedding = Array2::<f32>::zeros((n_beats, k));
+            for i in 0..n_beats {
+                for j in 0..k { embedding[[i, j]] = evecs[[i, indices[j]]]; }
+            }
+            let embed_norm = normalize_rows(&embedding);
+            
+            if let Ok(model) = KMeans::params(k).max_n_iterations(200).fit(&DatasetBase::from(embed_norm.clone())) {
+                labels_best = model.predict(&DatasetBase::from(embed_norm)).into_raw_vec_and_offset().0;
+            }
+        } else {
+            // CHANGE: Updated Scoring (Occam's Razor + Capped Ratio)
+            println!("DEBUG: Starting Auto-K Search (K=4..12)");
+            for k in 4..=12 {
+                let mut embedding = Array2::<f32>::zeros((n_beats, k));
+                for i in 0..n_beats {
+                    for j in 0..k { embedding[[i, j]] = evecs[[i, indices[j]]]; }
+                }
+                
+                let embed_norm = normalize_rows(&embedding);
+
+                if let Ok(model) = KMeans::params(k).max_n_iterations(100).fit(&DatasetBase::from(embed_norm.clone())) {
+                    let labels = model.predict(&DatasetBase::from(embed_norm.clone())).into_raw_vec_and_offset().0;
+                    
+                    let silhouette = Self::calculate_silhouette_score(&embedding.mapv(|x| x as f64), &labels, k);
+                    let (ratio, _) = Self::calculate_segment_stats(&labels, k);
+                    
+                    // NEW SCORING:
+                    // 1. Reward Silhouette (Purity) -> 10 * Sil
+                    // 2. Reward Ratio (Connectability) -> + Ratio.min(5.0) <-- CAP THIS
+                    // 3. PENALIZE Complexity -> - (K * 0.2)
+                    let mut score = -100.0;
+                    
+                    if ratio >= 1.5 {
+                        let ratio_reward = ratio.min(5.0);
+                        score = (10.0 * silhouette) + ratio_reward - (k as f32 * 0.2);
+                    }
+
+                    if score > best_score {
+                        best_score = score;
+                        k_best = k;
+                        labels_best = labels;
+                    }
+                    println!("DEBUG: K={}, Sil={:.3}, Ratio={:.2}, Score={:.3}", k, silhouette, ratio, score);
+                }
+            }
+             println!("DEBUG: Auto-K Selected K={} (Score={:.4})", k_best, best_score);
+        }
+
+        // --- NEW: Post-Processing Smoothing ---
+        // Apply a mode filter (window 8 = 2 bars) to remove micro-segments
+        let smoothed_labels = smooth_labels(&labels_best, 8);
+        // --------------------------------------
+
+        SegmentationResult {
+            labels: smoothed_labels, // Use smoothed labels
+            k_optimal: k_best,
+            eigenvalues: eigs.to_vec(),
+            jumps: jumps_indices,
+            novelty_curve: Vec::new(),
+            peaks: Vec::new(),
+        }
+    }
     /// Compute segmentation using Checkerboard Kernel + Segment Clustering.
     /// Compute segmentation using Checkerboard Kernel + Segment Clustering.
     pub fn compute_segments_checkerboard(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, bar_positions: &[usize], k_force: Option<usize>) -> SegmentationResult {
