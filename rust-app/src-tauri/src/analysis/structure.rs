@@ -1,3 +1,16 @@
+//! # Structural Analysis Module
+//!
+//! This module implements the SOTA "Bottom-Up" Spectral Clustering algorithm 
+//! to segment audio into musical sections (Intro, Verse, Chorus, etc.).
+//!
+//! ## Core Algorithm (`compute_segments_knn`)
+//! 1.  **Feature Extraction**: Uses beat-synchronous MFCC and Chroma features.
+//! 2.  **Affinity Matrix**: Constructs a Recurrence Matrix + Path Matrix (Diagonal).
+//! 3.  **Adaptive Jump Graph**: Builds a k-NN graph of similar beats.
+//! 4.  **Spectral Embedding**: Computes the Laplacian and its eigenvectors.
+//! 5.  **Auto-K Clustering**: Uses a customized heuristic (Score = 10*Sil + Ratio - Complexity) to determine the optimal number of segment types.
+//! 6.  **Temporal Smoothing**: Merges micro-segments using a mode filter.
+
 use ndarray::{Array2, Array1, s};
 use linfa::traits::{Fit, Predict};
 use rayon::prelude::*;
@@ -16,234 +29,22 @@ impl StructureAnalyzer {
 
 /// Result of segmentation containing labels and metadata
 pub struct SegmentationResult {
+    /// Cluster ID for each beat
     pub labels: Vec<usize>,
+    /// Optimal K selected
     pub k_optimal: usize,
+    /// Eigenvalues from the Laplacian
     pub eigenvalues: Vec<f32>,
+    /// Novelty curve (only for Checkerboard method)
     pub novelty_curve: Vec<f32>,
+    /// Detected peaks/boundaries (only for Checkerboard method)
     pub peaks: Vec<usize>,
-    pub jumps: Vec<Vec<usize>>, // NEW: Pre-calculated Jumps per beat
+    /// Pre-calculated jump candidates for each beat
+    pub jumps: Vec<Vec<usize>>,
 }
 
 impl StructureAnalyzer {
-    /// Compute segmentation from beat-synchronous features.
-    /// Returns: List of cluster labels for each beat.
-    /// If k=0, auto-detects K using Eigengap heuristic (max 14 eigenvalues).
-    /// If k>0, forces K (still returns 14 eigenvalues).
-    pub fn compute_segments(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, k_force: usize) -> SegmentationResult {
-        let n_beats = mfcc.nrows();
-        
-        // 1. Recurrence Matrix (Chroma - Cosine Sim)
-        // R[i, j] = chroma[i] . chroma[j] / (|ci| |cj|)
-        // Chroma is likely already normalized? 
-        // Let's normalize rows first
-        let chroma_norm = normalize_rows(chroma);
-        let mut recurrence = chroma_norm.dot(&chroma_norm.t());
-        
-        // Thresholding to remove weak links (noise)
-        recurrence.mapv_inplace(|x| if x < 0.5 { 0.0 } else { x });
-        
-        // Median Filter Recurrence (skipped for parity)
-        
-        // 2. Path Matrix (MFCC - Continuity)
-        let mut path_dists = Vec::with_capacity(n_beats - 1);
-        for i in 0..n_beats-1 {
-            let diff = &mfcc.slice(s![i, ..]) - &mfcc.slice(s![i+1, ..]);
-            let dist_sq = diff.dot(&diff);
-            path_dists.push(dist_sq);
-        }
-        
-        // Median sigma
-        let mut sorted = path_dists.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let sigma = if sorted.is_empty() { 1.0 } else { sorted[sorted.len()/2] };
-        let sigma = sigma.max(1e-5); 
-        
-        let mut adjacency = recurrence.clone(); 
-        
-        // Remixatron Logic: A = mu * R + (1-mu) * P
-        let mu = 0.5;
-        
-        // 1. Scale Recurrence by mu
-        adjacency.mapv_inplace(|x| x * mu);
-        
-        // 2. Add Path (weighted by 1-mu)
-        // Path only affects diagonals k=1 and k=-1.
-        for i in 0..n_beats-1 {
-             let d = path_dists[i];
-             let p_val = (-d / sigma).exp();
-             let weighted_p = (1.0 - mu) * p_val;
-             
-             // P is symmetric. Link (i, i+1) and (i+1, i)
-             adjacency[[i, i+1]] += weighted_p;
-             adjacency[[i+1, i]] += weighted_p;
-        }
 
-        for i in 0..n_beats {
-            for j in 0..n_beats {
-                if adjacency[[i, j]] < 0.0 { adjacency[[i, j]] = 0.0; }
-                if i == j { adjacency[[i, j]] = 0.0; } // Remove self-loops
-            }
-        }
-        
-        // 3. Laplacian
-        // D[i] = sum(A[i, :])
-        // L = I - D^-0.5 A D^-0.5
-        
-        let mut d_inv_sqrt = Array1::<f32>::zeros(n_beats);
-        for i in 0..n_beats {
-            let sum: f32 = adjacency.row(i).sum();
-            d_inv_sqrt[i] = if sum > 0.0 { 1.0 / sum.sqrt() } else { 0.0 };
-        }
-        
-        let mut laplacian = Array2::<f32>::eye(n_beats);
-        for i in 0..n_beats {
-            for j in 0..n_beats {
-                let val = adjacency[[i, j]] * d_inv_sqrt[i] * d_inv_sqrt[j];
-                laplacian[[i, j]] -= val;
-            }
-        }
-        
-        // 4. Eigen Decomposition
-        // We need smallest Eigenvalues of L.
-        let (evals, evecs) = jacobi_eigenvalue(&laplacian, 100); // 100 iters
-        
-        // 5. Auto-K Selection
-        // Sort eigenvalues
-        let mut indices: Vec<usize> = (0..n_beats).collect();
-        indices.sort_by(|&a, &b| evals[a].partial_cmp(&evals[b]).unwrap_or(std::cmp::Ordering::Equal));
-        
-        let mut sorted_evals = Vec::with_capacity(14);
-        for i in 0..14.min(n_beats) {
-            sorted_evals.push(evals[indices[i]]);
-        }
-        
-
-
-        // 5. Clustering (Auto-K selection)
-        let mut k_final;
-        let mut labels_final = Vec::new();
-        
-        if k_force > 0 {
-             k_final = k_force;
-             // Extract k_final eigenvectors
-             let mut features = Array2::<f32>::zeros((n_beats, k_final));
-             for i in 0..n_beats {
-                 for j in 0..k_final {
-                     let col_idx = indices[j];
-                     features[[i, j]] = evecs[[i, col_idx]];
-                 }
-             }
-             let feat_norm = normalize_rows(&features);
-
-             let model = KMeans::params(k_final)
-                .max_n_iterations(200)
-                .tolerance(1e-5)
-                .fit(&DatasetBase::from(feat_norm.clone()))
-                .expect("KMeans failed");
-                
-            labels_final = model.predict(&feat_norm).into_raw_vec_and_offset().0;
-        } else {
-            // Auto-K: Legacy Composite Score Heuristic
-            // Search range: [4, 20]
-            
-            println!("    Running Auto-K (Legacy Composite)...");
-            
-            let mut best_score: f32 = -1.0;
-            let mut best_stats = String::new();
-
-            // Default fallback
-            k_final = 4;
-            
-            // Iterate downwards
-            for k in (4..=20).rev() {
-                // Extract k eigenvectors
-                let mut features = Array2::<f32>::zeros((n_beats, k));
-                for i in 0..n_beats {
-                    for j in 0..k {
-                        let col_idx = indices[j];
-                        features[[i, j]] = evecs[[i, col_idx]];
-                    }
-                }
-                let feat_norm = normalize_rows(&features);
-
-                let dataset = DatasetBase::from(feat_norm.clone());
-                let model = KMeans::params(k) // linfa::k_means::KMeans
-                    .max_n_iterations(100)
-                    .tolerance(1e-4)
-                    .fit(&dataset);
-
-                if let Ok(model) = model {
-                    let labels = model.predict(&feat_norm).into_raw_vec_and_offset().0;
-                    
-                    // 1. Calculate Segment Stats
-                    let (ratio, min_seg_len) = Self::calculate_segment_stats(&labels, k);
-                    
-                    // 2. Calculate Silhouette Score
-                    let silhouette = Self::calculate_silhouette_score(&feat_norm.mapv(|x| x as f64), &labels, k);
-                    
-                    // 3. Composite Score
-                    let mut score = 0.0;
-                    if ratio >= 3.0 && silhouette > 0.4 {
-                         // Occam's Razor Score:
-                         // We want to maximize Quality (Silhouette) while minimizing Complexity (K).
-                         //
-                         // Formula: Score = (10 * Silhouette) + Ratio - (0.5 * K)
-                         //
-                         // Rationale for 0.5 * K Penalty:
-                         // - Silhouette is scaled by 10 (Range 0-10).
-                         // - A penalty of 0.5 per K means that adding 1 cluster is only justified 
-                         //   if it increases the Silhouette score by at least 0.05 (5%).
-                         //
-                         // - If Penalty was 1.0 (Strict): Requires 10% gain per cluster. (Too conservative, stays at K=4)
-                         // - If Penalty was 0.1 (Loose): Requires 1% gain per cluster. (Too aggressive, drifts to K=20)
-                         // - 0.5 is the "Sweet Spot" that allows complexity only when it measurably improves structure.
-                         
-                         score = (10.0 * silhouette) 
-                                + ratio 
-                                - (k as f32 * 0.5);
-                    }
-                    
-                    if score > best_score {
-                        best_score = score;
-                        k_final = k;
-                        labels_final = labels;
-                        best_stats = format!("Sil={:.2}, Rat={:.2}, Min={}", silhouette, ratio, min_seg_len);
-                    }
-                }
-            }
-            
-            println!("    Selected K={} (Score={:.2} | {})", k_final, best_score, best_stats);
-            
-            if labels_final.is_empty() {
-                println!("    WARNING: No ideal K found (all blocked by constraints). Forcing K=4.");
-                k_final = 4;
-                // Extract 4 eigen vectors
-                let mut features = Array2::<f32>::zeros((n_beats, k_final));
-                for i in 0..n_beats {
-                    for j in 0..k_final {
-                        let col_idx = indices[j];
-                        features[[i, j]] = evecs[[i, col_idx]];
-                    }
-                }
-                let feat_norm = normalize_rows(&features);
-
-                let model = KMeans::params(k_final)
-                    .max_n_iterations(200)
-                    .fit(&DatasetBase::from(feat_norm.clone()))
-                    .expect("KMeans fallback failed");
-                labels_final = model.predict(&feat_norm).into_raw_vec_and_offset().0;
-            }
-        }
-        
-        SegmentationResult {
-            labels: labels_final,
-            k_optimal: k_final,
-            eigenvalues: evals, // Return Segment Eigenvalues
-            novelty_curve: vec![],
-            peaks: vec![],
-            jumps: vec![],
-        }
-    }
 
     fn calculate_segment_stats(labels: &[usize], k_clusters: usize) -> (f32, usize) {
         if labels.is_empty() { return (0.0, 0); }
@@ -687,10 +488,17 @@ fn smooth_labels(labels: &[usize], window_size: usize) -> Vec<usize> {
     smoothed
 }
 
-
-
-
 impl StructureAnalyzer {
+    /// Constructs a k-Nearest Neighbor (k-NN) graph based on feature similarity.
+    ///
+    /// This produces the "Jump Graph" which serves two purposes:
+    /// 1.  **Affinity Matrix**: Used for spectral clustering (finding similar regions).
+    /// 2.  **Playback Heuristic**: Determines valid jump points for the Infinite Jukebox.
+    ///
+    /// # Arguments
+    /// * `features` - Feature matrix (typically Lag-Embedded MFCC+Chroma).
+    /// * `k` - Number of neighbors to find per beat (Graph Degree).
+    /// * `threshold` - Minimum cosine similarity (0.0 to 1.0) required to keep a link.
     fn compute_jump_graph(features: &Array2<f32>, k: usize, threshold: f32) -> Vec<Vec<(usize, f32)>> {
         let n_beats = features.nrows();
         let mut jumps = vec![Vec::new(); n_beats];
@@ -754,9 +562,21 @@ impl StructureAnalyzer {
         jumps
     }
 
-    /// compute_jump_graph: k-NN with Threshold + Weighted Edges
 
-
+    /// The Primary "Bottom-Up" Segmentation Algorithm.
+    ///
+    /// This hybrid spectral clustering approach is designed specifically for
+    /// pop/electronic music with clear structural repetition. It identifies segments
+    /// by clustering beats that share similar "Jump Neighbors".
+    ///
+    /// # Algorithm Overview
+    /// 1.  **Normalization**: Z-Score normalize MFCC and Chroma independently.
+    /// 2.  **Feature Fusion**: Concatenate & Apply Time-Delay Embedding (Lag=8).
+    /// 3.  **Graph Construction**: Build k-NN Jump Graph (`threshold = 0.35`).
+    /// 4.  **Continuity Injection**: Weight diagonal links (0.85) to enforce temporal cohesion.
+    /// 5.  **Spectral Embedding**: Eigen-decomposition of the Normalized Laplacian.
+    /// 6.  **Auto-K Clustering**: KMeans with customized "Occam's Razor" scoring.
+    /// 7.  **Smoothing**: Mode filter (Window=8) to merge micro-segments.
     pub fn compute_segments_knn(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, k_force: Option<usize>) -> SegmentationResult {
         // Step 1: Z-Score Normalize
         let mut mfcc_norm = mfcc.clone();
@@ -783,7 +603,7 @@ impl StructureAnalyzer {
         let structure_features = compute_lag_features(&fused, 8);
         
         // Step 4: Jump Graph (Weighted)
-        // Threshold 0.30 ensures graph connectivity
+        // Threshold 0.35 ensures graph connectivity
 
         let jump_threshold = 0.35;
         let jumps_weighted = Self::compute_jump_graph(&structure_features, 10, jump_threshold);
@@ -904,7 +724,23 @@ impl StructureAnalyzer {
         }
     }
     /// Compute segmentation using Checkerboard Kernel + Segment Clustering.
-    /// Compute segmentation using Checkerboard Kernel + Segment Clustering.
+    /// Secondary "Top-Down" Segmentation Algorithm (Novelty Curves).
+    ///
+    /// **NOTE: This function is currently UNUSED in the active pipeline.**
+    ///
+    /// It is retained as a valuable alternative strategy for future "Smart Mode" experimentation.
+    /// While the primary `compute_segments_knn` (Spectral Clustering) works best for common music structure,
+    /// this checkerboard approach is often superior for:
+    /// *   Ambient / Drone music (no clear beats)
+    /// *   Jazz / Classical (complex, non-repetitive structure)
+    ///
+    /// # Algorithm Overview
+    /// 1.  **SSM**: Compute Self-Similarity Matrix.
+    /// 2.  **Checkerboard Kernel**: Convolve along the diagonal to detect block transitions.
+    /// 3.  **Peak Picking**: Find peaks in the resulting Novelty Curve.
+    /// 4.  **Snap to Beat**: Align boundaries to the nearest musical downbeat.
+    /// 5.  **Segment Pooling**: Aggregate features within boundaries and cluster the resulting segments.
+    #[allow(dead_code)]
     pub fn compute_segments_checkerboard(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, bar_positions: &[usize], k_force: Option<usize>) -> SegmentationResult {
         let n_beats = mfcc.nrows();
         

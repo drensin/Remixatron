@@ -46,7 +46,7 @@ fn main() {
             println!("K-Optimal: {}", analysis.k_optimal);
             
             let mut engine = JukeboxEngine::new(analysis.beat_structs, analysis.k_optimal);
-            engine.identify_jump_candidates();
+
             
             let cand_count: usize = engine.beats.iter().map(|b| b.jump_candidates.len()).sum();
             println!("Identified {} jump candidates.", cand_count);

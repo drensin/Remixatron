@@ -1,15 +1,33 @@
+//! # Feature Extraction Module
+//!
+//! This module handles the conversion of raw audio or Mel Spectrograms into
+//! high-level structural features (MFCCs and Chroma).
+//!
+//! ## Core Features
+//! *   **MFCC (Mel-Frequency Cepstral Coefficients)**: Captures timbre/texture.
+//! *   **Chroma (CQT)**: Captures harmonic content (chords/notes).
+//! *   **Beat Synchronization**: Aggregates features per beat using Median Pooling to be tempo-invariant.
+
 use crate::analysis::cqt::CQTProcessor;
 use ndarray::{Array2, s};
 use std::f32::consts::PI;
 
+/// Coordinates the extraction of MFCC and Chroma features.
 pub struct FeatureExtractor {
     n_mels: usize,
     sample_rate: f32,
+    /// Pre-computed Discrete Cosine Transform matrix for MFCC generation.
     dct_matrix: Array2<f32>,
+    /// Constant-Q Transform processor for Chroma generation.
     cqt: CQTProcessor,
 }
 
 impl FeatureExtractor {
+    /// Creates a new FeatureExtractor.
+    ///
+    /// # Arguments
+    /// * `n_mels` - Number of Mel bands in the input spectrogram (usually 128).
+    /// * `sample_rate` - Audio sample rate (usually 44100).
     pub fn new(n_mels: usize, sample_rate: f32) -> Self {
         let dct_matrix = compute_dct_matrix(n_mels, 20); // Keep top 20 MFCCs
         
@@ -28,15 +46,21 @@ impl FeatureExtractor {
         }
     }
 
-    /// Compute beat-synchronous features.
-    /// Input: 
-    ///   audio: Raw audio samples (for CQT)
-    ///   mel: Log Mel Spectrogram (Time, Freq=128) (for MFCC)
-    ///   beats: List of beat times in seconds.
-    ///   fps: Frames per second of the mel spectrogram (usually 50.0).
-    /// Returns: (MFCC_Sync, Chroma_Sync)
-    /// MFCC_Sync: (NumBeats, 20)
-    /// Chroma_Sync: (NumBeats, 12)
+    /// Computes beat-synchronous features (MFCC and Chroma) for the entire track.
+    ///
+    /// This process involves:
+    /// 1.  **MFCC**: Computed from the provided Mel Spectrogram via DCT.
+    /// 2.  **CQT/Chroma**: Computed directly from raw audio using a Constant-Q Transform.
+    /// 3.  **Synchronization**: Both feature sets are aggregated into beat intervals using Median Pooling.
+    ///
+    /// # Arguments
+    /// *   `audio` - Raw audio samples (monophonic).
+    /// *   `mel` - Log Mel Spectrogram [Time, n_mels].
+    /// *   `beats` - Timestamps of detected beats in seconds.
+    /// *   `fps` - Frame rate of the Mel Spectrogram.
+    ///
+    /// # Returns
+    /// A tuple `(MFCCs, Chroma)` where each is `[n_beats, dim]`.
     pub fn compute_sync_features(
         &mut self,
         audio: &[f32],
@@ -176,6 +200,13 @@ impl FeatureExtractor {
 
 // Helpers
 
+/// Computes the Discrete Cosine Transform (Type-II) matrix.
+///
+/// Used to decorrelate Mel Spectrogram bands into MFCCs.
+///
+/// # Arguments
+/// * `n` - Input dimension (number of Mel bands).
+/// * `k` - Output dimension (number of MFCC coefficients).
 fn compute_dct_matrix(n: usize, k: usize) -> Array2<f32> {
     let mut matrix = Array2::<f32>::zeros((k, n));
     let scale = (2.0 / n as f32).sqrt(); // Orthogonal normalization

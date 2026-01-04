@@ -82,7 +82,7 @@ fn main() -> Result<()> {
     println!("  Clustering (K=3)...");
     let analyzer = StructureAnalyzer::new();
     // Force K=3 for synthetic test
-    let result = analyzer.compute_segments(&mfcc, &chroma, 3);
+    let result = analyzer.compute_segments_knn(&mfcc, &chroma, Some(3));
     let labels = result.labels;
     
     println!("    Labels: {:?}", labels);

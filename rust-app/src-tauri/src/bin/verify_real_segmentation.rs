@@ -71,7 +71,7 @@ fn main() -> Result<()> {
     println!("  Analyzing Structure (Auto-K)...");
     let analyzer = StructureAnalyzer::new();
     // K=0 triggers Auto-K
-    let result = analyzer.compute_segments(&mfcc, &chroma, 0);
+    let result = analyzer.compute_segments_knn(&mfcc, &chroma, None);
     
     println!("    Detected K: {}", result.k_optimal);
     println!("    Eigenvalues (First 14):"); // Kept for debug

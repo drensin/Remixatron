@@ -1,3 +1,14 @@
+//! # High-Quality Audio Loader
+//!
+//! This module provides a robust, high-fidelity audio loader designed for
+//! the Analysis Pipeline. It differs from the playback loader in two key ways:
+//! 1.  **Mono Mixdown**: It forces downmixing to mono (required for spectral analysis).
+//! 2.  **High-Quality Resampling**: It uses `rubato` (Sinc Interpolation) instead of linear interpolation
+//!     to preserve spectral characteristics during rate conversion.
+//!
+//! **Usage**:
+//! Used by `AnalysisWorkflow` to prepare audio for Beat Tracking and Feature Extraction.
+
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
@@ -10,12 +21,29 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 use rubato::{Resampler, SincFixedIn, SincInterpolationType, SincInterpolationParameters, WindowFunction};
 
+/// Container for decoded and processed audio.
 pub struct AudioData {
+    /// Interleaved audio samples (though usually Mono in this module).
     pub signal: Vec<f32>,
+    /// Sample rate of the data (e.g., 22050 Hz).
     pub sample_rate: u32,
+    /// Number of channels (locked to 1 for this loader).
     pub channels: u32,
 }
 
+/// Loads an audio file, mixes it to mono, and resamples it to the target rate.
+///
+/// # Arguments
+/// * `path` - Path to the audio file.
+/// * `target_sr` - Desired sample rate (e.g., 22050 for analysis).
+///
+/// # Returns
+/// An `AudioData` struct containing the mono signal at the target rate.
+///
+/// # Notes
+/// *   Uses `symphonia` for broad format support (MP3, WAV, FLAC, etc.).
+/// *   Uses `rubato` for audiophile-quality Sinc resampling.
+/// *   Always returns 1 channel (Mono).
 pub fn load_audio<P: AsRef<Path>>(path: P, target_sr: u32) -> Result<AudioData> {
     let src = File::open(path)?;
     let mss = MediaSourceStream::new(Box::new(src), Default::default());

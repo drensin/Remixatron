@@ -1,3 +1,13 @@
+//! # Jukebox Playback Engine
+//!
+//! This module handles the "Infinite Walk" logic and the actual audio playback.
+//! It uses `kira` for low-latency audio scheduling.
+//!
+//! ## Core Components
+//! *   `JukeboxEngine`: The main controller.
+//! *   `Beat`: A rich struct containing connectivity data (where can we jump to?).
+//! *   `PlayInstruction`: A calculated step in the infinite walk.
+
 use serde::{Deserialize, Serialize};
 use kira::{
     AudioManager, AudioManagerSettings,
@@ -9,38 +19,54 @@ use kira::{
 use std::{thread, time::Duration};
 use rand::prelude::*;
 
+/// A single musical beat with metadata for graph traversal.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Beat {
+    /// Unique index of the beat in the song.
     pub id: usize,
+    /// Start time in seconds.
     pub start: f32,
+    /// Duration in seconds.
     pub duration: f32,
+    /// Position in the bar (usually 0-3).
     pub bar_position: usize,
+    /// The structural cluster ID this beat belongs to.
     pub cluster: usize,
+    /// The specific segment instance ID.
     pub segment: usize,
+    /// Index of this beat within its segment.
     pub intra_segment_index: usize,
+    /// Quartile of the song (0-3), used for "Quartile Busting" logic.
     pub quartile: usize,
+    /// List of valid beat IDs we can seamless jump to from here.
     pub jump_candidates: Vec<usize>,
 }
 
+/// A step in the computed playback plan.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PlayInstruction {
+    /// The beat to play.
     pub beat_id: usize,
+    /// The target length of the current sequence (for debugging/visuals).
     pub seq_len: usize,
+    /// Current position in that sequence.
     pub seq_pos: usize,
 }
 
+/// The Audio Engine and Graph Walker.
 pub struct JukeboxEngine {
     pub beats: Vec<Beat>,
-    // settings
+    // Settings
     _clusters: usize,
     _branch_similarity_threshold: f32,
     
-    // Audio Backend
+    // Audio Backend (Kira)
     audio_manager: Option<AudioManager>,
     sound_data: Option<StaticSoundData>,
 }
 
 impl JukeboxEngine {
+    /// Creates a new engine instance.
     pub fn new(beats: Vec<Beat>, clusters: usize) -> Self {
         Self {
             beats,
@@ -51,9 +77,12 @@ impl JukeboxEngine {
         }
     }
     
+    /// Loads and decodes the audio file into memory.
+    ///
+    /// This uses a robust custom decoder (`rodio` based) to handle various formats,
+    /// then converts the raw samples into `Kira` frames.
     pub fn load_track(&mut self, path: &str) -> Result<(), String> {
         use crate::audio_backend::decoder::decode_audio_file;
-        use kira::sound::static_sound::StaticSoundSettings;
         use kira::Frame;
         use std::sync::Arc;
 
@@ -66,6 +95,7 @@ impl JukeboxEngine {
             .map_err(|e| format!("Robust decode failed: {}", e))?;
             
         // Convert Vec<f32> interleaved to Vec<Frame> for Kira
+        // Kira expects stereo frames. We handle mono/stereo/surround manually.
         let mut frames = Vec::with_capacity(samples.len() / channels as usize);
         if channels == 1 {
             for sample in samples {
@@ -78,7 +108,7 @@ impl JukeboxEngine {
                 }
             }
         } else {
-             // Fallback for others: just take first 2
+             // Fallback for >2 channels: just take first 2 (Left/Right)
              for chunk in samples.chunks(channels as usize) {
                  if chunk.len() >= 2 {
                      frames.push(Frame::new(chunk[0], chunk[1]));
@@ -100,10 +130,16 @@ impl JukeboxEngine {
         Ok(())
     }
     
+    /// Simple play command (no callback).
     pub fn play(&mut self, length: usize) -> Result<(), String> {
         self.play_with_callback(length, |_, _| {})
     }
 
+    /// Starts playback with a callback for UI updates.
+    ///
+    /// # Arguments
+    /// * `length` - How many beats to play (approximate, since it's infinite).
+    /// * `callback` - Function called on every beat start (beat_id, segment_id).
     pub fn play_with_callback<F>(&mut self, length: usize, callback: F) -> Result<(), String> 
     where F: Fn(usize, usize) + Send + 'static 
     {
@@ -111,13 +147,14 @@ impl JukeboxEngine {
              return Err("Audio engine not initialized. Call load_track() first.".to_string());
         }
         
-        // 1. Generate Play Vector
+        // 1. Generate the "Infinite Walk" Plan
+        // This pre-calculates the sequence of beats to play.
         let instructions = self.compute_play_vector(length);
         
         let manager = self.audio_manager.as_mut().unwrap();
         let sound_data = self.sound_data.as_ref().unwrap();
         
-        // Setup Clock (1 Tick = 1 ms)
+        // Setup Clock (1 Tick = 1 ms) to synchronize scheduling.
         let mut clock = manager.add_clock(ClockSpeed::TicksPerSecond(1000.0))
              .map_err(|e| format!("Failed to create clock: {}", e))?;
              
@@ -125,23 +162,33 @@ impl JukeboxEngine {
         
         let now_ticks = clock.time().ticks;
         let mut cumulative_ticks = 0;
-        const BUFFER_MS: u64 = 4000; // Keep 4 seconds buffered
+        const BUFFER_MS: u64 = 4000; // Keep 4 seconds buffered ahead
         
         for instruction in instructions {
              // Throttling: If we are too far ahead of the clock, wait.
+             // This prevents calculating 10 hours of audio instantly and OOMing the scheduler.
              loop {
                  let current_time = clock.time().ticks;
                  let elapsed = current_time.saturating_sub(now_ticks);
                  if cumulative_ticks < elapsed + BUFFER_MS {
                      break;
                  }
-                 // Sleep a bit to let audio catch up
+                 // Backpressure: Wait for playback to catch up to the buffer.
+                 // This yields the thread to prevent tight-looping while waiting.
                  thread::sleep(Duration::from_millis(50));
              }
 
              let beat = &self.beats[instruction.beat_id];
              
              // Emit Callback (Visuals)
+             // CRITICAL BUG: This callback fires when the beat is *scheduled*, which is `BUFFER_MS` (4s) ahead of playback.
+             // Indicates that the UI will display the "Future" state significantly earlier than the audio.
+             //
+             // TODO: FIX UI LATENCY (High Priority)
+             // We must decouple the UI event from this scheduling loop.
+             // Potential solutions:
+             // 1. Send the `start_time` (clock ticks) to the frontend, let JS handle the wait.
+             // 2. Spawn a separate thread that polls `clock.time()` and emits events at the correct moment.
              callback(beat.id, beat.segment);
 
              let duration_ticks = (beat.duration * 1000.0) as u64;
@@ -171,20 +218,20 @@ impl JukeboxEngine {
     }
 
     /// Pre-computes the "Infinite Walk" graph traversal.
-    /// This generates a long sequence of beat indices that represents the remix.
-    /// In the Python version, this was `play_vector`.
-
-    /// Pre-computes the "Infinite Walk" graph traversal.
-    /// Replicates Remixatron.py `CreatePlayVectorFromBeatsMadmom` logic EXACTLY.
+    ///
+    /// This mimics the probabilistic path finding from the original Python implementation.
+    /// It balances "sticking to the song" (playing sequential beats) with "jumping"
+    /// (moving to a similar beat elsewhere) to create an endless mix.
     pub fn compute_play_vector(&self, length: usize) -> Vec<PlayInstruction> {
         let mut play_vector = Vec::with_capacity(length);
         let mut rng = rand::thread_rng();
 
-        // Start at beat 0
+        // Cursor: The current beat we are playing.
         let mut cursor = 0;
-        let _current_beat_idx = 0; // Track actual beat index separately from cursor logic if needed
 
         // 0. Pre-calculate "Last Chance" beat index for "No Escape" logic
+        // If we reach the end of the song and there are no jumps, we must loop back
+        // earlier. We find the last beat that HAS a jump candidate.
         let mut last_chance = self.beats.len() - 1;
         for i in (0..self.beats.len()).rev() {
              if !self.beats[i].jump_candidates.is_empty() {
@@ -193,118 +240,63 @@ impl JukeboxEngine {
              }
         }
         
-        // 1. Determine Tempo and Duration (for heuristics)
+        // 1. Determine Tempo and Duration (simple heuristic)
         let last_beat = self.beats.last().unwrap();
         let duration = last_beat.start + last_beat.duration;
         let tempo = (self.beats.len() as f32 / duration) * 60.0;
         
         // 2. Determine Max Sequence Length (Tempo scaled)
-        // Remixatron.py: max_sequence_len = int(round((tempo / 120.0) * 48.0))
-        // max_sequence_len = max_sequence_len - (max_sequence_len % 4)
+        // We want to play longer uninterrupted sequences for faster songs.
         let mut max_sequence_len = ((tempo / 120.0) * 48.0).round() as usize;
         max_sequence_len = max_sequence_len - (max_sequence_len % 4);
 
-        // 3. Acceptable Jump Amounts
-        // Remixatron.py: [16, 24, 32, 48, 64, 72, 96, 128] filtered <= max_sequence_len
+        // 3. Define Acceptable Jump Points
+        // We only jump after playing a phrase of these lengths (in beats).
         let base_amounts = vec![16, 24, 32, 48, 64, 72, 96, 128];
         let mut acceptable_jump_amounts: Vec<usize> = base_amounts.into_iter()
             .filter(|&x| x <= max_sequence_len)
             .collect();
-            
-        println!("DEBUG: Tempo: {}, Max Seq Len: {}, Acceptable: {:?}", tempo, max_sequence_len, acceptable_jump_amounts);
 
-        // Handle 3/4 time logic (if max beats_per_bar == 3)
-        // We need to scan beats for max bar position. In Rust we can just check all.
+        // Handle 3/4 time logic adjustment
         let max_bar_pos = self.beats.iter().map(|b| b.bar_position).max().unwrap_or(4);
-        // Note: Remixatron.py says "beats_per_bar = max(...)". 
-        // If beats are 0-indexed bar_pos, max_bar_pos=3 implies 4/4? 
-        // No, typically bar_pos is 0-indexed. If max is 3, that means 0,1,2,3 -> 4 beats.
-        // If max is 2 (0,1,2) -> 3 beats.
-        // Remixatron code: `if beats_per_bar == 3: ...`
-        // Let's assume strict parity: If `max_bar_pos` (which is effectively beats_per_bar - 1 if 0-indexed, OR count if 1-indexed)
-        // Let's check `bar_position` definition. Usually 0-indexed.
-        // If max_bar_pos == 2, that's 3/4 time.
-        // If max_bar_pos == 3, that's 4/4 time.
-        // Wait, Remixatron.py: `beats_per_bar = max([ b['bar_position'] for b in beats ])`
-        // If `bar_position` was 1-indexed in Python, then 3 means 3/4.
-        // If it was 0-indexed, 3 means 4/4.
-        // Let's look at `Remixatron.py` Line 711: `final_beat['bar_position'] = int(beat_tuples[i][4])`
-        // `downbeats` from madmom are [time, bar_pos]. madmom bar_pos is 1-indexed (1..4).
-        // So `beats_per_bar` being 3 means 3/4 time.
-        // In Rust, ensure our `bar_position` logic matches.
-        
         let beats_per_bar = max_bar_pos + 1;
-        // Actually, let's just stick to the value inspection.
         
         if beats_per_bar == 3 {
              acceptable_jump_amounts = acceptable_jump_amounts.iter().map(|a| ((*a as f32) * 0.75) as usize).collect();
         }
 
-        // 4. Initial Sequence
-        // min_sequence = random.choice(acceptable_jump_amounts) - (beats[1]['bar_position'] + 2)
-        // We use beats[1] for bar pos ref? Python does: `beats[1]['bar_position']`.
+        // 4. Set Initial Sequence Target
         let ref_bar_pos = if self.beats.len() > 1 { self.beats[1].bar_position } else { 0 };
-        
-        // Safety: ensure acceptable_jump_amounts not empty
         let safe_amounts = if acceptable_jump_amounts.is_empty() { vec![16] } else { acceptable_jump_amounts.clone() };
         
+        // Randomly pick how long we play before ATTEMPTING a jump.
         let mut min_sequence = *safe_amounts.choose(&mut rng).unwrap() as isize - (ref_bar_pos as isize + 2);
-        if min_sequence < 1 { min_sequence = 1; } // Safety
+        if min_sequence < 1 { min_sequence = 1; }
         
         let mut current_sequence = 0;
+        let mut beats_since_jump = 0;
+        let mut failed_jumps = 0;
         
+        // Add first instruction
         play_vector.push(PlayInstruction {
             beat_id: cursor,
             seq_len: min_sequence as usize,
             seq_pos: current_sequence,
         });
 
-        // 5. Recent History Queue
+        // 5. Recent History Queue (Prevent immediate loops)
         let segments_count = self.beats.iter().map(|b| b.segment).max().unwrap_or(0) + 1;
         let recent_depth = (segments_count as f32 * 0.25).round() as usize;
         let recent_depth = recent_depth.max(1);
         let mut recent = std::collections::VecDeque::with_capacity(recent_depth);
 
-        // 6. Panic Thresholds
+        // 6. Panic Threshold
+        // If we haven't jumped in 10% of the song, force a jump soon.
         let max_beats_between_jumps = (self.beats.len() as f32 * 0.1).round() as usize;
-        // Filter acceptable amounts again
-        let acceptable_jump_amounts: Vec<usize> = safe_amounts.into_iter()
-             .filter(|&x| x <= max_beats_between_jumps)
-             .collect();
-        let safe_amounts = if acceptable_jump_amounts.is_empty() { vec![16] } else { acceptable_jump_amounts };
- 
-        // `safe_amounts` (first) used in filter source. 
-        // `safe_amounts` (second) is checking result.
-        // But in strict logic, we are redefining `acceptable_jump_amounts`.
-        // Line 133 target: `let safe_amounts = ...`
-        // Actually, line 133 defines `safe_amounts` which is NEVER used?
-        // Let's check logic:
-        // Line 130 defines `acceptable_jump_amounts` (filtered).
-        // Line 133 defines `safe_amounts` (fallback).
-        // Then we use `min_sequence` logic? No, `min_sequence` uses `safe_amounts` from Line 108.
-        // Wait, line 133 is seemingly for the loop logic?
-        // Line 152 `will_jump` logic uses `min_sequence`.
-        // `min_sequence` is recalculated inside the loop! (Line 238 in original logic, I truncated it?)
-        // Ah, `playback_engine.rs` implementation I provided truncated the `min_sequence` recalculation?
-        // I need to check if I implemented `min_sequence` recalculation inside the loop.
-        // If not, `safe_amounts` at 133 is truly unused.
-        // I should implement `min_sequence` recalculation.
-        
-        // Let's check `playback_engine.rs` view again? No tool output yet.
-        // I suspect I truncated `min_sequence` recalculation logic inside `if let Some(tgt) = jump_target` block.
-        // My previous Replace tool for `inner loop using last_chance` was lines 221-263.
-        // I did not see `min_sequence` recalc logic there.
-        // I need to implement it to match python.
-        
-        // For now, to clean warnings, I will prefix `_safe_amounts`.
 
-
-        let mut beats_since_jump = 0;
-        let mut failed_jumps = 0;
-
-        // 7. The Loop
+        // 7. The Main Loop
         while play_vector.len() < length {
-            // Update Recent
+            // Update Recent Segments
             let current_beat = &self.beats[cursor];
             if !recent.contains(&current_beat.segment) {
                 if recent.len() >= recent_depth {
@@ -315,51 +307,41 @@ impl JukeboxEngine {
 
             current_sequence += 1;
 
-            // Check Jump Condition
+            // Check if we should ATTEMPT a jump
             let will_jump = (current_sequence as isize == min_sequence) || 
                             (beats_since_jump >= max_beats_between_jumps);
             
-            if will_jump {
-                println!("DEBUG: Beat {}: Will Jump! CurSeq: {}, MinSeq: {}, Since: {}", cursor, current_sequence, min_sequence, beats_since_jump);
-            }
-
             let mut did_jump = false;
             let mut next_cursor = 0;
 
             if will_jump {
-                // Attempt 1: Non-Recent Candidates
+                // Strategy 1: Standard Jump (Must not be to a recently visited segment)
                 let all_cands = &current_beat.jump_candidates;
                 let non_recent: Vec<usize> = all_cands.iter()
                     .filter(|&&c| !recent.contains(&self.beats[c].segment))
                     .cloned()
                     .collect();
 
-                println!("DEBUG: Beat {}: Candidates Total={}, Non-Recent={}", cursor, all_cands.len(), non_recent.len());
-
                 if !non_recent.is_empty() {
-                     // Success!
+                     // Success! Pick a random valid candidate.
                      next_cursor = *non_recent.choose(&mut rng).unwrap();
                      did_jump = true;
                 } else {
-                     // Failure to find non-recent
-                     // Python: beats_since_jump += 1; failed_jumps += 1;
-                     // But we handle beats_since_jump update in the "Else" (no jump) block generally?
-                     // No, Python increments them inside the "if len(non_recent) == 0" block.
-                     // But if it subsequently succeeds in Quartile bust, it resets them to 0.
-                     // So we can track them locally.
-                     
-                     // Attempt 2: Quartile Busting (10% failure)
+                     // Strategy 2: "Quartile Busting" (Relaxed constraints)
+                     // If we failed too many times (10% of song length), allows jumping to same quartile.
+                     // (Heuristic: usually we want to jump to a different part of the song, but desperation kicks in).
                      let failure_threshold_10 = (self.beats.len() as f32 * 0.1) as usize;
+                     
+                     // We count this as a failure before checking threshold
+                     let current_failed_jumps = failed_jumps + 1;
+                     
                      let non_quartile: Vec<usize> = current_beat.jump_candidates.iter()
                         .filter(|&&c| self.beats[c].quartile != current_beat.quartile)
                         .cloned()
                         .collect();
 
-                     // Note: We used `failed_jumps + 1` for logic comparison because we just failed one more time effectively?
-                     // Python increments `failed_jumps` BEFORE checking threshold.
-                     let current_failed_jumps = failed_jumps + 1;
-
                      if current_failed_jumps >= failure_threshold_10 && !non_quartile.is_empty() {
+                          // Find the furthest component to jump to (maximize change)
                           let furthest_dist = non_quartile.iter()
                               .map(|&c| (current_beat.id as isize - c as isize).abs())
                               .max().unwrap_or(0);
@@ -371,7 +353,8 @@ impl JukeboxEngine {
                           }
                      }
                      
-                     // Attempt 3: Nuclear Reset (30% failure)
+                     // Strategy 3: "Nuclear Reset"
+                     // If we are REALLY stuck (30% failures), jump to start.
                      if !did_jump && current_failed_jumps >= (self.beats.len() as f32 * 0.3) as usize {
                           next_cursor = 0;
                           did_jump = true;
@@ -379,61 +362,53 @@ impl JukeboxEngine {
                 }
             }
 
-            // Duplicate block deleted. Logic is handled in the following if/else structure.
-            
-            // Correction: Merge the logic.
-            // If `will_jump`:
-            //    Try jump.
-            //    If success: `cursor = tgt`, reset `beats_since`, `failed_jumps`.
-            //    If fail: `cursor = next` (or last_chance logic), `beats_since++`, `failed++`.
-            //    ALWAYS: Reset `current_sequence`, Recalc `min_sequence`.
-            
+            // Apply Outcome
             if will_jump {
                  if did_jump {
-                     println!("DEBUG: SUCCESS! Jumping from {} to {}", cursor, next_cursor);
+                     // Jump Succeeded
                      cursor = next_cursor;
                      beats_since_jump = 0;
                      failed_jumps = 0;
                  } else {
-                     println!("DEBUG: Jump Failed. No valid candidates found.");
-                     // Failed to find target
+                     // Jump Failed (No candidates met criteria)
                      failed_jumps += 1;
                      
-                     // Fallback Step
+                     // Advance normally, unless we are at "Last Chance"
                      if cursor == last_chance {
+                          // Forced jump if possible, else loop to start
                           if !current_beat.jump_candidates.is_empty() {
                               cursor = *current_beat.jump_candidates.iter().min().unwrap();
                           } else {
                               cursor = if cursor + 1 < self.beats.len() { cursor + 1 } else { 0 };
                           }
                      } else {
+                          // Standard advance
                           cursor = if cursor + 1 < self.beats.len() { cursor + 1 } else { 0 };
                      }
                      beats_since_jump += 1;
                  }
                  
-                 // Sequence Reset (Shared)
+                 // Reset Sequence Counter (We attempted a jump, so a new "phrase" begins)
                  current_sequence = 0;
                  let ref_bar_pos = self.beats[cursor].bar_position;
                  min_sequence = *safe_amounts.choose(&mut rng).unwrap() as isize - (ref_bar_pos as isize + 2);
                  if min_sequence < 1 { min_sequence = 1; }
                  
-                 // Panic shortening
-                 // Note: `beats_since_jump` just updated.
+                 // Panic Logic: If we haven't jumped in a long time, shorten the next phrase
+                 // to try again sooner.
                  let remaining_panic = max_beats_between_jumps as isize - beats_since_jump as isize;
-                 // Fix: Ensure remaining_panic is at least 1 to prevent underflow/negative min_sequence
                  let safe_remaining = remaining_panic.max(1);
                  
                  if min_sequence > safe_remaining {
                      min_sequence = safe_remaining;
                  }
-                 // Visualization Hack
+                 // Visual hack: force progress bar to full if panic
                  if beats_since_jump >= max_beats_between_jumps {
                       current_sequence = min_sequence as usize;
                  }
 
             } else {
-                // Not trying to jump
+                // Standard Playback (No Jump Attempt)
                  if cursor == last_chance {
                       if !current_beat.jump_candidates.is_empty() {
                           cursor = *current_beat.jump_candidates.iter().min().unwrap();
@@ -445,6 +420,8 @@ impl JukeboxEngine {
                  }
                  beats_since_jump += 1;
             }
+            
+            // Record instruction
             play_vector.push(PlayInstruction {
                 beat_id: cursor,
                 seq_len: min_sequence as usize,
@@ -452,60 +429,5 @@ impl JukeboxEngine {
             });
         }
         play_vector
-    }
-    
-    // Placeholder to allow compilation to succeed if I truncated logic.
-    // Ideally I complete `compute_play_vector` in a follow up or careful block.
-    // Let's implement `identify_jump_candidates` first as it's a requisite.
-    
-    pub fn identify_jump_candidates(&mut self) {
-         let n_beats = self.beats.len();
-         let mut all_candidates: Vec<Vec<usize>> = vec![Vec::new(); n_beats];
-
-         // Compute Quartiles first (if not set externally)
-         // Python: beat['quartile'] = beat['id'] // (len(beats) / 4.0)
-         for beat in self.beats.iter_mut() {
-             beat.quartile = (beat.id as f32 / (n_beats as f32 / 4.0)) as usize;
-         }
-         // Cannot borrow mutable in loop below if we iterate.
-         // Actually we can compute quartiles in a separate pass.
-         // Let's assume we do 2 passes.
-
-         // Pass 1: Candidates
-         for i in 0..n_beats {
-             // Logic:
-             // beat['next'] defaults to id + 1.
-             // But "Last Chance" logic modifies 'next'.
-             // Python computes candidates BEFORE "Last Chance".
-             // So `next` used here is `id + 1` (or 0 if end).
-             
-             let next_beat_idx = if i + 1 < n_beats { i + 1 } else { 0 };
-             let next_beat = &self.beats[next_beat_idx];
-             let current_segment = self.beats[i].segment;
-             
-             for (j, candidate) in self.beats.iter().enumerate() {
-                 let dist = (j as isize - next_beat_idx as isize).abs();
-                 
-                  // 1. Cluster Parity
-                 if candidate.cluster == next_beat.cluster &&
-                    // 2. Intra-Segment Parity (Restored)
-                    candidate.intra_segment_index == next_beat.intra_segment_index &&
-                    // 3. Bar Pos Parity
-                    candidate.bar_position == next_beat.bar_position &&
-                    // 4. Segment Diversity
-                    candidate.segment != current_segment &&
-                    // 5. Sequential Exclusion
-                    j != next_beat_idx &&
-                    // 6. Distance Threshold
-                    dist > 7 {
-                        all_candidates[i].push(j);
-                    }
-             }
-         }
-
-         // Apply back matches
-         for (i, candidates) in all_candidates.into_iter().enumerate() {
-             self.beats[i].jump_candidates = candidates;
-         }
     }
 }
