@@ -164,37 +164,55 @@ impl JukeboxEngine {
         let mut cumulative_ticks = 0;
         const BUFFER_MS: u64 = 4000; // Keep 4 seconds buffered ahead
         
+        // Initialize the Pending Event Queue.
+        // This decouples the "Scheduling" (which happens 4 seconds in the future)
+        // from the "Notifying" (which must happen right now).
+        //
+        // Structure: (Time in Ticks to fire, Beat ID, Segment ID)
+        use std::collections::VecDeque;
+        let mut pending_events: VecDeque<(u64, usize, usize)> = VecDeque::new();
+        
         for instruction in instructions {
-             // Throttling: If we are too far ahead of the clock, wait.
-             // This prevents calculating 10 hours of audio instantly and OOMing the scheduler.
+             // Throttling Loop: Ensure we don't schedule too far ahead (OOM protection)
              loop {
                  let current_time = clock.time().ticks;
                  let elapsed = current_time.saturating_sub(now_ticks);
+                 
+                 // 1. Service the Event Queue (The Solution to UI Latency)
+                 // Check if any pending events are ready to fire (their time has come).
+                 while let Some((fire_time, beat_id, seg_id)) = pending_events.front() {
+                     if current_time >= *fire_time {
+                         // It is time! Notify the frontend.
+                         callback(*beat_id, *seg_id);
+                         pending_events.pop_front();
+                     } else {
+                         // The next event is still in the future. Stop checking.
+                         break;
+                     }
+                 }
+
                  if cumulative_ticks < elapsed + BUFFER_MS {
+                     // We have room in the buffer to schedule more audio.
                      break;
                  }
-                 // Backpressure: Wait for playback to catch up to the buffer.
-                 // This yields the thread to prevent tight-looping while waiting.
+                 
+                 // Buffer is full. Wait for playback to catch up.
+                 // Sleep yields the thread so we don't burn 100% CPU waiting.
                  thread::sleep(Duration::from_millis(50));
              }
 
              let beat = &self.beats[instruction.beat_id];
-             
-             // Emit Callback (Visuals)
-             // CRITICAL BUG: This callback fires when the beat is *scheduled*, which is `BUFFER_MS` (4s) ahead of playback.
-             // Indicates that the UI will display the "Future" state significantly earlier than the audio.
-             //
-             // TODO: FIX UI LATENCY (High Priority)
-             // We must decouple the UI event from this scheduling loop.
-             // Potential solutions:
-             // 1. Send the `start_time` (clock ticks) to the frontend, let JS handle the wait.
-             // 2. Spawn a separate thread that polls `clock.time()` and emits events at the correct moment.
-             callback(beat.id, beat.segment);
-
              let duration_ticks = (beat.duration * 1000.0) as u64;
+             let scheduled_start_ticks = now_ticks + cumulative_ticks;
              
-             let start_time = ClockTime { clock: clock.id(), ticks: now_ticks + cumulative_ticks, fraction: 0.0 };
-             let stop_time = ClockTime { clock: clock.id(), ticks: now_ticks + cumulative_ticks + duration_ticks, fraction: 0.0 };
+             // 2. Queue the Frontend Event
+             // Instead of calling the callback immediately, we push it to our queue
+             // with the timestamp of when it SHOULD fire.
+             pending_events.push_back((scheduled_start_ticks, beat.id, beat.segment));
+             
+             // 3. Schedule the Audio (Future)
+             let start_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks, fraction: 0.0 };
+             let stop_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks + duration_ticks, fraction: 0.0 };
              
              let mut handle = manager.play(
                  sound_data.with_settings(
