@@ -163,6 +163,22 @@ impl Remixatron {
             let mut segment_start_idx = 0;
             let mut current_label = result.labels[0];
 
+            // 0. Pre-calculate Segment IDs for all beats
+            // We need this map to filter "Intra-Segment" jumps efficiently in the main loop.
+            // (i.e. we need to know the segment ID of a *future* target beat).
+            let mut beat_to_segment_id = vec![0; result.labels.len()];
+            {
+                let mut temp_seg_id = 0;
+                let mut temp_label = result.labels[0];
+                for i in 0..result.labels.len() {
+                    if result.labels[i] != temp_label {
+                        temp_seg_id += 1;
+                        temp_label = result.labels[i];
+                    }
+                    beat_to_segment_id[i] = temp_seg_id;
+                }
+            }
+
             for i in 0..result.labels.len() {
                 let start_time = beats_extended[i];
                 let label = result.labels[i];
@@ -191,11 +207,29 @@ impl Remixatron {
                 // such that Y is similar to X+1. This preserves the musical flow.
                 let next_beat_idx = if i + 1 < result.labels.len() { i + 1 } else { 0 };
                 
-                let candidates = if next_beat_idx < result.jumps.len() {
-                    result.jumps[next_beat_idx].clone()
+                let raw_candidates = if next_beat_idx < result.jumps.len() {
+                    &result.jumps[next_beat_idx]
                 } else {
-                    Vec::new()
+                    &Vec::new()
                 };
+
+                // FEATURE: Ban Intra-Segment Jumps
+                // A jump is only valid if the target beat belongs to a DIFFERENT segment instance.
+                // This prevents the playback from getting "stuck" in the same verse forever,
+                // and encourages broad leaps across the song structure (e.g. Verse 1 -> Verse 2).
+                let mut candidates = Vec::new();
+                for target_idx in raw_candidates {
+                    // Check bounds just in case
+                    if *target_idx < beat_to_segment_id.len() {
+                        let target_seg_id = beat_to_segment_id[*target_idx];
+                        
+                        // THE FILTER:
+                        // Discard if Target Segment ID == Current Segment ID
+                        if target_seg_id != current_segment_id {
+                             candidates.push(*target_idx);
+                        }
+                    }
+                }
 
                 beat_structs.push(Beat {
                     id: i,

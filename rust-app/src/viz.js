@@ -115,7 +115,7 @@ export class InfiniteJukeboxViz {
                 ctx.moveTo(sx, sy);
                 // Bezier curve through center?
                 ctx.quadraticCurveTo(this.centerX, this.centerY, tx, ty);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+                ctx.strokeStyle = "rgba(0, 0, 0, 0.5)"; // Black for light background
                 ctx.stroke();
             });
         }
