@@ -1,0 +1,405 @@
+I am the verification binary. I am running.
+Current Dir: "/home/rensin/Projects/Remixatron/rust-app/src-tauri"
+Analyzing /home/rensin/Downloads/Two Timin' Man.mp3... (This may take a moment)
+    Computing SSM & Novelty Curve...
+
+--- Auto-K Selection Data (Ungated Sum, Ratio >= 1.5) ---
+K	Sil	Rat	MinSeg	Score	Selected?
+3	0.376	2.67	1	10.4	*
+4	0.284	2.25	1	10.1	
+5	0.317	1.80	1	11.0	*
+6	0.267	2.00	1	11.7	*
+7	0.433	1.71	1	14.0	*
+8	0.473	1.38	1	15.1	
+9	0.644	1.33	1	17.8	
+10	0.722	1.20	1	19.4	
+11	0.880	1.09	1	21.9	
+12	1.000	1.00	1	24.0	
+-----------------------------
+
+    Clustering 12 segments -> Selected K=7 (Sil=0.43, Rat=1.71)
+Analysis complete. Beats: 331
+K-Optimal: 7
+Identified 304 jump candidates.
+Beat 0: BarPos: 0, Segment: 0
+Beat 1: BarPos: 1, Segment: 0
+Beat 2: BarPos: 2, Segment: 0
+Beat 3: BarPos: 3, Segment: 0
+Beat 4: BarPos: 0, Segment: 0
+Beat 100: BarPos: 0, Segment: 2
+Max Bar Position: 3
+Loading track into Kira...
+Decoding audio with robust decoder...
+Generating Play Vector & Scheduling Audio...
+DEBUG: Tempo: 103.424576, Max Seq Len: 40, Acceptable: [16, 24, 32]
+DEBUG: Beat 28: Will Jump! CurSeq: 29, MinSeq: 29, Since: 28
+DEBUG: Beat 28: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 32: Will Jump! CurSeq: 4, MinSeq: 4, Since: 32
+DEBUG: Beat 32: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 33: Will Jump! CurSeq: 2, MinSeq: 1, Since: 33
+DEBUG: Beat 33: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 34: Will Jump! CurSeq: 2, MinSeq: 1, Since: 34
+DEBUG: Beat 34: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 35: Will Jump! CurSeq: 2, MinSeq: 1, Since: 35
+DEBUG: Beat 35: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 36: Will Jump! CurSeq: 2, MinSeq: 1, Since: 36
+DEBUG: Beat 36: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 37: Will Jump! CurSeq: 2, MinSeq: 1, Since: 37
+DEBUG: Beat 37: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 38: Will Jump! CurSeq: 2, MinSeq: 1, Since: 38
+DEBUG: Beat 38: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 39: Will Jump! CurSeq: 2, MinSeq: 1, Since: 39
+DEBUG: Beat 39: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 40: Will Jump! CurSeq: 2, MinSeq: 1, Since: 40
+DEBUG: Beat 40: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 41: Will Jump! CurSeq: 2, MinSeq: 1, Since: 41
+DEBUG: Beat 41: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 42: Will Jump! CurSeq: 2, MinSeq: 1, Since: 42
+DEBUG: Beat 42: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 43: Will Jump! CurSeq: 2, MinSeq: 1, Since: 43
+DEBUG: Beat 43: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 44: Will Jump! CurSeq: 2, MinSeq: 1, Since: 44
+DEBUG: Beat 44: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 45: Will Jump! CurSeq: 2, MinSeq: 1, Since: 45
+DEBUG: Beat 45: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 46: Will Jump! CurSeq: 2, MinSeq: 1, Since: 46
+DEBUG: Beat 46: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 47: Will Jump! CurSeq: 2, MinSeq: 1, Since: 47
+DEBUG: Beat 47: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 48: Will Jump! CurSeq: 2, MinSeq: 1, Since: 48
+DEBUG: Beat 48: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 49: Will Jump! CurSeq: 2, MinSeq: 1, Since: 49
+DEBUG: Beat 49: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 50: Will Jump! CurSeq: 2, MinSeq: 1, Since: 50
+DEBUG: Beat 50: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 51: Will Jump! CurSeq: 2, MinSeq: 1, Since: 51
+DEBUG: Beat 51: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 52: Will Jump! CurSeq: 2, MinSeq: 1, Since: 52
+DEBUG: Beat 52: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 53: Will Jump! CurSeq: 2, MinSeq: 1, Since: 53
+DEBUG: Beat 53: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 54: Will Jump! CurSeq: 2, MinSeq: 1, Since: 54
+DEBUG: Beat 54: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 55: Will Jump! CurSeq: 2, MinSeq: 1, Since: 55
+DEBUG: Beat 55: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 56: Will Jump! CurSeq: 2, MinSeq: 1, Since: 56
+DEBUG: Beat 56: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 57: Will Jump! CurSeq: 2, MinSeq: 1, Since: 57
+DEBUG: Beat 57: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 58: Will Jump! CurSeq: 2, MinSeq: 1, Since: 58
+DEBUG: Beat 58: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 59: Will Jump! CurSeq: 2, MinSeq: 1, Since: 59
+DEBUG: Beat 59: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 60: Will Jump! CurSeq: 2, MinSeq: 1, Since: 60
+DEBUG: Beat 60: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 61: Will Jump! CurSeq: 2, MinSeq: 1, Since: 61
+DEBUG: Beat 61: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 62: Will Jump! CurSeq: 2, MinSeq: 1, Since: 62
+DEBUG: Beat 62: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 63: Will Jump! CurSeq: 2, MinSeq: 1, Since: 63
+DEBUG: Beat 63: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 64: Will Jump! CurSeq: 2, MinSeq: 1, Since: 64
+DEBUG: Beat 64: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 65: Will Jump! CurSeq: 2, MinSeq: 1, Since: 65
+DEBUG: Beat 65: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 66: Will Jump! CurSeq: 2, MinSeq: 1, Since: 66
+DEBUG: Beat 66: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 67: Will Jump! CurSeq: 2, MinSeq: 1, Since: 67
+DEBUG: Beat 67: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 68: Will Jump! CurSeq: 2, MinSeq: 1, Since: 68
+DEBUG: Beat 68: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 69: Will Jump! CurSeq: 2, MinSeq: 1, Since: 69
+DEBUG: Beat 69: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 70: Will Jump! CurSeq: 2, MinSeq: 1, Since: 70
+DEBUG: Beat 70: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 71: Will Jump! CurSeq: 2, MinSeq: 1, Since: 71
+DEBUG: Beat 71: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 72: Will Jump! CurSeq: 2, MinSeq: 1, Since: 72
+DEBUG: Beat 72: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 73: Will Jump! CurSeq: 2, MinSeq: 1, Since: 73
+DEBUG: Beat 73: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 74: Will Jump! CurSeq: 2, MinSeq: 1, Since: 74
+DEBUG: Beat 74: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 75: Will Jump! CurSeq: 2, MinSeq: 1, Since: 75
+DEBUG: Beat 75: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 76: Will Jump! CurSeq: 2, MinSeq: 1, Since: 76
+DEBUG: Beat 76: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 77: Will Jump! CurSeq: 2, MinSeq: 1, Since: 77
+DEBUG: Beat 77: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 78: Will Jump! CurSeq: 2, MinSeq: 1, Since: 78
+DEBUG: Beat 78: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 79: Will Jump! CurSeq: 2, MinSeq: 1, Since: 79
+DEBUG: Beat 79: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 80: Will Jump! CurSeq: 2, MinSeq: 1, Since: 80
+DEBUG: Beat 80: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 81: Will Jump! CurSeq: 2, MinSeq: 1, Since: 81
+DEBUG: Beat 81: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 82: Will Jump! CurSeq: 2, MinSeq: 1, Since: 82
+DEBUG: Beat 82: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 83: Will Jump! CurSeq: 2, MinSeq: 1, Since: 83
+DEBUG: Beat 83: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 84: Will Jump! CurSeq: 2, MinSeq: 1, Since: 84
+DEBUG: Beat 84: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 85: Will Jump! CurSeq: 2, MinSeq: 1, Since: 85
+DEBUG: Beat 85: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 86: Will Jump! CurSeq: 2, MinSeq: 1, Since: 86
+DEBUG: Beat 86: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 87: Will Jump! CurSeq: 2, MinSeq: 1, Since: 87
+DEBUG: Beat 87: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 88: Will Jump! CurSeq: 2, MinSeq: 1, Since: 88
+DEBUG: Beat 88: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 89: Will Jump! CurSeq: 2, MinSeq: 1, Since: 89
+DEBUG: Beat 89: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 90: Will Jump! CurSeq: 2, MinSeq: 1, Since: 90
+DEBUG: Beat 90: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 91: Will Jump! CurSeq: 2, MinSeq: 1, Since: 91
+DEBUG: Beat 91: Candidates Total=3, Non-Recent=3
+DEBUG: SUCCESS! Jumping from 91 to 256
+DEBUG: Generated Vector (First 20): [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+DEBUG: Generated Vector (Last 20): [80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 256, 257, 258, 259, 260, 261, 262, 263]
+DEBUG: Tempo: 103.424576, Max Seq Len: 40, Acceptable: [16, 24, 32]
+DEBUG: Beat 28: Will Jump! CurSeq: 29, MinSeq: 29, Since: 28
+DEBUG: Beat 28: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 32: Will Jump! CurSeq: 4, MinSeq: 4, Since: 32
+DEBUG: Beat 32: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 33: Will Jump! CurSeq: 2, MinSeq: 1, Since: 33
+DEBUG: Beat 33: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 34: Will Jump! CurSeq: 2, MinSeq: 1, Since: 34
+DEBUG: Beat 34: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 35: Will Jump! CurSeq: 2, MinSeq: 1, Since: 35
+DEBUG: Beat 35: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 36: Will Jump! CurSeq: 2, MinSeq: 1, Since: 36
+DEBUG: Beat 36: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 37: Will Jump! CurSeq: 2, MinSeq: 1, Since: 37
+DEBUG: Beat 37: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 38: Will Jump! CurSeq: 2, MinSeq: 1, Since: 38
+DEBUG: Beat 38: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 39: Will Jump! CurSeq: 2, MinSeq: 1, Since: 39
+DEBUG: Beat 39: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 40: Will Jump! CurSeq: 2, MinSeq: 1, Since: 40
+DEBUG: Beat 40: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 41: Will Jump! CurSeq: 2, MinSeq: 1, Since: 41
+DEBUG: Beat 41: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 42: Will Jump! CurSeq: 2, MinSeq: 1, Since: 42
+DEBUG: Beat 42: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 43: Will Jump! CurSeq: 2, MinSeq: 1, Since: 43
+DEBUG: Beat 43: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 44: Will Jump! CurSeq: 2, MinSeq: 1, Since: 44
+DEBUG: Beat 44: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 45: Will Jump! CurSeq: 2, MinSeq: 1, Since: 45
+DEBUG: Beat 45: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 46: Will Jump! CurSeq: 2, MinSeq: 1, Since: 46
+DEBUG: Beat 46: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 47: Will Jump! CurSeq: 2, MinSeq: 1, Since: 47
+DEBUG: Beat 47: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 48: Will Jump! CurSeq: 2, MinSeq: 1, Since: 48
+DEBUG: Beat 48: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 49: Will Jump! CurSeq: 2, MinSeq: 1, Since: 49
+DEBUG: Beat 49: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 50: Will Jump! CurSeq: 2, MinSeq: 1, Since: 50
+DEBUG: Beat 50: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 51: Will Jump! CurSeq: 2, MinSeq: 1, Since: 51
+DEBUG: Beat 51: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 52: Will Jump! CurSeq: 2, MinSeq: 1, Since: 52
+DEBUG: Beat 52: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 53: Will Jump! CurSeq: 2, MinSeq: 1, Since: 53
+DEBUG: Beat 53: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 54: Will Jump! CurSeq: 2, MinSeq: 1, Since: 54
+DEBUG: Beat 54: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 55: Will Jump! CurSeq: 2, MinSeq: 1, Since: 55
+DEBUG: Beat 55: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 56: Will Jump! CurSeq: 2, MinSeq: 1, Since: 56
+DEBUG: Beat 56: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 57: Will Jump! CurSeq: 2, MinSeq: 1, Since: 57
+DEBUG: Beat 57: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 58: Will Jump! CurSeq: 2, MinSeq: 1, Since: 58
+DEBUG: Beat 58: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 59: Will Jump! CurSeq: 2, MinSeq: 1, Since: 59
+DEBUG: Beat 59: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 60: Will Jump! CurSeq: 2, MinSeq: 1, Since: 60
+DEBUG: Beat 60: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 61: Will Jump! CurSeq: 2, MinSeq: 1, Since: 61
+DEBUG: Beat 61: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 62: Will Jump! CurSeq: 2, MinSeq: 1, Since: 62
+DEBUG: Beat 62: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 63: Will Jump! CurSeq: 2, MinSeq: 1, Since: 63
+DEBUG: Beat 63: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 64: Will Jump! CurSeq: 2, MinSeq: 1, Since: 64
+DEBUG: Beat 64: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 65: Will Jump! CurSeq: 2, MinSeq: 1, Since: 65
+DEBUG: Beat 65: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 66: Will Jump! CurSeq: 2, MinSeq: 1, Since: 66
+DEBUG: Beat 66: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 67: Will Jump! CurSeq: 2, MinSeq: 1, Since: 67
+DEBUG: Beat 67: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 68: Will Jump! CurSeq: 2, MinSeq: 1, Since: 68
+DEBUG: Beat 68: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 69: Will Jump! CurSeq: 2, MinSeq: 1, Since: 69
+DEBUG: Beat 69: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 70: Will Jump! CurSeq: 2, MinSeq: 1, Since: 70
+DEBUG: Beat 70: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 71: Will Jump! CurSeq: 2, MinSeq: 1, Since: 71
+DEBUG: Beat 71: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 72: Will Jump! CurSeq: 2, MinSeq: 1, Since: 72
+DEBUG: Beat 72: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 73: Will Jump! CurSeq: 2, MinSeq: 1, Since: 73
+DEBUG: Beat 73: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 74: Will Jump! CurSeq: 2, MinSeq: 1, Since: 74
+DEBUG: Beat 74: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 75: Will Jump! CurSeq: 2, MinSeq: 1, Since: 75
+DEBUG: Beat 75: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 76: Will Jump! CurSeq: 2, MinSeq: 1, Since: 76
+DEBUG: Beat 76: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 77: Will Jump! CurSeq: 2, MinSeq: 1, Since: 77
+DEBUG: Beat 77: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 78: Will Jump! CurSeq: 2, MinSeq: 1, Since: 78
+DEBUG: Beat 78: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 79: Will Jump! CurSeq: 2, MinSeq: 1, Since: 79
+DEBUG: Beat 79: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 80: Will Jump! CurSeq: 2, MinSeq: 1, Since: 80
+DEBUG: Beat 80: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 81: Will Jump! CurSeq: 2, MinSeq: 1, Since: 81
+DEBUG: Beat 81: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 82: Will Jump! CurSeq: 2, MinSeq: 1, Since: 82
+DEBUG: Beat 82: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 83: Will Jump! CurSeq: 2, MinSeq: 1, Since: 83
+DEBUG: Beat 83: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 84: Will Jump! CurSeq: 2, MinSeq: 1, Since: 84
+DEBUG: Beat 84: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 85: Will Jump! CurSeq: 2, MinSeq: 1, Since: 85
+DEBUG: Beat 85: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 86: Will Jump! CurSeq: 2, MinSeq: 1, Since: 86
+DEBUG: Beat 86: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 87: Will Jump! CurSeq: 2, MinSeq: 1, Since: 87
+DEBUG: Beat 87: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 88: Will Jump! CurSeq: 2, MinSeq: 1, Since: 88
+DEBUG: Beat 88: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 89: Will Jump! CurSeq: 2, MinSeq: 1, Since: 89
+DEBUG: Beat 89: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 90: Will Jump! CurSeq: 2, MinSeq: 1, Since: 90
+DEBUG: Beat 90: Candidates Total=0, Non-Recent=0
+DEBUG: Jump Failed. No valid candidates found.
+DEBUG: Beat 91: Will Jump! CurSeq: 2, MinSeq: 1, Since: 91
+DEBUG: Beat 91: Candidates Total=3, Non-Recent=3
+DEBUG: SUCCESS! Jumping from 91 to 136
+Playback scheduling complete (100 beats). Draining buffer for 10 seconds...
+Finished.

@@ -3,12 +3,13 @@
     "version": "0.0.0",
     "description": "",
     "scripts": {
-        "tauri": "tauri",
-        "dev": "tauri dev",
-        "build": "tauri build"
+        "dev": "vite",
+        "build": "vite build",
+        "tauri": "tauri"
     },
     "license": "MIT",
     "devDependencies": {
-        "@tauri-apps/cli": "^2"
+        "@tauri-apps/cli": "^2",
+        "vite": "^7.3.0"
     }
 }

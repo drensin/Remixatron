@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "identifier": "com.remixatron.dev",
     "build": {
-        "beforeDevCommand": "",
+        "beforeDevCommand": "npm run dev",
         "beforeBuildCommand": "",
         "devUrl": "http://localhost:1420",
         "frontendDist": "../src"
@@ -20,6 +20,7 @@
         ]
     },
     "app": {
+        "withGlobalTauri": true,
         "windows": [
             {
                 "title": "Remixatron",

@@ -5,7 +5,7 @@ use crate::beat_tracker::inference::BeatProcessor;
 use crate::beat_tracker::post_processor::MinimalPostProcessor;
 use crate::analysis::features::FeatureExtractor;
 use crate::analysis::structure::StructureAnalyzer;
-use ndarray::Axis;
+use ndarray::{Axis, s};
 
 
 use crate::playback_engine::Beat;
@@ -19,10 +19,12 @@ pub struct AnalysisResult {
     pub beat_structs: Vec<Beat>,
     pub segments: Vec<Segment>,
     pub k_optimal: usize,
+    pub novelty_curve: Vec<f32>,
+    pub peaks: Vec<usize>,
     pub error: Option<String>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct Segment {
     pub start_time: f32,
     pub end_time: f32,
@@ -82,10 +84,33 @@ impl Remixatron {
         let mut beats_extended = beats.clone();
         beats_extended.push(duration_seconds);
         
-        let (mfcc, chroma) = feature_ex.compute_sync_features(&audio, &mel_2d, &beats_extended, 50.0);
+        let (mut mfcc, mut chroma) = feature_ex.compute_sync_features(&audio, &mel_2d, &beats_extended, 50.0);
+        
+        // Remove the last feature vector (which corresponds to the duration/end marker)
+        // because it has 0 duration and is not a valid beat for playback.
+        if mfcc.nrows() > 0 {
+             mfcc = mfcc.slice(s![0..mfcc.nrows()-1, ..]).to_owned();
+             chroma = chroma.slice(s![0..chroma.nrows()-1, ..]).to_owned();
+        }
+        
+        // 5. Pre-compute Bar Positions for Snapping
+        let mut bar_positions = Vec::with_capacity(beats_extended.len() - 1);
+        let mut bar_pos_counter = 0;
+        
+        // Only iterate up to actual beats (ignore last duration markers)
+        for i in 0..mfcc.nrows() {
+             let start_time = beats_extended[i];
+             // Check if this beat is close to a downbeat
+             let is_downbeat = downbeats.iter().any(|&d| (d - start_time).abs() < 0.05);
+             if is_downbeat {
+                 bar_pos_counter = 0;
+             }
+             bar_positions.push(bar_pos_counter);
+             bar_pos_counter = (bar_pos_counter + 1) % 4; // Assume 4/4 if no downbeat msg
+        }
         
         let analyzer = StructureAnalyzer::new();
-        let result = analyzer.compute_segments(&mfcc, &chroma, 0); // Auto-K
+        let result = analyzer.compute_segments_checkerboard(&mfcc, &chroma, &bar_positions, None); // Auto-K with Snapping
         
         // Convert labels to Segments
 
@@ -100,8 +125,6 @@ impl Remixatron {
             let mut segment_start_idx = 0;
             let mut current_label = result.labels[0];
             
-            // Bar position inference state
-            let mut bar_pos_counter = 0;
 
             for i in 0..result.labels.len() {
                 let start_time = beats_extended[i];
@@ -122,12 +145,6 @@ impl Remixatron {
                     segment_start_idx = i;
                 }
                 
-                // Bar Position Inference
-                // Check if this beat is close to a downbeat
-                let is_downbeat = downbeats.iter().any(|&d| (d - start_time).abs() < 0.05);
-                if is_downbeat {
-                    bar_pos_counter = 0;
-                }
                 
                 let duration = beats_extended[i+1] - start_time;
                 
@@ -135,7 +152,7 @@ impl Remixatron {
                     id: i,
                     start: start_time,
                     duration,
-                    bar_position: bar_pos_counter,
+                    bar_position: bar_positions[i],
                     cluster: label,
                     segment: current_segment_id,
                     intra_segment_index,
@@ -144,7 +161,6 @@ impl Remixatron {
                 });
                 
                 intra_segment_index += 1;
-                bar_pos_counter = (bar_pos_counter + 1) % 4; // Assume 4/4 if no downbeat msg
             }
             
             // Tail Segment
@@ -162,6 +178,8 @@ impl Remixatron {
             beat_structs,
             segments,
             k_optimal: result.k_optimal,
+            novelty_curve: result.novelty_curve,
+            peaks: result.peaks,
             error: None,
         })
     }

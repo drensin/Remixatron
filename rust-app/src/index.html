@@ -10,30 +10,20 @@
 
   <body>
     <main class="container">
-      <h1>Welcome to Tauri</h1>
+      <h1>Remixatron: Infinite Walk</h1>
 
       <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
+         <div id="controls">
+            <input id="file-path" type="text" placeholder="/path/to/song.mp3" value="/home/rensin/Projects/Remixatron/rust-app/Stay with Me.mp3" style="width: 300px;" />
+            <button id="analyze-btn">Analyze & Play</button>
+            <p id="status-msg">Ready</p>
+         </div>
       </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+      
+      <div id="canvas-container" style="position: relative; width: 600px; height: 600px; margin: 0 auto;">
+          <canvas id="jukebox-canvas"></canvas>
+      </div>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
     </main>
   </body>
 </html>

@@ -118,13 +118,25 @@ impl FeatureExtractor {
             let count = (end_c.saturating_sub(start_c)) as f32;
             
             if count > 0.0 {
-                for t in start_c..end_c {
-                    for k in 0..20 { mfcc_sync[[i, k]] += mfcc_frames[[t, k]]; }
+                // Median Pooling for MFCC (Robust against transients)
+                for k in 0..20 {
+                    let mut values = Vec::with_capacity((end_c - start_c) as usize);
+                    for t in start_c..end_c {
+                        values.push(mfcc_frames[[t, k]]);
+                    }
+                    // Sort for median
+                    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    
+                    let med = if values.is_empty() { 0.0 }
+                    else if values.len() % 2 == 1 {
+                        values[values.len() / 2]
+                    } else {
+                         let mid = values.len() / 2;
+                         (values[mid-1] + values[mid]) / 2.0
+                    };
+                    mfcc_sync[[i, k]] = med;
                 }
-                for k in 0..20 { mfcc_sync[[i, k]] /= count; }
             } else if start_c < n_time {
-                // Determine value for single point (aliasing?)
-                // Just use start_c frame
                  for k in 0..20 { mfcc_sync[[i, k]] = mfcc_frames[[start_c, k]]; }
             }
             

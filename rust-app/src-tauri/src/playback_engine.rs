@@ -1,18 +1,24 @@
 use serde::{Deserialize, Serialize};
-
+use kira::{
+    AudioManager, AudioManagerSettings,
+    sound::static_sound::{StaticSoundData, StaticSoundSettings},
+    clock::{ClockSpeed, ClockTime},
+    StartTime,
+    Tween,
+};
+use std::{thread, time::Duration};
 use rand::prelude::*;
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Beat {
     pub id: usize,
-    pub start: f32, // Seconds
+    pub start: f32,
     pub duration: f32,
     pub bar_position: usize,
     pub cluster: usize,
     pub segment: usize,
-    pub intra_segment_index: usize, // 'is' in legacy code
-    pub quartile: usize,            // Added for legacy parity
+    pub intra_segment_index: usize,
+    pub quartile: usize,
     pub jump_candidates: Vec<usize>,
 }
 
@@ -24,10 +30,14 @@ pub struct PlayInstruction {
 }
 
 pub struct JukeboxEngine {
-    beats: Vec<Beat>,
+    pub beats: Vec<Beat>,
     // settings
     _clusters: usize,
     _branch_similarity_threshold: f32,
+    
+    // Audio Backend
+    audio_manager: Option<AudioManager>,
+    sound_data: Option<StaticSoundData>,
 }
 
 impl JukeboxEngine {
@@ -35,8 +45,129 @@ impl JukeboxEngine {
         Self {
             beats,
             _clusters: clusters,
-            _branch_similarity_threshold: 0.0, // Not used in V1 logic directly, but good to have
+            _branch_similarity_threshold: 0.0,
+            audio_manager: None,
+            sound_data: None,
         }
+    }
+    
+    pub fn load_track(&mut self, path: &str) -> Result<(), String> {
+        use crate::audio_backend::decoder::decode_audio_file;
+        use kira::sound::static_sound::StaticSoundSettings;
+        use kira::Frame;
+        use std::sync::Arc;
+
+        let manager = AudioManager::new(AudioManagerSettings::default())
+            .map_err(|e| format!("Failed to initialize audio manager: {}", e))?;
+            
+        // Use our robust decoder
+        println!("Decoding audio with robust decoder...");
+        let (samples, sample_rate, channels) = decode_audio_file(path)
+            .map_err(|e| format!("Robust decode failed: {}", e))?;
+            
+        // Convert Vec<f32> interleaved to Vec<Frame> for Kira
+        let mut frames = Vec::with_capacity(samples.len() / channels as usize);
+        if channels == 1 {
+            for sample in samples {
+                frames.push(Frame::new(sample, sample));
+            }
+        } else if channels == 2 {
+            for chunk in samples.chunks(2) {
+                if chunk.len() == 2 {
+                    frames.push(Frame::new(chunk[0], chunk[1]));
+                }
+            }
+        } else {
+             // Fallback for others: just take first 2
+             for chunk in samples.chunks(channels as usize) {
+                 if chunk.len() >= 2 {
+                     frames.push(Frame::new(chunk[0], chunk[1]));
+                 } else if chunk.len() == 1 {
+                      frames.push(Frame::new(chunk[0], chunk[0]));
+                 }
+             }
+        }
+        
+        let sound_data = StaticSoundData {
+            sample_rate,
+            frames: Arc::from(frames),
+            settings: StaticSoundSettings::default(),
+            slice: None,
+        };
+             
+        self.audio_manager = Some(manager);
+        self.sound_data = Some(sound_data);
+        Ok(())
+    }
+    
+    pub fn play(&mut self, length: usize) -> Result<(), String> {
+        self.play_with_callback(length, |_, _| {})
+    }
+
+    pub fn play_with_callback<F>(&mut self, length: usize, callback: F) -> Result<(), String> 
+    where F: Fn(usize, usize) + Send + 'static 
+    {
+        if self.audio_manager.is_none() || self.sound_data.is_none() {
+             return Err("Audio engine not initialized. Call load_track() first.".to_string());
+        }
+        
+        // 1. Generate Play Vector
+        let instructions = self.compute_play_vector(length);
+        
+        let manager = self.audio_manager.as_mut().unwrap();
+        let sound_data = self.sound_data.as_ref().unwrap();
+        
+        // Setup Clock (1 Tick = 1 ms)
+        let mut clock = manager.add_clock(ClockSpeed::TicksPerSecond(1000.0))
+             .map_err(|e| format!("Failed to create clock: {}", e))?;
+             
+        clock.start();
+        
+        let now_ticks = clock.time().ticks;
+        let mut cumulative_ticks = 0;
+        const BUFFER_MS: u64 = 4000; // Keep 4 seconds buffered
+        
+        for instruction in instructions {
+             // Throttling: If we are too far ahead of the clock, wait.
+             loop {
+                 let current_time = clock.time().ticks;
+                 let elapsed = current_time.saturating_sub(now_ticks);
+                 if cumulative_ticks < elapsed + BUFFER_MS {
+                     break;
+                 }
+                 // Sleep a bit to let audio catch up
+                 thread::sleep(Duration::from_millis(50));
+             }
+
+             let beat = &self.beats[instruction.beat_id];
+             
+             // Emit Callback (Visuals)
+             callback(beat.id, beat.segment);
+
+             let duration_ticks = (beat.duration * 1000.0) as u64;
+             
+             let start_time = ClockTime { clock: clock.id(), ticks: now_ticks + cumulative_ticks, fraction: 0.0 };
+             let stop_time = ClockTime { clock: clock.id(), ticks: now_ticks + cumulative_ticks + duration_ticks, fraction: 0.0 };
+             
+             let mut handle = manager.play(
+                 sound_data.with_settings(
+                    StaticSoundSettings::new()
+                        .start_time(StartTime::ClockTime(start_time))
+                        .start_position(beat.start as f64)
+                 )
+             ).map_err(|e| format!("Failed to schedule sound: {}", e))?;
+             
+             handle.stop(
+                 Tween {
+                     start_time: StartTime::ClockTime(stop_time),
+                     ..Default::default()
+                 }
+             );
+
+             cumulative_ticks += duration_ticks;
+        }
+        
+        Ok(())
     }
 
     /// Pre-computes the "Infinite Walk" graph traversal.
@@ -79,6 +210,8 @@ impl JukeboxEngine {
         let mut acceptable_jump_amounts: Vec<usize> = base_amounts.into_iter()
             .filter(|&x| x <= max_sequence_len)
             .collect();
+            
+        println!("DEBUG: Tempo: {}, Max Seq Len: {}, Acceptable: {:?}", tempo, max_sequence_len, acceptable_jump_amounts);
 
         // Handle 3/4 time logic (if max beats_per_bar == 3)
         // We need to scan beats for max bar position. In Rust we can just check all.
@@ -100,7 +233,7 @@ impl JukeboxEngine {
         // So `beats_per_bar` being 3 means 3/4 time.
         // In Rust, ensure our `bar_position` logic matches.
         
-        let beats_per_bar = max_bar_pos; // Assuming 1-based or we adjust.
+        let beats_per_bar = max_bar_pos + 1;
         // Actually, let's just stick to the value inspection.
         
         if beats_per_bar == 3 {
@@ -185,16 +318,23 @@ impl JukeboxEngine {
             // Check Jump Condition
             let will_jump = (current_sequence as isize == min_sequence) || 
                             (beats_since_jump >= max_beats_between_jumps);
+            
+            if will_jump {
+                println!("DEBUG: Beat {}: Will Jump! CurSeq: {}, MinSeq: {}, Since: {}", cursor, current_sequence, min_sequence, beats_since_jump);
+            }
 
             let mut did_jump = false;
             let mut next_cursor = 0;
 
             if will_jump {
                 // Attempt 1: Non-Recent Candidates
-                let non_recent: Vec<usize> = current_beat.jump_candidates.iter()
+                let all_cands = &current_beat.jump_candidates;
+                let non_recent: Vec<usize> = all_cands.iter()
                     .filter(|&&c| !recent.contains(&self.beats[c].segment))
                     .cloned()
                     .collect();
+
+                println!("DEBUG: Beat {}: Candidates Total={}, Non-Recent={}", cursor, all_cands.len(), non_recent.len());
 
                 if !non_recent.is_empty() {
                      // Success!
@@ -239,81 +379,7 @@ impl JukeboxEngine {
                 }
             }
 
-            if did_jump {
-                cursor = next_cursor;
-                beats_since_jump = 0;
-                failed_jumps = 0;
-                
-                // Recalculate Sequence Logic
-                current_sequence = 0;
-                let ref_bar_pos = self.beats[cursor].bar_position;
-                
-                min_sequence = *safe_amounts.choose(&mut rng).unwrap() as isize - (ref_bar_pos as isize + 2);
-                if min_sequence < 1 { min_sequence = 1; }
-
-                // Local loop panic shortening
-                let remaining_panic = max_beats_between_jumps as isize - beats_since_jump as isize;
-                if min_sequence > remaining_panic {
-                    min_sequence = remaining_panic;
-                }
-                
-                // Visualization Hack: "Waiting to Jump"
-                // If we forced a jump because of panic, we set seq to min_seq to show 0 remaining?
-                // Python: if beats_since_jump >= max_beats_between_jumps: current_sequence = min_sequence
-                // Logic: `beats_since_jump` here is 0 (we just reset it).
-                // Wait, Python reset `beats_since_jump` BEFORE this check?
-                // Python Line 1228: `beats_since_jump = 0` (Success case)
-                // Python Line 1257: `if beats_since_jump >= max_beats_between_jumps`
-                // So if we just jumped, `beats_since_jump` is 0. So this check is always false?
-                // UNLESS `beats_since_jump` was NOT reset?
-                // Python resets it for: Success (1228), Quartile (1204), Nuclear (1212).
-                // So in all "did_jump" cases, `beats_since_jump` is 0.
-                // So `min_sequence` visualization check seems to be for cases where we DIDN'T jump?
-                // No, it's inside the `if will_jump` block, shared by all branches?
-                // Actually, the Python indentation of 1257 is aligned with `if will_jump`.
-                // BUT `min_sequence` recalc (1238) is ALSO aligned.
-                // So even if we failed to jump (else branch 1220), we execute 1236+ ??
-                // Let's re-read python indentation carefully.
-                // Line 1223 `else:` (nested under `if len(non_candidates) == 0` -> `if len(non_quartile) > 0`... else)
-                //      `beat = beats[beat['next']]`
-                //      (indent dedent)
-                // Line 1232 `else:` (nested under `if len(non_recent candidates) == 0`)
-                //      `beat = random...`
-                // Line 1236 `current_sequence = 0` (Dedent level matches `if len(non_recent) == 0`)
-                // This means line 1236 executes ONLY if `len(non_recent) > 0` (Lines 1223-1231)?
-                // NO. Line 1223 `else` is indented under `if failed_jumps...`.
-                // Line 1232 `else` is matching `if len(non_recent) == 0`.
-                // Line 1236 is indented SAME as `if len(non_recent) == 0`.
-                // So it runs UNCONDITIONALLY inside `if will_jump`.
-                // Wait, if we failed to jump (Lines 1181-1221), we STILL reset `current_sequence = 0`?
-                // If so, `beat` was advanced to `next`.
-                // So we effectively treated "step next" as a "jump" (start of new phrase) if we *intended* to jump but failed?
-                // YES! That is the logic. Even if we fail to find a jump, we start a new phrasing count.
-                
-                // So `did_jump` logic I implemented above needs adjustment.
-                // We reset sequence IF `will_jump` is true, regardless of `did_jump`.
-                
-            } else {
-                // If we didn't jump, we increment counters
-                // Check "Last Chance"
-                if cursor == last_chance {
-                     // Force jump
-                     if !current_beat.jump_candidates.is_empty() {
-                         cursor = *current_beat.jump_candidates.iter().min().unwrap();
-                         // Treat as step?
-                     } else {
-                         // Should not happen if logic is correct
-                         cursor = if cursor + 1 < self.beats.len() { cursor + 1 } else { 0 };
-                     }
-                } else {
-                     cursor = if cursor + 1 < self.beats.len() { cursor + 1 } else { 0 };
-                }
-                
-                beats_since_jump += 1;
-                
-                // If we WANTED to jump but didn't (will_jump was true), we increment failed_jumps
-                // But my `if/else` structure separates them.
-            }
+            // Duplicate block deleted. Logic is handled in the following if/else structure.
             
             // Correction: Merge the logic.
             // If `will_jump`:
@@ -324,10 +390,12 @@ impl JukeboxEngine {
             
             if will_jump {
                  if did_jump {
+                     println!("DEBUG: SUCCESS! Jumping from {} to {}", cursor, next_cursor);
                      cursor = next_cursor;
                      beats_since_jump = 0;
                      failed_jumps = 0;
                  } else {
+                     println!("DEBUG: Jump Failed. No valid candidates found.");
                      // Failed to find target
                      failed_jumps += 1;
                      
@@ -353,8 +421,11 @@ impl JukeboxEngine {
                  // Panic shortening
                  // Note: `beats_since_jump` just updated.
                  let remaining_panic = max_beats_between_jumps as isize - beats_since_jump as isize;
-                 if min_sequence > remaining_panic {
-                     min_sequence = remaining_panic;
+                 // Fix: Ensure remaining_panic is at least 1 to prevent underflow/negative min_sequence
+                 let safe_remaining = remaining_panic.max(1);
+                 
+                 if min_sequence > safe_remaining {
+                     min_sequence = safe_remaining;
                  }
                  // Visualization Hack
                  if beats_since_jump >= max_beats_between_jumps {
@@ -417,7 +488,7 @@ impl JukeboxEngine {
                  
                   // 1. Cluster Parity
                  if candidate.cluster == next_beat.cluster &&
-                    // 2. Intra-Segment Parity
+                    // 2. Intra-Segment Parity (Restored)
                     candidate.intra_segment_index == next_beat.intra_segment_index &&
                     // 3. Bar Pos Parity
                     candidate.bar_position == next_beat.bar_position &&
