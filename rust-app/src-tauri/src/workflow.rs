@@ -213,21 +213,33 @@ impl Remixatron {
                     &Vec::new()
                 };
 
-                // FEATURE: Ban Intra-Segment Jumps
-                // A jump is only valid if the target beat belongs to a DIFFERENT segment instance.
-                // This prevents the playback from getting "stuck" in the same verse forever,
-                // and encourages broad leaps across the song structure (e.g. Verse 1 -> Verse 2).
+                // FEATURE: Phase-Locked Jumps
+                // Logic:
+                // 1. Phase Consistency: We check the Bar Position (0-3) of the *next* beat.
+                //    Any jump target must have the SAME Bar Position.
+                // 2. Structural Diversity: We only jump to a DIFFERENT segment instance.
+                // 3. Safety: No dead ends.
                 let mut candidates = Vec::new();
+
+                // Determine the "Target Phase" (The Bar Position of the beat we are about to play)
+                let target_phase = if next_beat_idx < bar_positions.len() { bar_positions[next_beat_idx] } else { 0 };
+
                 for target_idx in raw_candidates {
                     // Check bounds just in case
                     if *target_idx < beat_to_segment_id.len() {
-                        let target_seg_id = beat_to_segment_id[*target_idx];
                         
-                        // THE FILTER:
-                        // Discard if Target Segment ID == Current Segment ID
-                        if target_seg_id != current_segment_id {
-                             candidates.push(*target_idx);
-                        }
+                        // CHECK 1: Phase Consistency
+                        let candidate_phase = bar_positions[*target_idx];
+                        if candidate_phase != target_phase { continue; }
+
+                        // CHECK 2: Structural Diversity
+                        let target_seg_id = beat_to_segment_id[*target_idx];
+                        if target_seg_id == current_segment_id { continue; }
+
+                        // CHECK 3: Safety
+                        if *target_idx >= result.labels.len() - 1 { continue; }
+
+                        candidates.push(*target_idx);
                     }
                 }
 
