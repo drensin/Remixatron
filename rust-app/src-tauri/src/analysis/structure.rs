@@ -10,6 +10,11 @@
 //! 4.  **Spectral Embedding**: Computes the Laplacian and its eigenvectors.
 //! 5.  **Auto-K Clustering**: Uses a customized heuristic (Score = 10*Sil + Ratio - Complexity) to determine the optimal number of segment types.
 //! 6.  **Temporal Smoothing**: Merges micro-segments using a mode filter.
+//!
+//! ## Heuristics Strategies
+//! The module supports toggleable strategies for picking K:
+//! *   **Legacy (Ungated Sum)**: `K + 10*Sil + Ratio + MinSeg` (The Python Classic).
+//! *   **Balanced Connectivity**: `10*Sil + Median(JumpCount)` (The New Standard).
 
 use ndarray::{Array2, Array1, s};
 use linfa::traits::{Fit, Predict};
@@ -20,6 +25,20 @@ use std::f32::consts::PI;
 
 
 pub struct StructureAnalyzer;
+
+/// Strategy enum for Auto-K Selection.
+/// Allows A/B testing different heuristics for choosing the optimal cluster count.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AutoKStrategy {
+    /// The legacy heuristic from the Python implementation.
+    /// Formula: `K + (10 * Sil) + Ratio + MinSeg_Score`
+    #[allow(dead_code)]
+    LegacyUngatedSum,
+
+    /// The new, streamlined heuristic that directly measures graph health.
+    /// Formula: `(10 * Sil) + Median_Jump_Count`
+    BalancedConnectivity,
+}
 
 impl StructureAnalyzer {
     pub fn new() -> Self {
@@ -148,6 +167,76 @@ impl StructureAnalyzer {
         }
         
         (total_s / n as f64) as f32
+    }
+
+    /// Simulates the jump graph for a candidate set of labels to compute connectivity stats.
+    ///
+    /// This is computationally expensive (O(N^2)) but necessary for metrics that
+    /// depend on actual jump availability (like Median Jump Count).
+    ///
+    /// # Arguments
+    /// * `labels`: The cluster assignment for every beat.
+    /// * `beats_per_bar`: Needed for phase alignment rules (roughly estimated or passed).
+    ///
+    /// # Returns
+    /// An array of jump counts for every beat.
+    fn simulate_jump_counts(labels: &[usize]) -> Vec<usize> {
+        let n = labels.len();
+        let mut jump_counts = vec![0; n];
+        
+        // We need to define "segments" first to know segment boundaries for the simulation.
+        // Jump Rule: Can't jump to same segment.
+        let mut segment_ids = vec![0; n];
+        let mut current_seg = 0;
+        let mut prev_label = labels[0];
+        
+        for i in 0..n {
+            if labels[i] != prev_label {
+                current_seg += 1;
+                prev_label = labels[i];
+            }
+            segment_ids[i] = current_seg;
+        }
+
+        // Rule Simplification for Speed:
+        // We assume Bar Position and Intra-Segment Index match if we are just testing connectivity potential.
+        // Actually, to be accurate, we need to respect the REAL jump rules:
+        // 1. Same Cluster
+        // 2. Different Segment
+        // 3. Not Immediate Neighbor
+        // 4. (Ignoring detailed Bar/Phase alignment for this heuristic proxy??)
+        // 
+        // User requested "Median Jump Candidates". To be accurate, we should probably just count 
+        // "Total Potential Targets" based on Cluster + Segment rules. Phase/Bar rules filter ~75% of these,
+        // but that filtering is uniform across all K. So raw Cluster/Segment match count is a valid proxy.
+        
+        // Optimization: Pre-calculate indices for each cluster
+        // Map: Label -> List(BeatIndices)
+        let mut clusters: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
+        for i in 0..n {
+            clusters.entry(labels[i]).or_default().push(i);
+        }
+
+        for i in 0..n {
+            let my_label = labels[i];
+            let my_seg = segment_ids[i];
+            
+            if let Some(candidates) = clusters.get(&my_label) {
+                let mut valid_jumps = 0;
+                for &target in candidates {
+                   // Rule: Different Segment
+                   if segment_ids[target] != my_seg {
+                       valid_jumps += 1;
+                   }
+                }
+                // Rough Adjustment for Phase Alignment Rules:
+                // In 4/4 time, only ~25% of beats align (Same bar pos).
+                // So we scale the raw count by 0.25 to get a realistic "Playable Jumps" estimate.
+                jump_counts[i] = (valid_jumps as f32 * 0.25) as usize; 
+            }
+        }
+        
+        jump_counts
     }
 }
 
@@ -685,17 +774,48 @@ impl StructureAnalyzer {
                     let labels = model.predict(&DatasetBase::from(embed_norm.clone())).into_raw_vec_and_offset().0;
                     
                     let silhouette = Self::calculate_silhouette_score(&embedding.mapv(|x| x as f64), &labels, k);
-                    let (ratio, _) = Self::calculate_segment_stats(&labels, k);
+                    let (ratio, min_seg_len) = Self::calculate_segment_stats(&labels, k);
                     
-                    // NEW SCORING:
-                    // 1. Reward Silhouette (Purity) -> 10 * Sil
-                    // 2. Reward Ratio (Connectability) -> + Ratio.min(5.0) <-- CAP THIS
-                    // 3. PENALIZE Complexity -> - (K * 0.2)
+                    // --- SCORING STRATEGY ---
+                    // Toggle this to A/B test strategies
+                    let strategy = AutoKStrategy::BalancedConnectivity;
+                    
                     let mut score = -100.0;
                     
-                    if ratio >= 1.5 {
-                        let ratio_reward = ratio.min(5.0);
-                        score = (10.0 * silhouette) + ratio_reward - (k as f32 * 0.2);
+                    match strategy {
+                        AutoKStrategy::LegacyUngatedSum => {
+                            // Formula: K + (10 * Sil) + Ratio + MinSeg_Score
+                            // Constraint: Ratio >= 1.5
+                            if ratio >= 1.5 {
+                                let min_seg_score = min_seg_len.min(8) as f32;
+                                score = (k as f32) + (10.0 * silhouette) + ratio + min_seg_score;
+                            }
+                        },
+                        
+                        AutoKStrategy::BalancedConnectivity => {
+                            // Formula: (10 * Sil) + Median_Jump_Count
+                            // Constraint: Median > 0 ??? Or just trust the score?
+                            // User Suggestion: "Experiment without gatekeepers first".
+                            
+                            // 1. Calculate Jump Counts
+                            let jump_counts = Self::simulate_jump_counts(&labels);
+                            
+                            // 2. Calculate Median
+                            let mut sorted_jumps = jump_counts.clone();
+                            sorted_jumps.sort_unstable();
+                            let mid = sorted_jumps.len() / 2;
+                            let median_jumps = sorted_jumps[mid] as f32;
+                            
+                            // 3. Score
+                            // Note: Sil is 0.0-1.0. Jump Median is typically 0-20+.
+                            // User proposed (10 * Sil) + Jumpiness.
+                            // If Sil=0.6 -> 6.0. If Median=3 -> 9.0.
+                            // Balanced enough.
+                            score = (10.0 * silhouette) + median_jumps;
+                            
+                            // Debug Log specific to this strategy
+                            // println!("      -> Median Jumps: {}", median_jumps);
+                        }
                     }
 
                     if score > best_score {
