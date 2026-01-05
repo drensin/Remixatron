@@ -761,8 +761,8 @@ impl StructureAnalyzer {
             }
         } else {
             // CHANGE: Updated Scoring (Occam's Razor + Capped Ratio)
-            println!("DEBUG: Starting Auto-K Search (K=4..12)");
-            for k in 4..=12 {
+            println!("DEBUG: Starting Auto-K Search (K=3..32)");
+            for k in 3..=32 {
                 let mut embedding = Array2::<f32>::zeros((n_beats, k));
                 for i in 0..n_beats {
                     for j in 0..k { embedding[[i, j]] = evecs[[i, indices[j]]]; }
