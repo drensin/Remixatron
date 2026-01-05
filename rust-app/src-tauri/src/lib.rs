@@ -164,7 +164,7 @@ async fn play_track(
         if let Ok(mut guard) = state_clone.engine.lock() {
             if let Some(engine) = guard.as_mut() {
                 // Play with callback
-                let _ = engine.play_with_callback(1000, move |beat_idx, segment_idx| {
+                let _ = engine.play_with_callback(usize::MAX, move |beat_idx, segment_idx| {
                     // Emit event to Frontend
                     // We ignore errors here (e.g., if app is closing).
                     let _ = app_handle.emit("playback_tick", PlaybackTick {
