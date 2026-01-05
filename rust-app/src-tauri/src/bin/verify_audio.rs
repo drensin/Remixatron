@@ -75,7 +75,13 @@ fn main() {
             println!("Generating Play Vector & Scheduling Audio...");
             // note: play() generates vector AND schedules playback
             // To inspect vector, we can compute it first!
-            let instructions = engine.compute_play_vector(100);
+            let mut instructions = Vec::new();
+            // Create a clone of engine to simulate without disturbing state? 
+            // Actually JIT changes state. So if we generate 100 here, the engine has advanced 100 steps.
+            println!("Simulating 100 steps to verify logic...");
+            for _ in 0..100 {
+                instructions.push(engine.get_next_beat());
+            }
              println!("DEBUG: Generated Vector (First 20): {:?}", instructions.iter().take(20).map(|i| i.beat_id).collect::<Vec<_>>());
              println!("DEBUG: Generated Vector (Last 20): {:?}", instructions.iter().skip(instructions.len().saturating_sub(20)).map(|i| i.beat_id).collect::<Vec<_>>());
 

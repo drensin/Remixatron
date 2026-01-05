@@ -29,11 +29,15 @@ fn main() {
     }
 
     // 2. Initialize Engine
-    let engine = JukeboxEngine::new(beats, 1);
+    let mut engine = JukeboxEngine::new(beats, 1);
     
     // 3. Compute Play Vector
+    // 3. Compute Play Vector
     println!("Computing play vector...");
-    let instructions = engine.compute_play_vector(100);
+    let mut instructions = Vec::new();
+    for _ in 0..100 {
+        instructions.push(engine.get_next_beat());
+    }
     
     let mut jumps = 0;
     for i in 0..instructions.len()-1 {
