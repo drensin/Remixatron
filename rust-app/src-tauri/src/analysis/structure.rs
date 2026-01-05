@@ -781,11 +781,13 @@ impl StructureAnalyzer {
                     let strategy = AutoKStrategy::BalancedConnectivity;
                     
                     let mut score = -100.0;
+                    let metric_val; // Defer initialization
                     
                     match strategy {
                         AutoKStrategy::LegacyUngatedSum => {
                             // Formula: K + (10 * Sil) + Ratio + MinSeg_Score
                             // Constraint: Ratio >= 1.5
+                            metric_val = ratio;
                             if ratio >= 1.5 {
                                 let min_seg_score = min_seg_len.min(8) as f32;
                                 score = (k as f32) + (10.0 * silhouette) + ratio + min_seg_score;
@@ -794,8 +796,6 @@ impl StructureAnalyzer {
                         
                         AutoKStrategy::BalancedConnectivity => {
                             // Formula: (10 * Sil) + Median_Jump_Count
-                            // Constraint: Median > 0 ??? Or just trust the score?
-                            // User Suggestion: "Experiment without gatekeepers first".
                             
                             // 1. Calculate Jump Counts
                             let jump_counts = Self::simulate_jump_counts(&labels);
@@ -805,16 +805,10 @@ impl StructureAnalyzer {
                             sorted_jumps.sort_unstable();
                             let mid = sorted_jumps.len() / 2;
                             let median_jumps = sorted_jumps[mid] as f32;
+                            metric_val = median_jumps;
                             
                             // 3. Score
-                            // Note: Sil is 0.0-1.0. Jump Median is typically 0-20+.
-                            // User proposed (10 * Sil) + Jumpiness.
-                            // If Sil=0.6 -> 6.0. If Median=3 -> 9.0.
-                            // Balanced enough.
-                            score = (10.0 * silhouette) + median_jumps;
-                            
-                            // Debug Log specific to this strategy
-                            // println!("      -> Median Jumps: {}", median_jumps);
+                            score = (100.0 * silhouette) + median_jumps;
                         }
                     }
 
@@ -823,7 +817,7 @@ impl StructureAnalyzer {
                         k_best = k;
                         labels_best = labels;
                     }
-                    println!("DEBUG: K={}, Sil={:.3}, Ratio={:.2}, Score={:.3}", k, silhouette, ratio, score);
+                    println!("DEBUG: K={}, Sil={:.3}, Metric={:.2}, Score={:.3}", k, silhouette, metric_val, score);
                 }
             }
              println!("DEBUG: Auto-K Selected K={} (Score={:.4})", k_best, best_score);
