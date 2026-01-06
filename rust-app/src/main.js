@@ -2,10 +2,12 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 import { InfiniteJukeboxViz } from './viz.js';
 
+// Global Vars
 let viz;
 let statusEl;
 let analyzeBtn;
 let pathInput;
+let remoteMetadata = null; // Defined globally so listener can see it
 
 // UI Elements (New M3 Structure)
 let onboardingCard;
@@ -16,7 +18,7 @@ let albumArtImg;
 let albumArtPlaceholder;
 
 async function startRemix() {
-    const path = pathInput.value;
+    let path = pathInput.value;
     if (!path) return;
 
     try {
@@ -24,6 +26,48 @@ async function startRemix() {
         onboardingCard.classList.add("hidden");
         floatingPlayer.classList.add("visible");
         floatingPlayer.classList.add("loading"); // Start Progress Bar
+        analyzeBtn.disabled = true;
+
+        // UI: Reset Metadata to Loading State initially
+        const filename = path.split(/[/\\]/).pop();
+        if (trackTitleEl) trackTitleEl.textContent = `Loading...`;
+        if (albumArtImg) albumArtImg.classList.add("hidden");
+        if (albumArtPlaceholder) albumArtPlaceholder.classList.remove("hidden");
+
+        remoteMetadata = null;
+
+        // 0. Handle URLs (Download First)
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+            statusEl.textContent = "Initializing Downloader...";
+            try {
+                console.log("Calling import_url...");
+                const metadata = await invoke("import_url", { url: path });
+                console.log("Metadata received!", metadata);
+
+                remoteMetadata = metadata; // Save for later
+                path = metadata.path;
+
+                // UI: Update Metadata Immediately (Step 0b)
+                if (trackTitleEl) {
+                    console.log("Updating Title to:", metadata.title);
+                    trackTitleEl.textContent = metadata.title;
+                }
+
+                // UI: Update Album Art from URL
+                if (metadata.thumbnail_url && albumArtImg) {
+                    console.log("Updating Art URL to:", metadata.thumbnail_url);
+                    albumArtImg.src = metadata.thumbnail_url;
+                    albumArtImg.classList.remove("hidden");
+                    if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
+                }
+            } catch (e) {
+                console.error("Download Step Failed:", e);
+                throw "Download Failed: " + e;
+            }
+        } else {
+            // Local file: Show filename
+            if (trackTitleEl) trackTitleEl.textContent = `Loading ${filename}...`;
+        }
 
         statusEl.textContent = "Stopping previous playback...";
         try {
@@ -35,27 +79,24 @@ async function startRemix() {
         statusEl.textContent = "Analyzing Audio Structure...";
         analyzeBtn.disabled = true;
 
-        // UI: Show what we are loading immediately
-        const filename = path.split(/[/\\]/).pop();
-        if (trackTitleEl) trackTitleEl.textContent = `Loading ${filename}...`;
-
-        // UI: Reset Art
-        if (albumArtImg) albumArtImg.classList.add("hidden");
-        if (albumArtPlaceholder) albumArtPlaceholder.classList.remove("hidden");
-
         // 1. Analyze
         const payload = await invoke("analyze_track", { path });
         console.log("Analysis Complete!", payload);
         statusEl.textContent = "Structure Decoded. Starting Walk...";
 
-        // 1b. Update Metadata
-        if (trackTitleEl) trackTitleEl.textContent = payload.title;
+        // 1b. Update Metadata (Merge Remote with Local)
+        // If we have remote metadata, use it. Otherwise use payload.
+        if (remoteMetadata) {
+            // Keep the title we already set
+        } else {
+            if (trackTitleEl) trackTitleEl.textContent = payload.title;
 
-        // 1c. Update Album Art
-        if (payload.album_art_base64 && albumArtImg) {
-            albumArtImg.src = payload.album_art_base64;
-            albumArtImg.classList.remove("hidden");
-            if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
+            // 1c. Update Album Art (Local Only)
+            if (payload.album_art_base64 && albumArtImg) {
+                albumArtImg.src = payload.album_art_base64;
+                albumArtImg.classList.remove("hidden");
+                if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
+            }
         }
 
         // 2. Setup Viz
@@ -137,6 +178,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // Listen for Early Metadata (Instant Update)
     listen('metadata_ready', (event) => {
+        // If we have high-quality API metadata, ignore the local probe
+        if (remoteMetadata) {
+            console.log("Ignoring local metadata update (preferring remote API)");
+            return;
+        }
+
         const payload = event.payload;
         // Update Metadata
         if (trackTitleEl) trackTitleEl.textContent = payload.title;
@@ -151,6 +198,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // Listen for Detailed Status Updates
     listen('analysis_progress', (event) => {
+        if (statusEl) statusEl.textContent = event.payload;
+    });
+
+    // Listen for Downloader Status
+    listen('downloader_status', (event) => {
         if (statusEl) statusEl.textContent = event.payload;
     });
 

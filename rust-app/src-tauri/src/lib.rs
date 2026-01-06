@@ -14,7 +14,7 @@
 //! by the engine, but triggered via Tauri commands.
 
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, State, Manager};
 use std::sync::mpsc::{self, Sender};
 use playback_engine::PlaybackCommand;
 use symphonia::core::io::MediaSourceStream;
@@ -30,6 +30,7 @@ pub mod audio_backend;
 pub mod workflow;
 pub mod audio;
 pub mod playback_engine;
+pub mod downloader; 
 
 use workflow::Remixatron;
 use playback_engine::{JukeboxEngine, Beat};
@@ -126,12 +127,6 @@ async fn analyze_track(
     let mut artist = String::from("Unknown Artist");
     let mut album_art_base64 = None;
 
-    // Robust file name fallback:
-    let path_obj = std::path::Path::new(&path);
-    if let Some(stem) = path_obj.file_stem() {
-         title = stem.to_string_lossy().to_string();
-    }
-    
     // Probe for Metadata (Title, Artist, Art)
     // We do this BEFORE the heavy analysis so the UI updates instantly.
     if let Ok(src) = File::open(&path) {
@@ -148,29 +143,41 @@ async fn analyze_track(
         let fmt_opts = FormatOptions::default();
 
         if let Ok(mut probed) = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts) {
-            let find_art = |rev: &symphonia::core::meta::MetadataRevision| -> Option<String> {
+            // Helper to extract data from a revision
+            let mut extract_from_rev = |rev: &symphonia::core::meta::MetadataRevision| {
                  if let Some(tag) = rev.visuals().first() {
                      let b64 = BASE64_STANDARD.encode(&tag.data);
-                     return Some(format!("data:{};base64,{}", tag.media_type, b64));
+                     album_art_base64 = Some(format!("data:{};base64,{}", tag.media_type, b64));
                  }
-                 None
+                 if title == "Unknown Title" {
+                     if let Some(tags) = rev.tags().iter().find(|t| t.std_key == Some(symphonia::core::meta::StandardTagKey::TrackTitle)) {
+                         title = tags.value.to_string();
+                     }
+                 }
+                 if artist == "Unknown Artist" {
+                     if let Some(tags) = rev.tags().iter().find(|t| t.std_key == Some(symphonia::core::meta::StandardTagKey::Artist)) {
+                         artist = tags.value.to_string();
+                     }
+                 }
             };
-            
+
+            // 1. Check Format Metadata (e.g. ID3v2)
             if let Some(rev) = probed.format.metadata().current() {
-                 if let Some(art) = find_art(rev) { album_art_base64 = Some(art); }
-                 if let Some(tags) = rev.tags().iter().find(|t| t.std_key == Some(symphonia::core::meta::StandardTagKey::TrackTitle)) {
-                     title = tags.value.to_string();
-                 }
-                 if let Some(tags) = rev.tags().iter().find(|t| t.std_key == Some(symphonia::core::meta::StandardTagKey::Artist)) {
-                     artist = tags.value.to_string();
-                 }
+                 extract_from_rev(rev);
             }
             
-            if album_art_base64.is_none() {
-                if let Some(rev) = probed.metadata.get().as_ref().and_then(|m| m.current()) {
-                     if let Some(art) = find_art(rev) { album_art_base64 = Some(art); }
-                }
+            // 2. Check Container Metadata (e.g. MP4 Atoms / MOOV)
+            if let Some(rev) = probed.metadata.get().as_ref().and_then(|m| m.current()) {
+                 extract_from_rev(rev);
             }
+        }
+    }
+
+    // Fallback: If title is still unknown, use filename
+    if title == "Unknown Title" {
+        let path_obj = std::path::Path::new(&path);
+        if let Some(stem) = path_obj.file_stem() {
+            title = stem.to_string_lossy().to_string();
         }
     }
 
@@ -231,6 +238,11 @@ async fn analyze_track(
         artist,
         album_art_base64,
     })
+}
+
+#[tauri::command]
+async fn import_url(app: AppHandle, url: String) -> Result<downloader::VideoMetadata, String> {
+    downloader::download_url(app, url).await.map_err(|e| e.to_string())
 }
 
 /// Signals the running playback thread to stop safely.
@@ -322,11 +334,31 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState {
-            engine: Arc::new(Mutex::new(None)),
-            playback_tx: Arc::new(Mutex::new(None)),
+        .setup(|app| {
+            // Manage state
+            app.manage(AppState {
+                engine: Arc::new(Mutex::new(None)),
+                playback_tx: Arc::new(Mutex::new(None)),
+            });
+
+            // Initialize Downloader in background
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match downloader::init_downloader(handle.clone()).await {
+                    Ok(path) => println!("Downloader Initialized at {:?}", path),
+                    Err(e) => eprintln!("Downloader Init Failed: {}", e),
+                }
+            });
+
+            Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, analyze_track, play_track, stop_playback]) // Add stop_playback
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            analyze_track, 
+            play_track, 
+            stop_playback, 
+            import_url
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -32,8 +32,9 @@ pub fn decode_audio_file(path: &str) -> Result<(Vec<f32>, u32, u64), Box<dyn std
         .make(&track.codec_params, &DecoderOptions::default())?;
 
     let track_id = track.id;
-    let sample_rate = track.codec_params.sample_rate.ok_or("Unknown sample rate")?;
-    let channels = track.codec_params.channels.ok_or("Unknown channel count")?.count() as u32;
+    // Allow missing metadata initially; update from first packet
+    let mut sample_rate = track.codec_params.sample_rate.unwrap_or(0);
+    let mut channels = track.codec_params.channels.map(|c| c.count() as u32).unwrap_or(0);
     
     let mut samples: Vec<f32> = Vec::new();
 
@@ -56,6 +57,15 @@ pub fn decode_audio_file(path: &str) -> Result<(Vec<f32>, u32, u64), Box<dyn std
         match decoder.decode(&packet) {
             Ok(decoded) => {
                  let spec = *decoded.spec();
+                 
+                 // Lazily update metadata if we didn't have it
+                 if sample_rate == 0 {
+                     sample_rate = spec.rate;
+                 }
+                 if channels == 0 {
+                     channels = spec.channels.count() as u32;
+                 }
+                 
                  let duration = decoded.capacity() as u64;
                  let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
                  sample_buf.copy_interleaved_ref(decoded);
@@ -72,6 +82,10 @@ pub fn decode_audio_file(path: &str) -> Result<(Vec<f32>, u32, u64), Box<dyn std
             }
             Err(e) => return Err(Box::new(e)),
         }
+    }
+
+    if sample_rate == 0 || channels == 0 {
+        return Err("Failed to determine audio spec (no valid packets decoded)".into());
     }
 
     Ok((samples, sample_rate, channels as u64))
