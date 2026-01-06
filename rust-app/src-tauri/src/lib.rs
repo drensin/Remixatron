@@ -189,8 +189,12 @@ async fn analyze_track(
     // 1. Run Analysis Pipeline
     // This delegates to the `workflow` module which orchestrates the complex logic.
     let engine_workflow = Remixatron::new(mel_path, beat_path);
-    let analysis_result = engine_workflow.analyze(&path)
-        .map_err(|e| format!("Analysis Failed: {}", e))?;
+    
+    // Create a callback that emits events to the frontend
+    let app_handle = app.clone();
+    let analysis_result = engine_workflow.analyze(&path, |status| {
+        let _ = app_handle.emit("analysis_progress", status);
+    }).map_err(|e| format!("Analysis Failed: {}", e))?;
 
     // 2. Initialize Jukebox Engine
     // We create the engine with the analyzed beats. It is not yet playing.

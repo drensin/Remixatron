@@ -149,6 +149,11 @@ window.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // Listen for Detailed Status Updates
+    listen('analysis_progress', (event) => {
+        if (statusEl) statusEl.textContent = event.payload;
+    });
+
 }, false); // End Event Listener
 
 // Global Error Handler

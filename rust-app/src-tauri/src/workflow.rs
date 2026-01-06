@@ -79,13 +79,20 @@ impl Remixatron {
 
     /// Executes the full analysis pipeline on the given audio file.
     ///
+    /// # Arguments
+    /// * `audio_path`: Path to the audio file.
+    /// * `progress_callback`: A closure that accepts a status string `&str`.
+    ///
     /// # Errors
     /// Returns an error if:
     /// * File cannot be opened or decoded.
     /// * ONNX models fail to load or run.
     /// * Audio is too short or silent.
-    pub fn analyze(&self, audio_path: &str) -> Result<AnalysisResult> {
+    pub fn analyze<F>(&self, audio_path: &str, progress_callback: F) -> Result<AnalysisResult> 
+    where F: Fn(&str)
+    {
         // 1. Load & Resample Audio
+        progress_callback("Decoding & Resampling Audio...");
         // We use the High-Quality Loader (Rubato) to get mono audio at 22050 Hz.
         // This ensures maximum spectral accuracy for the downstream feature extractors.
         let target_sr = 22050;
@@ -97,11 +104,13 @@ impl Remixatron {
         let duration_seconds = audio.len() as f32 / sr as f32;
         
         // 2. Mel Spectrogram
+        progress_callback("Generating Mel Spectrogram...");
         // Compute the input tensor for the Beat Tracker.
         let mut mel_proc = MelProcessor::new(&self.mel_path)?;
         let mel = mel_proc.process(&audio)?;
         
         // 3. Beat Tracking
+        progress_callback("Tracking Beats (AI Inference)...");
         // Run inference to get beat/downbeat activation logits.
         let mut tracker = BeatProcessor::new(&self.beat_path)?;
         let (b_logits, d_logits) = tracker.process(&mel)?;
@@ -111,6 +120,7 @@ impl Remixatron {
         let (beats, downbeats) = post.process(&b_logits, &d_logits)?;
         
         // 4. Feature Extraction & Structure
+        progress_callback("Extracting Timbre & Harmony...");
         // Extract Timbre (MFCC) and Harmony (Chroma) for every beat.
         let mut feature_ex = FeatureExtractor::new(128, target_sr as f32);
         let mel_2d = mel.index_axis(Axis(0), 0).to_owned();
@@ -148,6 +158,7 @@ impl Remixatron {
         }
         
         // 6. Structural Analysis (The Core Logic)
+        progress_callback("Clustering Structure...");
         // Perform Spectral Clustering on the beat-synchronous features.
         let analyzer = StructureAnalyzer::new();
         let result = analyzer.compute_segments_knn(&mfcc, &chroma, None); 
