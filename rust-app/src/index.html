@@ -30,8 +30,7 @@
             <h1>Infinite Walk</h1>
             <p>Enter a local music file to begin the algorithmic remix.</p>
 
-            <input id="file-path" class="m3-input" type="text"
-                value="/home/rensin/Projects/Remixatron/rust-app/Stay with Me.mp3" placeholder="/path/to/song.mp3">
+            <input id="file-path" class="m3-input" type="text" placeholder="/path/to/song.mp3">
 
             <button id="analyze-btn" class="m3-fab-extended">
                 <span class="icon">▶</span> Start Walk
@@ -46,7 +45,8 @@
                 <div class="progress-bar-fill"></div>
             </div>
 
-            <div class="album-art-placeholder">🎵</div>
+            <img id="album-art-img" class="album-art hidden" alt="Album Art" />
+            <div id="album-art-placeholder" class="album-art-placeholder">🎵</div>
 
             <div class="track-info">
                 <div class="track-title">Stay with Me</div>

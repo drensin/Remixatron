@@ -17,6 +17,12 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 use std::sync::mpsc::{self, Sender};
 use playback_engine::PlaybackCommand;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::probe::Hint;
+use symphonia::core::meta::{MetadataOptions, Limit};
+use symphonia::core::formats::FormatOptions;
+use base64::prelude::*;
+use std::fs::File;
 
 pub mod analysis;
 pub mod beat_tracker;
@@ -60,6 +66,16 @@ struct StructurePayload {
     title: String,
     /// Metadata: Track Artist
     artist: String,
+    /// Metadata: Album Art (Base64 Data URI)
+    album_art_base64: Option<String>,
+}
+
+/// Early metadata payload emitted before analysis completes.
+#[derive(serde::Serialize, Clone)]
+struct MetadataPayload {
+    title: String,
+    artist: String,
+    album_art_base64: Option<String>,
 }
 
 /// Event payload emitted on every playback tick.
@@ -99,11 +115,72 @@ fn greet(name: &str) -> String {
 /// * `Result<StructurePayload, String>` - The structural data for the UI, or an error description.
 #[tauri::command]
 async fn analyze_track(
-    _app: AppHandle,
+    app: AppHandle,
     path: String,
     state: State<'_, AppState>
 ) -> Result<StructurePayload, String> {
     println!("Analyzing: {}", path);
+
+    // 0. Extract Metadata (Early)
+    let mut title = String::from("Unknown Title");
+    let mut artist = String::from("Unknown Artist");
+    let mut album_art_base64 = None;
+
+    // Robust file name fallback:
+    let path_obj = std::path::Path::new(&path);
+    if let Some(stem) = path_obj.file_stem() {
+         title = stem.to_string_lossy().to_string();
+    }
+    
+    // Probe for Metadata (Title, Artist, Art)
+    // We do this BEFORE the heavy analysis so the UI updates instantly.
+    if let Ok(src) = File::open(&path) {
+        let mss = MediaSourceStream::new(Box::new(src), Default::default());
+        let mut hint = Hint::new();
+        if let Some(ext) = std::path::Path::new(&path).extension().and_then(|e| e.to_str()) {
+            hint.with_extension(ext);
+        }
+        
+        let meta_opts = MetadataOptions { 
+            limit_visual_bytes: Limit::Maximum(10 * 1024 * 1024), 
+            ..Default::default() 
+        };
+        let fmt_opts = FormatOptions::default();
+
+        if let Ok(mut probed) = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts) {
+            let find_art = |rev: &symphonia::core::meta::MetadataRevision| -> Option<String> {
+                 if let Some(tag) = rev.visuals().first() {
+                     let b64 = BASE64_STANDARD.encode(&tag.data);
+                     return Some(format!("data:{};base64,{}", tag.media_type, b64));
+                 }
+                 None
+            };
+            
+            if let Some(rev) = probed.format.metadata().current() {
+                 if let Some(art) = find_art(rev) { album_art_base64 = Some(art); }
+                 if let Some(tags) = rev.tags().iter().find(|t| t.std_key == Some(symphonia::core::meta::StandardTagKey::TrackTitle)) {
+                     title = tags.value.to_string();
+                 }
+                 if let Some(tags) = rev.tags().iter().find(|t| t.std_key == Some(symphonia::core::meta::StandardTagKey::Artist)) {
+                     artist = tags.value.to_string();
+                 }
+            }
+            
+            if album_art_base64.is_none() {
+                if let Some(rev) = probed.metadata.get().as_ref().and_then(|m| m.current()) {
+                     if let Some(art) = find_art(rev) { album_art_base64 = Some(art); }
+                }
+            }
+        }
+    }
+
+    // EMIT EARLY EVENT
+    let _ = app.emit("metadata_ready", MetadataPayload {
+        title: title.clone(),
+        artist: artist.clone(),
+        album_art_base64: album_art_base64.clone(),
+    });
+
     // Hardcoded model paths for MVP - Ensure these exist in your bundle or are absolute
     // TODO: Move these to a configuration file or embedded assets for production.
     let mel_path = "/home/rensin/Projects/Remixatron/rust-app/MelSpectrogram_Ultimate.onnx";
@@ -137,22 +214,8 @@ async fn analyze_track(
     let mut engine_guard = state.engine.lock().map_err(|_| "Failed to lock state".to_string())?;
     *engine_guard = Some(jukebox);
 
-    // 6. Extract Metadata
-    let mut title = String::from("Unknown Title");
-    let artist = String::from("Unknown Artist");
-    
-    // Quick Probe for Metadata (re-opening file, lightweight)
-    // We wrapped workflow but it consumes its probe. We can just probe again or parse filename.
-    // Robust file name fallback:
-    let path_obj = std::path::Path::new(&path);
-    if let Some(stem) = path_obj.file_stem() {
-         title = stem.to_string_lossy().to_string();
-    }
-    
-    // Check symphonia if possible (Optional Polish)
-    // Since we didn't expose the ProbeResult from workflow, we'll stick to 
-    // filename fallback for this MVP step to avoid code duplication or errors.
-    // Ideally, `Remixatron::analyze` should return metadata.
+    // 6. Metadata already extracted above!
+    // We just return it now.
     
     // 7. Return Structure to Frontend
     Ok(StructurePayload {
@@ -162,6 +225,7 @@ async fn analyze_track(
         peaks: analysis_result.peaks,
         title,
         artist,
+        album_art_base64,
     })
 }
 

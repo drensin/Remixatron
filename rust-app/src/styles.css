@@ -136,6 +136,18 @@ body {
     transform: translateY(0);
 }
 
+.album-art {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--md-sys-shape-corner-medium);
+    object-fit: cover;
+}
+
+.album-art.hidden,
+.album-art-placeholder.hidden {
+    display: none;
+}
+
 .album-art-placeholder {
     width: 48px;
     height: 48px;

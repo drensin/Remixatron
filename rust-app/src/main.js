@@ -12,6 +12,8 @@ let onboardingCard;
 let floatingPlayer;
 let stopBtn;
 let trackTitleEl;
+let albumArtImg;
+let albumArtPlaceholder;
 
 async function startRemix() {
     const path = pathInput.value;
@@ -37,6 +39,10 @@ async function startRemix() {
         const filename = path.split(/[/\\]/).pop();
         if (trackTitleEl) trackTitleEl.textContent = `Loading ${filename}...`;
 
+        // UI: Reset Art
+        if (albumArtImg) albumArtImg.classList.add("hidden");
+        if (albumArtPlaceholder) albumArtPlaceholder.classList.remove("hidden");
+
         // 1. Analyze
         const payload = await invoke("analyze_track", { path });
         console.log("Analysis Complete!", payload);
@@ -44,6 +50,13 @@ async function startRemix() {
 
         // 1b. Update Metadata
         if (trackTitleEl) trackTitleEl.textContent = payload.title;
+
+        // 1c. Update Album Art
+        if (payload.album_art_base64 && albumArtImg) {
+            albumArtImg.src = payload.album_art_base64;
+            albumArtImg.classList.remove("hidden");
+            if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
+        }
 
         // 2. Setup Viz
         viz.setData(payload);
@@ -95,6 +108,8 @@ window.addEventListener("DOMContentLoaded", () => {
     floatingPlayer = document.querySelector("#floating-player");
     stopBtn = document.querySelector("#stop-btn");
     trackTitleEl = document.querySelector(".track-title");
+    albumArtImg = document.querySelector("#album-art-img");
+    albumArtPlaceholder = document.querySelector("#album-art-placeholder");
 
     const canvas = document.querySelector("#jukebox-canvas");
     viz = new InfiniteJukeboxViz(canvas);
@@ -119,6 +134,21 @@ window.addEventListener("DOMContentLoaded", () => {
         viz.updatePlaybackState(seq_pos, seq_len);
         viz.draw(beat_index, segment_index);
     });
+
+    // Listen for Early Metadata (Instant Update)
+    listen('metadata_ready', (event) => {
+        const payload = event.payload;
+        // Update Metadata
+        if (trackTitleEl) trackTitleEl.textContent = payload.title;
+
+        // Update Album Art
+        if (payload.album_art_base64 && albumArtImg) {
+            albumArtImg.src = payload.album_art_base64;
+            albumArtImg.classList.remove("hidden");
+            if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
+        }
+    });
+
 }, false); // End Event Listener
 
 // Global Error Handler
