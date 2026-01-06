@@ -1,112 +1,271 @@
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #ffe21c);
-}
+/* 
+ * Remixatron - Material Design 3 Theme 
+ * Theme: Neutral Dark (Content-First)
+ */
+
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
+    /* --- M3 Color Tokens (Neutral Dark) --- */
+    --md-sys-color-surface: #000000;
+    --md-sys-color-surface-container: #121212;
+    --md-sys-color-surface-container-high: #1E1E1E;
+    --md-sys-color-on-surface: #E2E2E2;
+    --md-sys-color-on-surface-variant: #C4C7C5;
+    --md-sys-color-outline: #444746;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+    --md-sys-color-primary: #AACCFF;
+    --md-sys-color-on-primary: #003355;
+    --md-sys-color-secondary: #00CCFF;
+    /* Viz Cyan */
+    --md-sys-color-tertiary: #FF0055;
+    /* Viz Pink */
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+    --md-sys-color-error: #FFB4AB;
+
+    /* --- M3 Elevation & Shape --- */
+    --md-sys-shape-corner-small: 8px;
+    --md-sys-shape-corner-medium: 12px;
+    --md-sys-shape-corner-large: 16px;
+    --md-sys-shape-corner-full: 9999px;
+
+    /* --- Typography (Inter / System) --- */
+    --md-sys-typescale-display-large: 57px;
+    --md-sys-typescale-headline-large: 32px;
+    --md-sys-typescale-title-medium: 16px;
+    --md-sys-typescale-body-medium: 14px;
 }
 
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
+/* Reset & Base */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    /* App Shell behavior */
+    display: flex;
+    flex-direction: column;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
+/* --- Layer 1: Hero Visualization (Z-0) --- */
+#viz-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    justify-content: center;
+    align-items: center;
+    /* padding-bottom removed to maximize Viz size */
 }
 
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
+/* --- Layer 2: UI Scrim & Controls (Z-10) --- */
+#ui-layer {
+    position: relative;
+    z-index: 10;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    /* Floating controls at bottom */
+    padding: 24px;
+    pointer-events: none;
+    /* Let clicks pass to canvas unless hitting a button */
 }
 
-.row {
-  display: flex;
-  justify-content: center;
+/* Enable pointer events for actual controls */
+.interactive {
+    pointer-events: auto;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+/* --- Component: Onboarding Card (Zero State) --- */
+.onboarding-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--md-sys-color-surface-container);
+    padding: 32px;
+    border-radius: var(--md-sys-shape-corner-large);
+    width: 400px;
+    text-align: center;
+    border: 1px solid var(--md-sys-color-outline);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    transition: opacity 0.5s ease;
 }
 
-a:hover {
-  color: #535bf2;
+.onboarding-card h1 {
+    font-size: var(--md-sys-typescale-headline-large);
+    margin-bottom: 8px;
+    font-weight: 600;
 }
 
-h1 {
-  text-align: center;
+.onboarding-card p {
+    color: var(--md-sys-color-on-surface-variant);
+    margin-bottom: 24px;
 }
 
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+/* --- Component: Floating Player --- */
+.floating-player {
+    background-color: rgba(30, 30, 30, 0.4);
+    /* High Transparency */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* Subtle border for definition */
+    border-radius: var(--md-sys-shape-corner-full);
+    /* Stadium Shape */
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    margin: 0 auto 24px auto;
+    /* Center horizontally + Bottom Margin */
+    max-width: 600px;
+    width: 100%;
+    transform: translateY(150%);
+    /* Hidden by default */
+    transition: transform 0.6s cubic-bezier(0.2, 0.0, 0, 1.0);
 }
 
-button {
-  cursor: pointer;
+.floating-player.visible {
+    transform: translateY(0);
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
+.album-art-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--md-sys-shape-corner-medium);
+    background: linear-gradient(135deg, var(--md-sys-color-secondary), var(--md-sys-color-tertiary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
 }
 
-#greet-input {
-  margin-right: 5px;
+.track-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
+.track-title {
+    font-weight: 600;
+    font-size: var(--md-sys-typescale-title-medium);
+    color: var(--md-sys-color-on-surface);
+}
 
-  a:hover {
-    color: #24c8db;
-  }
+.track-status {
+    font-size: var(--md-sys-typescale-body-medium);
+    color: var(--md-sys-color-on-surface-variant);
+}
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+/* --- Inputs & Buttons --- */
+.m3-input {
+    width: 100%;
+    background: var(--md-sys-color-surface-container-high);
+    border: none;
+    border-bottom: 1px solid var(--md-sys-color-outline);
+    color: var(--md-sys-color-on-surface);
+    padding: 12px 16px;
+    border-radius: 4px 4px 0 0;
+    margin-bottom: 16px;
+    font-family: inherit;
+    outline: none;
+    transition: background 0.2s;
+}
+
+.m3-input:focus {
+    background: #2A2A2A;
+    border-bottom-color: var(--md-sys-color-primary);
+}
+
+.m3-fab-extended {
+    background-color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    border: none;
+    padding: 16px 24px;
+    border-radius: var(--md-sys-shape-corner-large);
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.m3-fab-extended:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(170, 204, 255, 0.3);
+}
+
+.m3-icon-btn {
+    background: transparent;
+    border: 1px solid var(--md-sys-color-outline);
+    color: var(--md-sys-color-on-surface-variant);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.m3-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--md-sys-color-on-surface);
+    border-color: var(--md-sys-color-on-surface);
+}
+
+/* --- Progress Bar --- */
+.progress-bar-container {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    border-radius: 4px;
+    display: none;
+    /* Hidden unless loading */
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: var(--md-sys-color-secondary);
+    width: 0%;
+    transition: width 0.2s;
+}
+
+.loading .progress-bar-container {
+    display: block;
+}
+
+.loading .progress-bar-fill {
+    animation: indeterminate 2s infinite linear;
+}
+
+@keyframes indeterminate {
+    0% {
+        left: -100%;
+        width: 50%;
+    }
+
+    100% {
+        left: 100%;
+        width: 50%;
+    }
+}
+
+/* Utilities */
+.hidden {
+    opacity: 0;
+    pointer-events: none;
 }

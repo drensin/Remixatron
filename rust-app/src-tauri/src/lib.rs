@@ -56,6 +56,10 @@ struct StructurePayload {
     novelty_curve: Vec<f32>,
     /// Indices of detected structural peaks/boundaries
     peaks: Vec<usize>,
+    /// Metadata: Track Title
+    title: String,
+    /// Metadata: Track Artist
+    artist: String,
 }
 
 /// Event payload emitted on every playback tick.
@@ -133,12 +137,31 @@ async fn analyze_track(
     let mut engine_guard = state.engine.lock().map_err(|_| "Failed to lock state".to_string())?;
     *engine_guard = Some(jukebox);
 
-    // 6. Return Structure to Frontend
+    // 6. Extract Metadata
+    let mut title = String::from("Unknown Title");
+    let artist = String::from("Unknown Artist");
+    
+    // Quick Probe for Metadata (re-opening file, lightweight)
+    // We wrapped workflow but it consumes its probe. We can just probe again or parse filename.
+    // Robust file name fallback:
+    let path_obj = std::path::Path::new(&path);
+    if let Some(stem) = path_obj.file_stem() {
+         title = stem.to_string_lossy().to_string();
+    }
+    
+    // Check symphonia if possible (Optional Polish)
+    // Since we didn't expose the ProbeResult from workflow, we'll stick to 
+    // filename fallback for this MVP step to avoid code duplication or errors.
+    // Ideally, `Remixatron::analyze` should return metadata.
+    
+    // 7. Return Structure to Frontend
     Ok(StructurePayload {
         segments: analysis_result.segments,
         beats: beats_with_jumps,
         novelty_curve: analysis_result.novelty_curve,
         peaks: analysis_result.peaks,
+        title,
+        artist,
     })
 }
 

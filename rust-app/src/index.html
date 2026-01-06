@@ -1,29 +1,67 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remixatron // Infinite Walk</title>
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
     <script type="module" src="/main.js" defer></script>
-  </head>
+</head>
 
-  <body>
-    <main class="container">
-      <h1>Remixatron: Infinite Walk</h1>
+<body>
 
-      <div class="row">
-         <div id="controls">
-            <input id="file-path" type="text" placeholder="/path/to/song.mp3" value="/home/rensin/Projects/Remixatron/rust-app/Stay with Me.mp3" style="width: 300px;" />
-            <button id="analyze-btn">Analyze & Play</button>
-            <p id="status-msg">Ready</p>
-         </div>
-      </div>
-      
-      <div id="canvas-container" style="position: relative; width: 600px; height: 600px; margin: 0 auto;">
-          <canvas id="jukebox-canvas"></canvas>
-      </div>
+    <!-- Z-0: Visualization Hero -->
+    <div id="viz-layer">
+        <canvas id="jukebox-canvas"></canvas>
+    </div>
 
-    </main>
-  </body>
+    <!-- Z-10: UI Layer -->
+    <div id="ui-layer">
+
+        <!-- Zero State: Onboarding Card -->
+        <div id="onboarding-card" class="onboarding-card interactive">
+            <h1>Infinite Walk</h1>
+            <p>Enter a local music file to begin the algorithmic remix.</p>
+
+            <input id="file-path" class="m3-input" type="text"
+                value="/home/rensin/Projects/Remixatron/rust-app/Stay with Me.mp3" placeholder="/path/to/song.mp3">
+
+            <button id="analyze-btn" class="m3-fab-extended">
+                <span class="icon">▶</span> Start Walk
+            </button>
+        </div>
+
+        <!-- Active State: Floating Player -->
+        <div id="floating-player" class="floating-player interactive">
+
+            <!-- Loading Indicator -->
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill"></div>
+            </div>
+
+            <div class="album-art-placeholder">🎵</div>
+
+            <div class="track-info">
+                <div class="track-title">Stay with Me</div>
+                <div id="status-msg" class="track-status">Wait for Input...</div>
+            </div>
+
+            <div class="controls">
+                <button id="stop-btn" class="m3-icon-btn" title="Stop Playback">
+                    ■
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+
 </html>
