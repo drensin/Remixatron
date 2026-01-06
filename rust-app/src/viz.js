@@ -16,6 +16,11 @@ export class InfiniteJukeboxViz {
         ];
     }
 
+    updatePlaybackState(seqPos, seqLen) {
+        this.currentSeqPos = seqPos;
+        this.currentSeqLen = seqLen;
+    }
+
     resize() {
         // High DPI Support
         const dpr = window.devicePixelRatio || 1;
@@ -63,6 +68,9 @@ export class InfiniteJukeboxViz {
 
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.width, this.height);
+
+        // Reset Context State
+        ctx.lineCap = "butt";
 
         // 1. Draw Segments (Outer Ring)
         ctx.lineWidth = 15;
@@ -120,7 +128,12 @@ export class InfiniteJukeboxViz {
             });
         }
 
-        // 4. Draw Novelty Curve (Debug View) - Bottom 100px
+        // 4. Draw Countdown Pulse Ring
+        if (activeBeatIndex !== -1 && this.currentSeqLen > 0) {
+            this.drawCountdown(ctx, this.currentSeqPos, this.currentSeqLen);
+        }
+
+        // 5. Draw Novelty Curve (Debug View) - Bottom 100px
         this.drawNoveltyCurve(ctx);
     }
 
@@ -177,5 +190,54 @@ export class InfiniteJukeboxViz {
                 ctx.fill();
             }
         });
+    }
+
+    drawCountdown(ctx, pos, total) {
+        // Center of screen
+        const cx = this.centerX;
+        const cy = this.centerY;
+
+        // Remaining beats
+        const remaining = total - pos;
+
+        // Color Logic
+        let color = "#00CCFF"; // Safe Cyan
+        if (remaining <= 4) color = "#FFAA00"; // Warn Orange
+        if (remaining <= 1) color = "#FF0055"; // Jump Imminent (Hot Pink)
+
+        // 1. Draw Ring Background (Dim)
+        ctx.beginPath();
+        ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+        ctx.stroke();
+
+        // 2. Draw Progress Ring (Counter-Clockwise Unwinding)
+        // Start at top (-PI/2)
+        // Percentage complete = pos / total
+        const pct = pos / total;
+        const startAngle = -Math.PI / 2;
+        const endAngle = startAngle + (Math.PI * 2 * (1.0 - pct));
+
+        ctx.beginPath();
+        // Draw arc counter-clockwise? No, standard arc draws clockwise. 
+        // To "unwind", we draw from Start to End where End decreases.
+        ctx.arc(cx, cy, 40, startAngle, endAngle, false);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        // 3. Draw Number
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = color;
+        ctx.font = "bold 24px sans-serif";
+        ctx.fillText(remaining.toString(), cx, cy - 2);
+
+        // 4. Draw Label
+        ctx.font = "8px sans-serif";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.fillText("BRANCH", cx, cy + 12);
     }
 }

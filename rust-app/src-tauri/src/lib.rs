@@ -67,6 +67,10 @@ struct PlaybackTick {
     beat_index: usize,
     /// The index of the segment this beat belongs to.
     segment_index: usize,
+    /// Total length of the current sequence (for countdown).
+    seq_len: usize,
+    /// Current position in said sequence.
+    seq_pos: usize,
 }
 
 /// A simple greeting command for testing the Tauri connection.
@@ -196,12 +200,16 @@ async fn play_track(
         if let Ok(mut guard) = state_clone.engine.lock() {
             if let Some(engine) = guard.as_mut() {
                 // Play with callback and RECEIVER
-                let _ = engine.play_with_callback(rx, move |beat_idx, segment_idx| {
+                let _ = engine.play_with_callback(rx, move |instruction, segment_idx| {
                     // Emit event to Frontend
                     // We ignore errors here (e.g., if app is closing).
+                    let beat_idx = instruction.beat_id;
+                    
                     let _ = app_handle.emit("playback_tick", PlaybackTick {
                         beat_index: beat_idx,
-                        segment_index: segment_idx
+                        segment_index: segment_idx,
+                        seq_len: instruction.seq_len,
+                        seq_pos: instruction.seq_pos,
                     });
                 });
             }

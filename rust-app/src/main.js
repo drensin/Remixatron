@@ -31,16 +31,6 @@ async function startRemix() {
         viz.setData(payload);
 
         // 3. Play
-        // Note: play_track is async/blocking in backend logic but returns quickly if we spawned thread correctly?
-        // Wait, my backend implementation blocked. `spawn_blocking` returns a task handle, but `invoke` awaits it?
-        // `spawn_blocking` runs on a thread pool. The `invoke` returns the result of the closure.
-        // My closure returns `Ok(())` immediately? No.
-        // `spawn_blocking(closure)` returns a `JoinHandle`.
-        // I did NOT await the join handle in Rust. I just disregarded it?
-        // Ah, `tauri::async_runtime::spawn_blocking` returns a JoinHandle.
-        // If I don't await it, the function returns immediately.
-        // So `play_track` will return immediately, keeping the thread running. Perfect.
-
         await invoke("play_track", { path });
         statusEl.textContent = "Playing Infinite Walk...";
         analyzeBtn.disabled = false;
@@ -65,9 +55,13 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
     // Listen for Playback Ticks
+    // Listen for Playback Ticks
     listen('playback_tick', (event) => {
-        // payload: { beat_index, segment_index }
-        const { beat_index, segment_index } = event.payload;
+        // payload: { beat_index, segment_index, seq_len, seq_pos }
+        const { beat_index, segment_index, seq_len, seq_pos } = event.payload;
+
+        // Update Viz State & Draw
+        viz.updatePlaybackState(seq_pos, seq_len);
         viz.draw(beat_index, segment_index);
     });
 }, false); // End Event Listener

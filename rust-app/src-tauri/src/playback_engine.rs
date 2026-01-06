@@ -211,15 +211,17 @@ impl JukeboxEngine {
     /// Simple play command (no callback).
     pub fn play(&mut self) -> Result<(), String> {
         let (_tx, rx) = std::sync::mpsc::channel();
+        // Pass dummy segment index (0) since this play() is for verification only
         self.play_with_callback(rx, |_, _| {})
     }
 
     /// Starts playback with a callback for UI updates.
     /// Uses JIT (Just-In-Time) logic to decide the next beat in real-time.
     /// * `command_rx` - A channel receiver to listen for Stop/Pause commands.
-    /// * `callback` - Closure called on every beat (beat_index, segment_index).
+    /// * `command_rx` - A channel receiver to listen for Stop/Pause commands.
+    /// * `callback` - Closure called on every beat (instruction, segment_index).
     pub fn play_with_callback<F>(&mut self, command_rx: Receiver<PlaybackCommand>, mut callback: F) -> Result<(), String> 
-    where F: FnMut(usize, usize) 
+    where F: FnMut(&PlayInstruction, usize) 
     {
         println!("Starting JIT Playback Loop...");
 
@@ -241,7 +243,8 @@ impl JukeboxEngine {
         const BUFFER_MS: u64 = 4000; 
         
         use std::collections::VecDeque;
-        let mut pending_events: VecDeque<(u64, usize, usize)> = VecDeque::new();
+        // Queue now stores: (fire_time, PlayInstruction)
+        let mut pending_events: VecDeque<(u64, PlayInstruction)> = VecDeque::new();
 
         // Loop Indefinitely (until Stop command or error)
         loop {
@@ -264,9 +267,13 @@ impl JukeboxEngine {
                 let elapsed = current_time.saturating_sub(now_ticks);
                 
                 // Service Events
-                while let Some((fire_time, beat_id, seg_id)) = pending_events.front() {
+                while let Some((fire_time, instruction)) = pending_events.front() {
                     if current_time >= *fire_time {
-                        callback(*beat_id, *seg_id);
+                        // Look up segment index safely
+                        if instruction.beat_id < self.beats.len() {
+                             let seg_id = self.beats[instruction.beat_id].segment;
+                             callback(instruction, seg_id);
+                        }
                         pending_events.pop_front();
                     } else {
                         break;
@@ -287,7 +294,8 @@ impl JukeboxEngine {
             let scheduled_start_ticks = now_ticks + cumulative_ticks;
             
             // 3. Queue Notification
-            pending_events.push_back((scheduled_start_ticks, beat.id, beat.segment));
+            // 3. Queue Notification
+            pending_events.push_back((scheduled_start_ticks, instruction));
             
             // 4. Schedule Audio
             let start_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks, fraction: 0.0 };
@@ -335,6 +343,10 @@ impl JukeboxEngine {
         }
 
         self.current_sequence += 1;
+        
+        // Capture State for Return (BEFORE any jump resets modifiers)
+        let display_seq_len = self.min_sequence_len as usize;
+        let display_seq_pos = self.current_sequence;
 
         // 3. Check Jump Trigger (Do we jump AFTER this beat?)
         // Note: logical offset is now handled in the min_seq calculation
@@ -444,8 +456,8 @@ impl JukeboxEngine {
         // 5. Return the CURRENT instruction (The one we started with)
         PlayInstruction {
             beat_id: current_cursor, // Return the beat we processed/played
-            seq_len: self.min_sequence_len as usize,
-            seq_pos: self.current_sequence,
+            seq_len: display_seq_len,
+            seq_pos: display_seq_pos,
         }
     }
 
