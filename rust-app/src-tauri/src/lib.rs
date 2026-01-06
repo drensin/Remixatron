@@ -14,7 +14,9 @@
 //! by the engine, but triggered via Tauri commands.
 
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, State}; // Use Emitter trait for emitting events
+use tauri::{AppHandle, Emitter, State};
+use std::sync::mpsc::{self, Sender};
+use playback_engine::PlaybackCommand;
 
 pub mod analysis;
 pub mod beat_tracker;
@@ -36,6 +38,9 @@ use playback_engine::{JukeboxEngine, Beat};
 #[derive(Clone)]
 struct AppState {
     engine: Arc<Mutex<Option<JukeboxEngine>>>,
+    /// Channel Sender to control the active playback thread.
+    /// Kept separate from `engine` lock to prevent deadlocks.
+    playback_tx: Arc<Mutex<Option<Sender<PlaybackCommand>>>>,
 }
 
 /// The payload returned to the Frontend after a successful analysis.
@@ -133,6 +138,26 @@ async fn analyze_track(
     })
 }
 
+/// Signals the running playback thread to stop safely.
+///
+/// This resolves the "Mutex Deadlock" by allowing the playback thread to exit its loop
+/// and release the `engine` lock, so that a new analysis can acquire it.
+#[tauri::command]
+async fn stop_playback(state: State<'_, AppState>) -> Result<(), String> {
+    println!("Stopping Playback...");
+    // 1. Acquire Sender Lock (This is fast, never held long)
+    let tx_guard = state.playback_tx.lock().map_err(|_| "Failed to lock playback_tx".to_string())?;
+    
+    // 2. Send Stop Command
+    if let Some(tx) = tx_guard.as_ref() {
+        // We ignore send errors (e.g., if thread is already dead)
+        let _ = tx.send(PlaybackCommand::Stop);
+    }
+    
+    // We do NOT wait for join here. The Frontend handles the flow.
+    Ok(())
+}
+
 /// Starts the infinite playback loop.
 ///
 /// Spawns a dedicated background thread to handle the playback without blocking the Tauri
@@ -154,17 +179,24 @@ async fn play_track(
     // Because `AppState` derives Clone (and wraps Arcs), this is a cheap operation
     // that creates a new reference to the same shared memory.
     let state_clone = state.inner().clone();
+    
+    // 1. Create Control Channel
+    let (tx, rx) = mpsc::channel();
+    
+    // 2. Store Sender in State (overwrite previous if any)
+    {
+        let mut tx_guard = state.playback_tx.lock().map_err(|_| "Failed to lock playback_tx".to_string())?;
+        *tx_guard = Some(tx);
+    } // Drop lock immediately
 
     // Spawn a blocking thread for the heavy audio loop.
     tauri::async_runtime::spawn_blocking(move || {
         // Lock the engine.
         // NOTE: This lock is held for the entire duration of playback (until the song ends or errors).
-        // This is acceptable for the MVP as "Playing" is a blocking state, but it prevents
-        // other commands from acquiring the engine lock concurrently.
         if let Ok(mut guard) = state_clone.engine.lock() {
             if let Some(engine) = guard.as_mut() {
-                // Play with callback
-                let _ = engine.play_with_callback(usize::MAX, move |beat_idx, segment_idx| {
+                // Play with callback and RECEIVER
+                let _ = engine.play_with_callback(rx, move |beat_idx, segment_idx| {
                     // Emit event to Frontend
                     // We ignore errors here (e.g., if app is closing).
                     let _ = app_handle.emit("playback_tick", PlaybackTick {
@@ -192,9 +224,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState {
-            engine: Arc::new(Mutex::new(None))
+            engine: Arc::new(Mutex::new(None)),
+            playback_tx: Arc::new(Mutex::new(None)),
         })
-        .invoke_handler(tauri::generate_handler![greet, analyze_track, play_track])
+        .invoke_handler(tauri::generate_handler![greet, analyze_track, play_track, stop_playback]) // Add stop_playback
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -20,6 +20,17 @@ use std::{thread, time::Duration};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use std::collections::VecDeque;
+use std::sync::mpsc::Receiver;
+
+/// Commands to control the playback loop from another thread.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PlaybackCommand {
+    /// Stop playback immediately and return from the loop.
+    Stop,
+    // Placeholder for Pause/Resume if needed later
+    // Pause,
+    // Resume,
+}
 
 /// A single musical beat with metadata for graph traversal.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -198,28 +209,31 @@ impl JukeboxEngine {
     }
     
     /// Simple play command (no callback).
-    pub fn play(&mut self, length: usize) -> Result<(), String> {
-        self.play_with_callback(length, |_, _| {})
+    pub fn play(&mut self) -> Result<(), String> {
+        let (_tx, rx) = std::sync::mpsc::channel();
+        self.play_with_callback(rx, |_, _| {})
     }
 
     /// Starts playback with a callback for UI updates.
     /// Uses JIT (Just-In-Time) logic to decide the next beat in real-time.
-    pub fn play_with_callback<F>(&mut self, length: usize, callback: F) -> Result<(), String> 
-    where F: Fn(usize, usize) + Send + 'static 
+    /// * `command_rx` - A channel receiver to listen for Stop/Pause commands.
+    /// * `callback` - Closure called on every beat (beat_index, segment_index).
+    pub fn play_with_callback<F>(&mut self, command_rx: Receiver<PlaybackCommand>, mut callback: F) -> Result<(), String> 
+    where F: FnMut(usize, usize) 
     {
-        if self.audio_manager.is_none() || self.sound_data.is_none() {
-             return Err("Audio engine not initialized. Call load_track() first.".to_string());
-        }
+        println!("Starting JIT Playback Loop...");
+
+        // Ensure audio is loaded
+        let mut manager = self.audio_manager.take()
+            .ok_or("Audio Manager not initialized. Call load_track() first.")?;
+        let sound_data = self.sound_data.take()
+            .ok_or("Sound Data not loaded.")?;
+            
+        // Initial Play
+        // let mut last_processed_cursor = usize::MAX; // Unused
         
-        // Take ownership temporarily to unblock `self` for JIT calls
-        let mut manager = self.audio_manager.take().unwrap();
-        // StaticSoundData is cheap to clone (Arc), so we clone it to avoid taking
-        let sound_data = self.sound_data.as_ref().unwrap().clone();
-        
-        // Wrap logic in a closure to ensure we can return ownership even on error
-        let result: Result<(), String> = (|| {
-            let mut clock = manager.add_clock(ClockSpeed::TicksPerSecond(1000.0))
-                 .map_err(|e| format!("Failed to create clock: {}", e))?;
+        let mut clock = manager.add_clock(ClockSpeed::TicksPerSecond(1000.0))
+            .map_err(|e| format!("Failed to create clock: {}", e))?;
         clock.start();
         
         let now_ticks = clock.time().ticks;
@@ -228,72 +242,74 @@ impl JukeboxEngine {
         
         use std::collections::VecDeque;
         let mut pending_events: VecDeque<(u64, usize, usize)> = VecDeque::new();
-        let mut beats_played = 0;
 
-        // THE INFINITE LOOP (or until length reached)
-        while beats_played < length { // Use `loop` for true infinity
-             // 1. Throttling (Buffer Control)
-             loop {
-                 let current_time = clock.time().ticks;
-                 let elapsed = current_time.saturating_sub(now_ticks);
-                 
-                 // Service Events
-                 while let Some((fire_time, beat_id, seg_id)) = pending_events.front() {
-                     if current_time >= *fire_time {
-                         callback(*beat_id, *seg_id);
-                         pending_events.pop_front();
-                     } else {
-                         break;
-                     }
-                 }
+        // Loop Indefinitely (until Stop command or error)
+        loop {
+            // 0. Check for Control Commands (Non-blocking)
+            if let Ok(cmd) = command_rx.try_recv() {
+                match cmd {
+                    PlaybackCommand::Stop => {
+                        println!("Playback Stopped by Command.");
+                        // Force Drop of Manager to stop audio immediately
+                        drop(manager);
+                        // self.audio_manager remains None, which is fine as this engine is about to be replaced
+                        return Ok(());
+                    }
+                }
+            }
+        
+            // 1. Throttling (Buffer Control)
+            loop {
+                let current_time = clock.time().ticks;
+                let elapsed = current_time.saturating_sub(now_ticks);
+                
+                // Service Events
+                while let Some((fire_time, beat_id, seg_id)) = pending_events.front() {
+                    if current_time >= *fire_time {
+                        callback(*beat_id, *seg_id);
+                        pending_events.pop_front();
+                    } else {
+                        break;
+                    }
+                }
 
-                 if cumulative_ticks < elapsed + BUFFER_MS {
-                     break;
-                 }
-                 thread::sleep(Duration::from_millis(50));
-             }
+                if cumulative_ticks < elapsed + BUFFER_MS {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
 
-             // 2. JIT Decision: Get the next beat
-             let instruction = self.get_next_beat();
-             
-             let beat = &self.beats[instruction.beat_id];
-             let duration_ticks = (beat.duration * 1000.0) as u64;
-             let scheduled_start_ticks = now_ticks + cumulative_ticks;
-             
-             // 3. Queue Notification
-             pending_events.push_back((scheduled_start_ticks, beat.id, beat.segment));
-             
-             // 4. Schedule Audio
-             let start_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks, fraction: 0.0 };
-             let stop_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks + duration_ticks, fraction: 0.0 };
-             
-             let mut handle = manager.play(
-                 sound_data.with_settings(
-                    StaticSoundSettings::new()
-                        .start_time(StartTime::ClockTime(start_time))
-                        .start_position(beat.start as f64)
-                 )
-             ).map_err(|e| format!("Failed to schedule sound: {}", e))?;
-             
-             handle.stop(
-                 Tween {
-                     start_time: StartTime::ClockTime(stop_time),
-                     ..Default::default()
-                 }
-             );
+            // 2. JIT Decision: Get the next beat
+            let instruction = self.get_next_beat();
+            
+            let beat = &self.beats[instruction.beat_id];
+            let duration_ticks = (beat.duration * 1000.0) as u64;
+            let scheduled_start_ticks = now_ticks + cumulative_ticks;
+            
+            // 3. Queue Notification
+            pending_events.push_back((scheduled_start_ticks, beat.id, beat.segment));
+            
+            // 4. Schedule Audio
+            let start_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks, fraction: 0.0 };
+            let stop_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks + duration_ticks, fraction: 0.0 };
+            
+            let mut handle = manager.play(
+                sound_data.with_settings(
+                   StaticSoundSettings::new()
+                       .start_time(StartTime::ClockTime(start_time))
+                       .start_position(beat.start as f64)
+                )
+            ).map_err(|e| format!("Failed to schedule sound: {}", e))?;
+            
+            handle.stop(
+                Tween {
+                    start_time: StartTime::ClockTime(stop_time),
+                    ..Default::default()
+                }
+            );
 
-             cumulative_ticks += duration_ticks;
-             beats_played += 1;
+            cumulative_ticks += duration_ticks;
         }
-        
-        Ok(())
-        })();
-
-        // Restore ownership
-        self.audio_manager = Some(manager);
-        // data was cloned, so we don't need to restore it
-        
-        result
     }
 
     /// Determines the next beat to play based on current state.

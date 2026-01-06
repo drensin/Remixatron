@@ -88,7 +88,7 @@ fn main() {
             // Re-running play() will regenerate a slightly different random vector.
             // Be aware of this discrepancy. ideally we modify play to take vector (refactoring),
             // but for now let's just observe play() behavior by relying on the engine debug prints I just enabled.
-            if let Err(e) = engine.play(100) {
+            if let Err(e) = engine.play() {
                  eprintln!("Playback error: {}", e);
                  return;
             }

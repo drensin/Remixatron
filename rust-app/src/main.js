@@ -12,6 +12,13 @@ async function startRemix() {
     if (!path) return;
 
     try {
+        statusEl.textContent = "Stopping previous playback...";
+        try {
+            await invoke("stop_playback");
+        } catch (e) {
+            console.log("Stop playback harmless error:", e);
+        }
+
         statusEl.textContent = "Analyzing... (This may take a moment)";
         analyzeBtn.disabled = true;
 
@@ -36,6 +43,7 @@ async function startRemix() {
 
         await invoke("play_track", { path });
         statusEl.textContent = "Playing Infinite Walk...";
+        analyzeBtn.disabled = false;
 
     } catch (e) {
         console.error(e);
