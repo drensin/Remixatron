@@ -353,14 +353,60 @@ async fn play_track(
 /// Configures the environment, registers plugins, manages state, and launches the app.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Explicitly point to the bundled ONNX Runtime library to ensure it loads correctly on Linux
-    std::env::set_var("ORT_DYLIB_PATH", "/home/rensin/Projects/Remixatron/rust-app/libonnxruntime.so");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // --- ONNX Runtime Library Resolution ---
+            #[cfg(desktop)]
+            {
+                use tauri::Manager;
+                let resource_path = app.path().resource_dir().expect("failed to get resource dir");
+                
+                // Construct path based on platform
+                let lib_path = if cfg!(target_os = "windows") {
+                    resource_path.join("libs\\win\\onnxruntime.dll")
+                } else if cfg!(target_os = "macos") {
+                    resource_path.join("libs/macos/libonnxruntime.dylib")
+                } else {
+                    resource_path.join("libs/linux/libonnxruntime.so")
+                };
+
+                // In Development, resources aren't bundled the same way.
+                // We fallback to a relative path check or allow the hardcoded path.
+                if !lib_path.exists() {
+                     // Dev fallback: Try local relative path
+                     // This assumes running from `src-tauri` root usually?
+                     // actually, cargo run runs from root.
+                     println!("Bundled ORT not found at {:?}. Assuming Dev Environment.", lib_path);
+                     
+                     // Helper for dev environment path
+                     let dev_path = if cfg!(target_os = "windows") {
+                        "libs/win/onnxruntime.dll"
+                     } else if cfg!(target_os = "macos") {
+                        "libs/macos/libonnxruntime.dylib"
+                     } else {
+                        "libs/linux/libonnxruntime.so"
+                     };
+                     
+                     // We just try to set it to absolute path of project root + dev_path
+                     // Or just leave it if user set it externally.
+                     if let Ok(cwd) = std::env::current_dir() {
+                         let abs_dev_path = cwd.join("src-tauri").join(dev_path);
+                         if abs_dev_path.exists() {
+                             std::env::set_var("ORT_DYLIB_PATH", &abs_dev_path);
+                             println!("Set ORT_DYLIB_PATH to Dev Path: {:?}", abs_dev_path);
+                         }
+                     }
+                } else {
+                    // Production Bundle
+                    std::env::set_var("ORT_DYLIB_PATH", lib_path.clone());
+                    println!("Set ORT_DYLIB_PATH to Bundled Resource: {:?}", lib_path);
+                }
+            }
+
             // Manage state
             app.manage(AppState {
                 engine: Arc::new(Mutex::new(None)),

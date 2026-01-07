@@ -17,7 +17,12 @@
             "icons/128x128@2x.png",
             "icons/icon.icns",
             "icons/icon.ico"
-        ]
+        ],
+        "resources": {
+            "libs/linux/*": "libs/linux/",
+            "libs/macos/*": "libs/macos/",
+            "libs/win/*": "libs/win/"
+        }
     },
     "app": {
         "withGlobalTauri": true,
