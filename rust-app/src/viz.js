@@ -1,3 +1,21 @@
+/**
+ * @fileoverview Visualization engine for the Infinite Jukebox.
+ * 
+ * Renders the circular "beat map" on an HTML5 Canvas.
+ * Supports:
+ * - High DPI rendering
+ * - Dynamic segment coloring
+ * - Beat cursor tracking
+ * - Jump arc rendering
+ * - Countdown pulse ring for branches
+ * - Debug overlay for Novelty Curve
+ * 
+ * @author Remixatron Team
+ */
+
+/**
+ * Manages the HTML5 Canvas rendering context for the musical visualization.
+ */
 export class InfiniteJukeboxViz {
     constructor(canvas) {
         this.canvas = canvas;
@@ -21,6 +39,12 @@ export class InfiniteJukeboxViz {
         this.currentSeqLen = seqLen;
     }
 
+    /**
+     * Resizes the canvas to match the parent container (HiDPI aware).
+     * 
+     * Calculates the radius, center point, and scaling factor for the visualization.
+     * Should be called on window resize.
+     */
     resize() {
         // High DPI Support
         const dpr = window.devicePixelRatio || 1;
@@ -42,6 +66,15 @@ export class InfiniteJukeboxViz {
         this.draw(); // Redraw on resize
     }
 
+    /**
+     * Updates the visualization data with a new Analysis Result.
+     * 
+     * @param {Object} payload - The structure payload from the backend.
+     * @param {Array} payload.beats - List of Beat objects.
+     * @param {Array} payload.segments - List of Segment objects.
+     * @param {Array} payload.novelty_curve - Novelty score array.
+     * @param {Array} payload.peaks - Indices of detected boundaries.
+     */
     setData(payload) {
         this.beats = payload.beats;
         this.segments = payload.segments;
@@ -63,6 +96,21 @@ export class InfiniteJukeboxViz {
         return (time / this.duration) * 2 * Math.PI - (Math.PI / 2); // Start at 12 o'clock
     }
 
+    /**
+     * Main render loop.
+     * 
+     * Draws the visualization frame based on the current active beat.
+     * Layer Order:
+     * 1. Clear Screen
+     * 2. Segments Ring (Static base)
+     * 3. Beating Cursor (Active position)
+     * 4. Jump Arcs (Future possibilities)
+     * 5. Countdown Ring (If near a branch)
+     * 6. Debug Graphs (Novelty curve)
+     * 
+     * @param {number} activeBeatIndex - The global index of the beat currently playing.
+     * @param {number} activeSegmentIndex - The segment index to highlight (optional).
+     */
     draw(activeBeatIndex = -1, activeSegmentIndex = -1) {
         if (!this.beats.length) return;
 
@@ -137,6 +185,14 @@ export class InfiniteJukeboxViz {
         this.drawNoveltyCurve(ctx);
     }
 
+    /**
+     * Renders the Novelty Curve debug graph at the bottom of the canvas.
+     * 
+     * Used to verify that the spectral clustering and boundary detection
+     * align with the visual segments.
+     * 
+     * @param {CanvasRenderingContext2D} ctx - The canvas context.
+     */
     drawNoveltyCurve(ctx) {
         if (!this.novelty || !this.novelty.length) return;
 
@@ -192,6 +248,16 @@ export class InfiniteJukeboxViz {
         });
     }
 
+    /**
+     * Draws the "Branch Countdown" ring.
+     * 
+     * Visualizes the time remaining until a potential jump event.
+     * The ring "unwinds" counter-clockwise as the jump approaches.
+     * 
+     * @param {CanvasRenderingContext2D} ctx - The canvas context.
+     * @param {number} pos - Current position in the sequence (0..total).
+     * @param {number} total - Total length of the sequence.
+     */
     drawCountdown(ctx, pos, total) {
         // Center of screen
         const cx = this.centerX;

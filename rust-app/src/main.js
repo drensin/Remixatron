@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Main entry point for the Remixatron Frontend.
+ * 
+ * This file orchestrates the interaction between the UI (HTML), the visualization logic (Viz.js),
+ * and the Rust backend (Tauri). It handles user input, manages the download/analysis pipeline,
+ * and coordinates the infinite playback loop.
+ * 
+ * @author Remixatron Team
+ */
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 import { InfiniteJukeboxViz } from './viz.js';
@@ -19,6 +29,19 @@ let trackTitleEl;
 let albumArtImg;
 let albumArtPlaceholder;
 
+/**
+ * Initiates the Remixatron workflow.
+ * 
+ * This async function handles the full lifecycle of a new track:
+ * 1. detects input type (Local File vs URL).
+ * 2. (Optional) Downloads audio via the backend.
+ * 3. Extracts and displays metadata (Title, Art).
+ * 4. Invokes the backend analysis pipeline.
+ * 5. Initializes the visualization.
+ * 6. Starts the audio playback.
+ * 
+ * @returns {Promise<void>}
+ */
 async function startRemix() {
     let path = pathInput.value;
     if (!path) return;
@@ -130,6 +153,17 @@ async function startRemix() {
     }
 }
 
+/**
+ * Stops the current playback and resets the UI to the "Ready" state.
+ * 
+ * This function handles safety cleanup:
+ * 1. Signals the backend to stop the audio engine.
+ * 2. Hides the floating player.
+ * 3. Resets internal playback state (Pause flags).
+ * 4. Shows the Onboarding Card after a transition delay.
+ * 
+ * @returns {Promise<void>}
+ */
 async function stopRemix() {
     try {
         await invoke("stop_playback");
