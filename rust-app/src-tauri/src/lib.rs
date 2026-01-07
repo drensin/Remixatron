@@ -195,14 +195,45 @@ async fn analyze_track(
         album_art_base64: album_art_base64.clone(),
     });
 
-    // Hardcoded model paths for MVP - Ensure these exist in your bundle or are absolute
-    // TODO: Move these to a configuration file or embedded assets for production.
-    let mel_path = "/home/rensin/Projects/Remixatron/rust-app/MelSpectrogram_Ultimate.onnx";
-    let beat_path = "/home/rensin/Projects/Remixatron/rust-app/BeatThis_small0.onnx";
+    // --- MODEL PATH RESOLUTION ---
+    // In Production: They are bundled in `models/` resource.
+    // In Development: They are in `src-tauri/models/` (relative to CWD).
+    
+    // We resolve the resources directory using Tauri's path resolver.
+    // Since we are in a Command, we can access the app handle directly.
+    
+    let resource_dir = app.path().resource_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    
+    let mel_resource = resource_dir.join("models").join("MelSpectrogram_Ultimate.onnx");
+    let beat_resource = resource_dir.join("models").join("BeatThis_small0.onnx");
+
+    let (mel_path_buf, beat_path_buf) = if mel_resource.exists() && beat_resource.exists() {
+         (mel_resource, beat_resource)
+    } else {
+         // Fallback for Dev Environment (cargo run from root)
+         // Assuming CWD is project root
+         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+         let dev_mel = cwd.join("src-tauri").join("models").join("MelSpectrogram_Ultimate.onnx");
+         let dev_beat = cwd.join("src-tauri").join("models").join("BeatThis_small0.onnx");
+         
+         if dev_mel.exists() {
+             (dev_mel, dev_beat)
+         } else {
+             // Second Fallback: Maybe CWD is src-tauri?
+             let dev_mel_2 = cwd.join("models").join("MelSpectrogram_Ultimate.onnx");
+              let dev_beat_2 = cwd.join("models").join("BeatThis_small0.onnx");
+             (dev_mel_2, dev_beat_2)
+         }
+    };
+    
+    let mel_path = mel_path_buf.to_string_lossy().to_string();
+    let beat_path = beat_path_buf.to_string_lossy().to_string();
+    
+    println!("Using Models:\nMel: {}\nBeat: {}", mel_path, beat_path);
 
     // 1. Run Analysis Pipeline
     // This delegates to the `workflow` module which orchestrates the complex logic.
-    let engine_workflow = Remixatron::new(mel_path, beat_path);
+    let engine_workflow = Remixatron::new(&mel_path, &beat_path);
     
     // Create a callback that emits events to the frontend
     let app_handle = app.clone();

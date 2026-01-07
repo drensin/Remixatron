@@ -21,7 +21,8 @@
         "resources": {
             "libs/linux/*": "libs/linux/",
             "libs/macos/*": "libs/macos/",
-            "libs/win/*": "libs/win/"
+            "libs/win/*": "libs/win/",
+            "models/*": "models/"
         }
     },
     "app": {
