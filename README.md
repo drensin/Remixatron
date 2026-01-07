@@ -1,7 +1,11 @@
 # Remixatron
 (c) 2017-2022 - Dave Rensin - drensin@gmail.com  
 
-__READ THIS!__ This is the old CLI version of this program. All the current development is being done on the Web GUI tool [here](https://github.com/drensin/Remixatron/tree/master/Web%20UI). You should _definitely_ use that tool, instead. I'm leaving this code up for now but there's a good chance I'll will delete it over time.
+> **IMPORTANT!** This is the **Legacy Python CLI (V1)** version of this program.
+> All current development is happening in the **[Rust Application (V3)](rust-app/)** folder.
+> You should **definitely** use the new, high-performance native app instead.
+>
+> 🚀 **[Go to the New Remixatron (Rust App)](rust-app/)**
 
 This program attempts to recreate the wonderful Infinite Jukebox (http://www.infinitejuke.com) on the command line in Python. It groups musically similar beats of a song into clusters and then plays a random path through the song that makes musical sense, but not does not repeat. It will do this infinitely.
 ***
