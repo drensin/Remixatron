@@ -1,10 +1,10 @@
 # Remixatron: The Infinite Jukebox
 
-## What is Remixatron?
-
 > **Just want to run it?**
 > You don't need to build from source!
 > 📦 **[Download the Latest Release for Windows, macOS, and Linux](https://github.com/drensin/Remixatron/releases)**
+
+## What is Remixatron?
 
 Remixatron is an intelligent audio player that extends any song into an infinite, seamless remix. By analyzing the musical structure of a track—detecting beats, timber, and segmentation—it identifies "Jump Candidates": points in the song that are acoustically identical but occur at different times. 
 

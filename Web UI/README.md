@@ -1,12 +1,12 @@
-# Remixatron Web UI
-(c) 2017-2025 - Dave Rensin - drensin@gmail.com
-
 > **IMPORTANT!**  
 > **This Web UI Version (V2) is Deprecated!**
 > While still functional via Docker, it has been superseded by the **[Remixatron Native App (V3)](../rust-app/)**.
 > V3 is faster (zero-latency Rust/Kira engine), portable (single binary), and requires no Docker setup.
 >
 > 🚀 **[Go to the New Remixatron (Rust App)](../rust-app/)**
+
+# Remixatron Web UI
+(c) 2017-2025 - Dave Rensin - drensin@gmail.com
 
 Creates an infinite remix of an audio file by finding musically similar beats and computing a randomized play path through them. The default choices should be suitable for a variety of musical styles. This work is inspired by the Infinite Jukebox (http://www.infinitejuke.com) project creaeted by Paul Lamere (paul@spotify.com)
 
