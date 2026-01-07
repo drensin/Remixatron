@@ -292,6 +292,7 @@ If we just played **Beat 4** (End of Bar), the listener expects **Beat 1** (Star
 *   **Incorrect**: Jumping from Beat 4 to Beat 3 (Time Travel) or another Beat 4 (Stutter).
 
 **Rule**: We enforce that the Jump Target must have the same `bar_position` as the beat we *would have played* linearly.
+
 $$
 \text{Phase}(\text{Target}) \equiv \text{Phase}(\text{Next Linear Beat})
 $$
