@@ -79,6 +79,13 @@ struct MetadataPayload {
     album_art_base64: Option<String>,
 }
 
+/// Payload for explicit progress updates during analysis.
+#[derive(serde::Serialize, Clone)]
+struct ProgressPayload {
+    message: String,
+    progress: f32,
+}
+
 /// Event payload emitted on every playback tick.
 ///
 /// Used to update the specific "cursor" position on the frontend visualization.
@@ -199,8 +206,11 @@ async fn analyze_track(
     
     // Create a callback that emits events to the frontend
     let app_handle = app.clone();
-    let analysis_result = engine_workflow.analyze(&path, |status| {
-        let _ = app_handle.emit("analysis_progress", status);
+    let analysis_result = engine_workflow.analyze(&path, |message, progress| {
+        let _ = app_handle.emit("analysis_progress", ProgressPayload {
+            message: message.to_string(),
+            progress,
+        });
     }).map_err(|e| format!("Analysis Failed: {}", e))?;
 
     // 2. Initialize Jukebox Engine
@@ -262,6 +272,22 @@ async fn stop_playback(state: State<'_, AppState>) -> Result<(), String> {
     }
     
     // We do NOT wait for join here. The Frontend handles the flow.
+    Ok(())
+}
+
+/// Toggles the pause state of the playback engine.
+#[tauri::command]
+async fn set_paused(state: State<'_, AppState>, paused: bool) -> Result<(), String> {
+    // 1. Acquire Sender Lock
+    let tx_guard = state.playback_tx.lock().map_err(|_| "Failed to lock playback_tx".to_string())?;
+    
+    // 2. Send Command
+    if let Some(tx) = tx_guard.as_ref() {
+        let cmd = if paused { PlaybackCommand::Pause } else { PlaybackCommand::Resume };
+        // Ignore errors (if thread dead, nothing to pause)
+        let _ = tx.send(cmd);
+    }
+    
     Ok(())
 }
 
@@ -357,7 +383,8 @@ pub fn run() {
             analyze_track, 
             play_track, 
             stop_playback, 
-            import_url
+            import_url,
+            set_paused
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

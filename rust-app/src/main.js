@@ -8,11 +8,13 @@ let statusEl;
 let analyzeBtn;
 let pathInput;
 let remoteMetadata = null; // Defined globally so listener can see it
+let isPaused = false; // Track playback state
 
 // UI Elements (New M3 Structure)
 let onboardingCard;
 let floatingPlayer;
 let stopBtn;
+let pauseBtn;
 let trackTitleEl;
 let albumArtImg;
 let albumArtPlaceholder;
@@ -27,6 +29,13 @@ async function startRemix() {
         floatingPlayer.classList.add("visible");
         floatingPlayer.classList.add("loading"); // Start Progress Bar
         analyzeBtn.disabled = true;
+
+        // UI: Reset Pause State
+        isPaused = false;
+        if (pauseBtn) {
+            const icon = pauseBtn.querySelector(".material-symbols-outlined");
+            if (icon) icon.textContent = "pause_circle";
+        }
 
         // UI: Reset Metadata to Loading State initially
         const filename = path.split(/[/\\]/).pop();
@@ -128,6 +137,15 @@ async function stopRemix() {
         // UI Transition: Active -> Zero
         floatingPlayer.classList.remove("visible");
 
+        // Reset State
+        isPaused = false;
+        // Reset State
+        isPaused = false;
+        if (pauseBtn) {
+            const icon = pauseBtn.querySelector(".material-symbols-outlined");
+            if (icon) icon.textContent = "pause_circle";
+        }
+
         // Wait for player to slide down before showing card
         setTimeout(() => {
             onboardingCard.classList.remove("hidden");
@@ -148,6 +166,7 @@ window.addEventListener("DOMContentLoaded", () => {
     onboardingCard = document.querySelector("#onboarding-card");
     floatingPlayer = document.querySelector("#floating-player");
     stopBtn = document.querySelector("#stop-btn");
+    pauseBtn = document.querySelector("#pause-btn");
     trackTitleEl = document.querySelector(".track-title");
     albumArtImg = document.querySelector("#album-art-img");
     albumArtPlaceholder = document.querySelector("#album-art-placeholder");
@@ -163,6 +182,23 @@ window.addEventListener("DOMContentLoaded", () => {
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
             stopRemix();
+        });
+    }
+
+    // Bind Pause Button
+    if (pauseBtn) {
+        pauseBtn.addEventListener("click", async () => {
+            try {
+                isPaused = !isPaused;
+                await invoke("set_paused", { paused: isPaused });
+                const icon = pauseBtn.querySelector(".material-symbols-outlined");
+                if (icon) {
+                    icon.textContent = isPaused ? "play_circle" : "pause_circle";
+                }
+                statusEl.textContent = isPaused ? "Paused" : "Infinite Walk Active";
+            } catch (e) {
+                console.error("Pause toggle failed:", e);
+            }
         });
     }
 
@@ -198,7 +234,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // Listen for Detailed Status Updates
     listen('analysis_progress', (event) => {
-        if (statusEl) statusEl.textContent = event.payload;
+        // payload: { message: string, progress: float }
+        const { message, progress } = event.payload;
+        if (statusEl) statusEl.textContent = message;
+
+        // Update Progress Bar
+        const fill = document.querySelector(".progress-bar-fill");
+        if (fill) {
+            fill.style.width = (progress * 100) + "%";
+        }
     });
 
     // Listen for Downloader Status

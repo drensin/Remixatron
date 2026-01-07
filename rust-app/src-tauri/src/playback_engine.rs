@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use kira::{
     AudioManager, AudioManagerSettings,
-    sound::static_sound::{StaticSoundData, StaticSoundSettings},
+    sound::static_sound::{StaticSoundData, StaticSoundSettings, StaticSoundHandle},
     clock::{ClockSpeed, ClockTime},
     StartTime,
     Tween,
@@ -23,13 +23,13 @@ use std::collections::VecDeque;
 use std::sync::mpsc::Receiver;
 
 /// Commands to control the playback loop from another thread.
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PlaybackCommand {
     /// Stop playback immediately and return from the loop.
     Stop,
-    // Placeholder for Pause/Resume if needed later
-    // Pause,
-    // Resume,
+    /// Pause the clock (freezes time and audio).
+    Pause,
+    /// Resume the clock.
+    Resume,
 }
 
 /// A single musical beat with metadata for graph traversal.
@@ -218,7 +218,6 @@ impl JukeboxEngine {
     /// Starts playback with a callback for UI updates.
     /// Uses JIT (Just-In-Time) logic to decide the next beat in real-time.
     /// * `command_rx` - A channel receiver to listen for Stop/Pause commands.
-    /// * `command_rx` - A channel receiver to listen for Stop/Pause commands.
     /// * `callback` - Closure called on every beat (instruction, segment_index).
     pub fn play_with_callback<F>(&mut self, command_rx: Receiver<PlaybackCommand>, mut callback: F) -> Result<(), String> 
     where F: FnMut(&PlayInstruction, usize) 
@@ -238,13 +237,20 @@ impl JukeboxEngine {
             .map_err(|e| format!("Failed to create clock: {}", e))?;
         clock.start();
         
+        // Track Clock Time locally for scheduling
         let now_ticks = clock.time().ticks;
         let mut cumulative_ticks = 0;
-        const BUFFER_MS: u64 = 4000; 
+        // Reducing buffer from 4000ms to 200ms ensures "Pause" is instant.
+        const BUFFER_MS: u64 = 200; 
         
         use std::collections::VecDeque;
         // Queue now stores: (fire_time, PlayInstruction)
         let mut pending_events: VecDeque<(u64, PlayInstruction)> = VecDeque::new();
+        // Track active audio handles to explicitly pause them (Kira clock doesn't prevent "Runaway Beats")
+        // Store (start_time, end_time, handle) to prune dead handles.
+        let mut active_handles: VecDeque<(u64, u64, StaticSoundHandle)> = VecDeque::new();
+
+        let mut paused = false;
 
         // Loop Indefinitely (until Stop command or error)
         loop {
@@ -253,23 +259,105 @@ impl JukeboxEngine {
                 match cmd {
                     PlaybackCommand::Stop => {
                         println!("Playback Stopped by Command.");
-                        // Force Drop of Manager to stop audio immediately
                         drop(manager);
-                        // self.audio_manager remains None, which is fine as this engine is about to be replaced
                         return Ok(());
+                    },
+                    PlaybackCommand::Pause => {
+                        println!("CMD: Pause");
+                        if !paused {
+                            let _ = clock.pause();
+                            let now = clock.time().ticks;
+                            println!("State -> PAUSED. Clock frozen at: {}", now);
+                            
+                            // MANUAL STOP & PRUNE: Ensure finished sounds are actually stopped
+                            let mut alive_handles = VecDeque::new();
+                            while let Some((start, end, mut handle)) = active_handles.pop_front() {
+                                if end <= now {
+                                    // It should be done. Kill it to be sure.
+                                    let _ = handle.stop(Tween::default());
+                                } else {
+                                    alive_handles.push_back((start, end, handle));
+                                }
+                            }
+                            active_handles = alive_handles;
+
+                            // Pause ONLY currently playing sounds
+                            for (start_tick, end_tick, handle) in active_handles.iter_mut() {
+                                if *start_tick <= now {
+                                    println!("  [PAUSE] Handle {}-{} (now {}). Pausing.", start_tick, end_tick, now);
+                                    let _ = handle.pause(Tween::default());
+                                } else {
+                                    println!("  [SKIP] Handle {}-{} > now {}. Future.", start_tick, end_tick, now);
+                                }
+                            }
+                            paused = true;
+                        }
+                    },
+                    PlaybackCommand::Resume => {
+                        println!("CMD: Resume");
+                        if paused {
+                            let _ = clock.start();
+                            let now = clock.time().ticks; 
+                            println!("State -> RUNNING. Clock resumed at: {}", now);
+                            
+                            // MANUAL STOP & PRUNE
+                            let mut alive_handles = VecDeque::new();
+                            while let Some((start, end, mut handle)) = active_handles.pop_front() {
+                                if end <= now {
+                                    let _ = handle.stop(Tween::default());
+                                } else {
+                                    alive_handles.push_back((start, end, handle));
+                                }
+                            }
+                            active_handles = alive_handles;
+
+                            // Resume active sounds
+                            for (start_tick, end_tick, handle) in active_handles.iter_mut() {
+                                if *start_tick <= now {
+                                    println!("  [RESUME] Handle {}-{} (now {}). Resuming.", start_tick, end_tick, now);
+                                    let _ = handle.resume(Tween::default());
+                                } else {
+                                    println!("  [SKIP] Handle {}-{} > now {}. Future.", start_tick, end_tick, now);
+                                }
+                            }
+                            paused = false;
+                        }
                     }
                 }
             }
         
-            // 1. Throttling (Buffer Control)
+            if paused {
+                thread::sleep(Duration::from_millis(50));
+                continue;
+            }
+
+            // 1. Throttling & Maintenance
             loop {
                 let current_time = clock.time().ticks;
+                
+                // Active Maintenance: Stop expired handles periodically
+                // This protects against Kira's scheduler failing during Pause cycles
+                if !active_handles.is_empty() {
+                    let mut i = 0;
+                    while i < active_handles.len() {
+                        let (_, end, _) = active_handles[i];
+                        if end <= current_time {
+                             // Stop and Remove
+                             if let Some((_, _, mut handle)) = active_handles.remove(i) {
+                                  // println!("  [AUTO-STOP] Enforcing stop at {}", current_time);
+                                  let _ = handle.stop(Tween::default());
+                             }
+                        } else {
+                             i += 1;
+                        }
+                    }
+                }
+
                 let elapsed = current_time.saturating_sub(now_ticks);
                 
                 // Service Events
                 while let Some((fire_time, instruction)) = pending_events.front() {
                     if current_time >= *fire_time {
-                        // Look up segment index safely
                         if instruction.beat_id < self.beats.len() {
                              let seg_id = self.beats[instruction.beat_id].segment;
                              callback(instruction, seg_id);
@@ -283,7 +371,7 @@ impl JukeboxEngine {
                 if cumulative_ticks < elapsed + BUFFER_MS {
                     break;
                 }
-                thread::sleep(Duration::from_millis(50));
+                thread::sleep(Duration::from_millis(10));
             }
 
             // 2. JIT Decision: Get the next beat
@@ -291,9 +379,9 @@ impl JukeboxEngine {
             
             let beat = &self.beats[instruction.beat_id];
             let duration_ticks = (beat.duration * 1000.0) as u64;
+            // Schedule relative to initial start + cumulative duration
             let scheduled_start_ticks = now_ticks + cumulative_ticks;
             
-            // 3. Queue Notification
             // 3. Queue Notification
             pending_events.push_back((scheduled_start_ticks, instruction));
             
@@ -301,20 +389,36 @@ impl JukeboxEngine {
             let start_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks, fraction: 0.0 };
             let stop_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks + duration_ticks, fraction: 0.0 };
             
-            let mut handle = manager.play(
+            // println!("Scheduling Beat {} at {}", instruction.beat_id, scheduled_start_ticks);
+
+            match manager.play(
                 sound_data.with_settings(
                    StaticSoundSettings::new()
                        .start_time(StartTime::ClockTime(start_time))
                        .start_position(beat.start as f64)
                 )
-            ).map_err(|e| format!("Failed to schedule sound: {}", e))?;
-            
-            handle.stop(
-                Tween {
-                    start_time: StartTime::ClockTime(stop_time),
-                    ..Default::default()
+            ) {
+                Ok(mut handle) => {
+                     // We still ask Kira to schedule the stop as Plan A
+                     let _ = handle.stop(
+                        Tween {
+                            start_time: StartTime::ClockTime(stop_time),
+                            ..Default::default()
+                        }
+                    );
+                    
+                    // Track handle for Action & Manual Cleanup (Plan B)
+                    active_handles.push_back((scheduled_start_ticks, scheduled_start_ticks + duration_ticks, handle));
+                    // Note: No popping here, we let the Maintenance loop handle cleanup based on time.
+                    // But we keep a safety max size just in case
+                    if active_handles.len() > 10 {
+                        active_handles.pop_front();
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Failed to schedule sound: {}", e);
                 }
-            );
+            }
 
             cumulative_ticks += duration_ticks;
         }

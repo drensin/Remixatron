@@ -35,6 +35,12 @@
 }
 
 /* Reset & Base */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -130,6 +136,9 @@ body {
     transform: translateY(150%);
     /* Hidden by default */
     transition: transform 0.6s cubic-bezier(0.2, 0.0, 0, 1.0);
+    overflow: hidden;
+    /* Clips progress bar */
+    position: relative;
 }
 
 .floating-player.visible {
@@ -141,6 +150,7 @@ body {
     height: 48px;
     border-radius: var(--md-sys-shape-corner-medium);
     object-fit: cover;
+    flex-shrink: 0;
 }
 
 .album-art.hidden,
@@ -157,26 +167,49 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 20px;
+    flex-shrink: 0;
 }
 
 .track-info {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    /* Allows flex child to shrink below content size */
+    margin-right: 16px;
 }
 
 .track-title {
     font-weight: 600;
     font-size: var(--md-sys-typescale-title-medium);
     color: var(--md-sys-color-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .track-status {
     font-size: var(--md-sys-typescale-body-medium);
     color: var(--md-sys-color-on-surface-variant);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* --- Inputs & Buttons --- */
+.controls {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+    align-items: center !important;
+    justify-content: flex-end;
+    /* Move to end */
+    width: auto !important;
+    /* Do not take full width, let standard flex rules apply */
+    flex-shrink: 0;
+    /* Don't shrink */
+}
+
 .m3-input {
     width: 100%;
     background: var(--md-sys-color-surface-container-high);
@@ -217,22 +250,29 @@ body {
 
 .m3-icon-btn {
     background: transparent;
-    border: 1px solid var(--md-sys-color-outline);
+    border: none;
+    /* Standard M3: No border */
     color: var(--md-sys-color-on-surface-variant);
     width: 48px;
+    /* Increased for touch target */
     height: 48px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background 0.2s, color 0.2s;
+    /* No explicit font-size, handled by material-symbols class */
+}
+
+.m3-icon-btn .material-symbols-outlined {
+    font-size: 32px;
+    /* Nicely sized icon */
 }
 
 .m3-icon-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--md-sys-color-on-surface);
-    border-color: var(--md-sys-color-on-surface);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--md-sys-color-primary);
 }
 
 /* --- Progress Bar --- */
@@ -261,19 +301,8 @@ body {
 }
 
 .loading .progress-bar-fill {
-    animation: indeterminate 2s infinite linear;
-}
-
-@keyframes indeterminate {
-    0% {
-        left: -100%;
-        width: 50%;
-    }
-
-    100% {
-        left: 100%;
-        width: 50%;
-    }
+    /* Explicit width set by JS */
+    transition: width 0.3s ease-out;
 }
 
 /* Utilities */

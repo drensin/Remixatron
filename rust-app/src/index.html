@@ -7,10 +7,12 @@
     <title>Remixatron // Infinite Walk</title>
     <link rel="stylesheet" href="styles.css">
 
-    <!-- Fonts: Inter -->
+    <!-- Fonts: Inter & Material Symbols -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 
     <script type="module" src="/main.js" defer></script>
 </head>
@@ -27,13 +29,13 @@
 
         <!-- Zero State: Onboarding Card -->
         <div id="onboarding-card" class="onboarding-card interactive">
-            <h1>Infinite Walk</h1>
+            <h1>Load a Track</h1>
             <p>Enter a local music file to begin the algorithmic remix.</p>
 
             <input id="file-path" class="m3-input" type="text" placeholder="Local file path or YouTube URL...">
 
             <button id="analyze-btn" class="m3-fab-extended">
-                <span class="icon">▶</span> Start Walk
+                <span class="material-symbols-outlined">play_arrow</span> Start Remix
             </button>
         </div>
 
@@ -54,8 +56,11 @@
             </div>
 
             <div class="controls">
+                <button id="pause-btn" class="m3-icon-btn" title="Pause/Resume">
+                    <span class="material-symbols-outlined">pause_circle</span>
+                </button>
                 <button id="stop-btn" class="m3-icon-btn" title="Stop Playback">
-                    ■
+                    <span class="material-symbols-outlined">stop_circle</span>
                 </button>
             </div>
         </div>

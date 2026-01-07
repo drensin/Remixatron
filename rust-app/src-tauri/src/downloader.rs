@@ -24,6 +24,9 @@ pub async fn init_downloader(app: AppHandle) -> Result<PathBuf> {
 
     // 2. Report Status
     let _ = app.emit("downloader_status", "Checking external tools...");
+    
+    // 2a. Cleanup Old Downloads (Startup Hygiene)
+    let _ = cleanup_downloads(&app);
 
     // 3. Initialize logic using crate's auto-setup
     // This will download yt-dlp and ffmpeg if missing.
@@ -56,6 +59,12 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     let dl_dir = app_data_dir.join("downloads");
     
     let _ = app.emit("downloader_status", "Init Downloader...");
+
+    let _ = app.emit("downloader_status", "Init Downloader...");
+
+    // 0. Cleanup Previous Downloads
+    // Safe to do because playback engine loads file into RAM.
+    let _ = cleanup_downloads(&app);
 
     // 1. Get Fetcher
     let fetcher = Youtube::with_new_binaries(bin_dir, dl_dir.clone())
@@ -96,4 +105,35 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
         artist,
         thumbnail_url: Some(thumbnail_url),
     })
+}
+
+/// Cleans up the downloads directory by removing all files.
+/// This prevents storage bloat from accumulated temporary files.
+fn cleanup_downloads(app: &AppHandle) -> Result<()> {
+    let app_data_dir = app.path().app_local_data_dir()
+        .map_err(|e| anyhow!("Failed to get app data dir: {}", e))?;
+    let dl_dir = app_data_dir.join("downloads");
+
+    if !dl_dir.exists() {
+        return Ok(());
+    }
+
+    let mut count = 0;
+    for entry in fs::read_dir(dl_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Err(e) = fs::remove_file(&path) {
+                eprintln!("Failed to remove temp file {:?}: {}", path, e);
+            } else {
+                count += 1;
+            }
+        }
+    }
+    
+    if count > 0 {
+        println!("Cleaned up {} temporary files from downloads.", count);
+    }
+    
+    Ok(())
 }

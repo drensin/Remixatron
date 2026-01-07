@@ -40,7 +40,7 @@ fn main() {
     let remixatron = Remixatron::new(mel_path, beat_path);
     println!("Analyzing {}... (This may take a moment)", audio_path);
     
-    match remixatron.analyze(audio_path, |status| println!("[Status]: {}", status)) {
+    match remixatron.analyze(audio_path, |status, _| println!("[Status]: {}", status)) {
         Ok(analysis) => {
             println!("Analysis complete. Beats: {}", analysis.beat_structs.len());
             println!("K-Optimal: {}", analysis.k_optimal);
