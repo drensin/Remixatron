@@ -30,7 +30,7 @@ linfa = "0.8.1"
 linfa-clustering = "0.8.1"
 linfa-nn = "0.8.1"
 symphonia = { version = "0.5.5", features = ["all"] }
-ort = { version = "2.0.0-rc.10", features = ["load-dynamic", "ndarray"] }
+ort = { version = "=2.0.0-rc.10", features = ["load-dynamic", "ndarray"] }
 tauri-plugin-fs = "2.4.4"
 tauri-plugin-dialog = "2.4.2"
 rubato = "0.14.1"
