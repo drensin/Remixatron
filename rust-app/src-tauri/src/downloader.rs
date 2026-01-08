@@ -6,10 +6,18 @@ use tauri::Manager;
 use tauri::Emitter; 
 use yt_dlp::Youtube;
 
+/// Result of a download operation.
+///
+/// Contains the local file path and extracted metadata from the downloaded video.
+/// This struct is used internally and may differ from the API-facing `VideoMetadata`.
 pub struct DownloadResult {
+    /// Path to the downloaded audio file on disk.
     pub file_path: PathBuf,
+    /// Cleaned video title (redundant artist prefix removed).
     pub title: String,
+    /// Channel/artist name from YouTube metadata.
     pub artist: String,
+    /// Optional path to the downloaded thumbnail image.
     pub thumbnail_path: Option<PathBuf>,
 }
 
@@ -61,15 +69,44 @@ pub async fn init_downloader(app: AppHandle) -> Result<PathBuf> {
     Ok(bin_dir)
 }
 
-/// Downloads a URL and returns the local path to the audio file.
+/// Metadata returned from a successful download operation.
+///
+/// This struct is serialized and sent to the frontend via Tauri IPC.
+/// It contains all information needed to display the track in the UI
+/// and add it to favorites.
 #[derive(serde::Serialize, Clone)]
 pub struct VideoMetadata {
+    /// Absolute path to the downloaded audio file.
     pub path: String,
+    /// Cleaned video title (redundant artist prefix removed).
     pub title: String,
+    /// Channel/artist name from YouTube metadata.
     pub artist: String,
+    /// URL to the video thumbnail image for display in the UI.
     pub thumbnail_url: Option<String>,
 }
 
+/// Downloads audio from a YouTube URL and returns metadata.
+///
+/// This function:
+/// 1. Cleans up previous downloads to prevent storage bloat.
+/// 2. Fetches video metadata (title, channel, thumbnail) using the yt-dlp crate.
+/// 3. Downloads the audio by invoking the yt-dlp binary as a subprocess.
+///
+/// The subprocess approach is used because the crate's built-in download methods
+/// use direct HTTP requests to stream URLs, which YouTube blocks with 403 Forbidden.
+/// The yt-dlp binary handles signatures, throttling, and retries internally.
+///
+/// # Arguments
+/// * `app` - The Tauri application handle for accessing paths and emitting events.
+/// * `url` - The YouTube video URL to download.
+///
+/// # Returns
+/// * `Ok(VideoMetadata)` - Contains path to audio file and extracted metadata.
+/// * `Err` - If metadata fetch fails, binary is missing, or download fails.
+///
+/// # Emits
+/// * `downloader_status` - Progress events for UI feedback.
 pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> {
     let app_data_dir = app.path().app_local_data_dir()
         .map_err(|e| anyhow!("Failed to get app data dir: {}", e))?;
@@ -153,32 +190,37 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     })
 }
 
-/// Cleans up the downloads directory by removing all files.
-/// This prevents storage bloat from accumulated temporary files.
+/// Cleans up the downloads directory by removing all temporary files.
+///
+/// This function is called at startup and before each download to prevent
+/// storage bloat from accumulated temporary audio files. It is safe to call
+/// at any time because the playback engine loads audio files into RAM.
+///
+/// # Arguments
+/// * `app` - The Tauri application handle for accessing the app data directory.
+///
+/// # Returns
+/// * `Ok(())` - Cleanup completed (files removed or directory was already empty).
+/// * `Err` - If the app data directory could not be resolved.
 fn cleanup_downloads(app: &AppHandle) -> Result<()> {
     let app_data_dir = app.path().app_local_data_dir()
         .map_err(|e| anyhow!("Failed to get app data dir: {}", e))?;
     let dl_dir = app_data_dir.join("downloads");
 
+    // Early return if directory doesn't exist yet.
     if !dl_dir.exists() {
         return Ok(());
     }
 
-    let mut count = 0;
+    // Iterate through directory and remove each file.
     for entry in fs::read_dir(dl_dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
             if let Err(e) = fs::remove_file(&path) {
                 eprintln!("Failed to remove temp file {:?}: {}", path, e);
-            } else {
-                count += 1;
             }
         }
-    }
-    
-    if count > 0 {
-        println!("Cleaned up {} temporary files from downloads.", count);
     }
     
     Ok(())
