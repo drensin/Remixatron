@@ -141,6 +141,15 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     // "Artist - Artist - Song Title" when displayed in favorites.
     let title = clean_title(&raw_title, &artist);
 
+    // 2c. Emit metadata immediately so the UI can update while downloading.
+    // This provides early feedback before the slow download completes.
+    let early_metadata = serde_json::json!({
+        "title": title,
+        "artist": artist,
+        "thumbnail_url": thumbnail_url
+    });
+    let _ = app.emit("download_metadata", early_metadata);
+
     let _ = app.emit("downloader_status", "Downloading Audio...");
 
     // 3. Download Audio by running yt-dlp directly as a subprocess.

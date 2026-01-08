@@ -708,6 +708,28 @@ window.addEventListener("DOMContentLoaded", () => {
         if (statusEl) statusEl.textContent = event.payload;
     });
 
+    // Listen for Early Metadata (fires before download completes)
+    listen('download_metadata', (event) => {
+        const meta = event.payload;
+        console.log("Early metadata received:", meta);
+
+        // Update track title immediately
+        if (trackTitleEl && meta.title) {
+            trackTitleEl.textContent = meta.title;
+        }
+
+        // Update album art from thumbnail URL
+        if (meta.thumbnail_url && albumArtImg) {
+            albumArtImg.src = meta.thumbnail_url;
+            albumArtImg.classList.remove("hidden");
+            if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
+        }
+
+        // Update favorites state with early metadata
+        if (meta.artist) currentTrackArtist = meta.artist;
+        if (meta.title) currentTrackTitle = meta.title;
+    });
+
 }, false); // End Event Listener
 
 // Global Error Handler
