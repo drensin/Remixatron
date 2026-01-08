@@ -75,6 +75,10 @@ async function startRemix() {
         // Clear previous visualization state
         viz.clear();
 
+        // Reset progress bar to 0% for new analysis
+        const progressFill = document.querySelector(".progress-bar-fill");
+        if (progressFill) progressFill.style.width = "0%";
+
         // UI: Reset Pause State
         isPaused = false;
         if (pauseBtn) {
