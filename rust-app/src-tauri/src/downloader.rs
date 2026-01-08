@@ -13,7 +13,19 @@ pub struct DownloadResult {
     pub thumbnail_path: Option<PathBuf>,
 }
 
-/// Initializes the downloader by ensuring binaries exist.
+/// Initializes the downloader by ensuring binaries exist and are up-to-date.
+///
+/// This function:
+/// 1. Resolves the app's local data directory paths.
+/// 2. Creates the `bin` and `downloads` directories if they don't exist.
+/// 3. Downloads yt-dlp and ffmpeg binaries if missing.
+/// 4. Updates yt-dlp to the latest version (prevents stale binary 403 errors).
+///
+/// # Arguments
+/// * `app` - The Tauri application handle.
+///
+/// # Returns
+/// The path to the bin directory containing the executables.
 pub async fn init_downloader(app: AppHandle) -> Result<PathBuf> {
     // 1. Resolve Local Data Paths
     let app_data_dir = app.path().app_local_data_dir()
@@ -33,9 +45,16 @@ pub async fn init_downloader(app: AppHandle) -> Result<PathBuf> {
     if !bin_dir.exists() { fs::create_dir_all(&bin_dir)?; }
     if !dl_dir.exists() { fs::create_dir_all(&dl_dir)?; }
 
-    let _fetcher = Youtube::with_new_binaries(bin_dir.clone(), dl_dir)
+    let fetcher = Youtube::with_new_binaries(bin_dir.clone(), dl_dir)
         .await
         .map_err(|e| anyhow!("Failed to setup yt-dlp binaries: {}", e))?;
+
+    // 4. Update yt-dlp to the latest version.
+    // YouTube frequently changes their API, so stale yt-dlp versions fail with 403 errors.
+    let _ = app.emit("downloader_status", "Updating yt-dlp...");
+    if let Err(e) = fetcher.update_downloader().await {
+        eprintln!("Warning: Failed to update yt-dlp: {}. Continuing with existing version.", e);
+    }
 
     let _ = app.emit("downloader_status", "Downloader Ready!");
     
@@ -57,8 +76,6 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     
     let bin_dir = app_data_dir.join("bin");
     let dl_dir = app_data_dir.join("downloads");
-    
-    let _ = app.emit("downloader_status", "Init Downloader...");
 
     let _ = app.emit("downloader_status", "Init Downloader...");
 
@@ -66,8 +83,8 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     // Safe to do because playback engine loads file into RAM.
     let _ = cleanup_downloads(&app);
 
-    // 1. Get Fetcher
-    let fetcher = Youtube::with_new_binaries(bin_dir, dl_dir.clone())
+    // 1. Get Fetcher (for metadata only - we use subprocess for download).
+    let fetcher = Youtube::with_new_binaries(bin_dir.clone(), dl_dir.clone())
         .await
         .map_err(|e| anyhow!("Failed to load downloader: {}", e))?;
 
@@ -78,9 +95,9 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
         .await
         .map_err(|e| anyhow!("Failed to fetch video info: {}", e))?;
 
-    let raw_title = video.title;
-    let artist = video.channel; // Field is 'channel', not 'uploader', and it is a String (not Option)
-    let thumbnail_url = video.thumbnail;
+    let raw_title = video.title.clone();
+    let artist = video.channel.clone();
+    let thumbnail_url = video.thumbnail.clone();
 
     // 2b. Clean up title to remove redundant artist prefix.
     // Many YouTube videos are titled "Artist - Song Title", which leads to
@@ -89,23 +106,47 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
 
     let _ = app.emit("downloader_status", "Downloading Audio...");
 
-    // 3. Download Audio
+    // 3. Download Audio by running yt-dlp directly as a subprocess.
+    // NOTE: The crate's download methods (download_audio_stream_with_quality,
+    // download_format) use direct HTTP requests to stream URLs, which YouTube
+    // blocks with 403 Forbidden. Running yt-dlp directly as a subprocess works
+    // because yt-dlp handles signatures, throttling, and retries internally.
     let filename = format!("audio_{}.m4a", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis());
-    
-    use yt_dlp::model::selector::{AudioQuality, AudioCodecPreference};
+    let output_path = dl_dir.join(&filename);
 
-    fetcher.download_audio_stream_with_quality(
-        url,
-        &filename,
-        AudioQuality::Best,
-        AudioCodecPreference::AAC
-    ).await
-    .map_err(|e| anyhow!("Download failed: {}", e))?;
+    // Locate the yt-dlp binary in our bin directory.
+    let ytdlp_bin = bin_dir.join("yt-dlp");
+    if !ytdlp_bin.exists() {
+        return Err(anyhow!("yt-dlp binary not found at {:?}", ytdlp_bin));
+    }
+
+    // Run yt-dlp directly to download audio only.
+    // -f bestaudio: Select best audio format
+    // -x: Extract audio (convert to audio-only)
+    // --audio-format m4a: Output format
+    // -o: Output path template
+    let output = std::process::Command::new(&ytdlp_bin)
+        .arg("-f")
+        .arg("bestaudio")
+        .arg("-x")
+        .arg("--audio-format")
+        .arg("m4a")
+        .arg("-o")
+        .arg(&output_path)
+        .arg(&url)
+        .output()
+        .map_err(|e| anyhow!("Failed to execute yt-dlp: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("yt-dlp error: {}", stderr);
+        return Err(anyhow!("yt-dlp failed: {}", stderr));
+    }
         
     let _ = app.emit("downloader_status", "Download complete!");
     
     Ok(VideoMetadata {
-        path: dl_dir.join(filename).to_string_lossy().to_string(),
+        path: output_path.to_string_lossy().to_string(),
         title,
         artist,
         thumbnail_url: Some(thumbnail_url),

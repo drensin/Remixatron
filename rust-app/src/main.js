@@ -300,11 +300,15 @@ function renderFavoritesList(favorites) {
         icon.textContent = "music_note";
         li.appendChild(icon);
 
-        // Label: "Artist - Title".
+        // Label container (clips overflow) and label (can expand on hover).
+        const labelContainer = document.createElement("div");
+        labelContainer.className = "fav-label-container";
+
         const label = document.createElement("span");
         label.className = "fav-label";
         label.textContent = `${fav.artist} - ${fav.title}`;
-        li.appendChild(label);
+        labelContainer.appendChild(label);
+        li.appendChild(labelContainer);
 
         // Delete button (trash icon).
         const deleteBtn = document.createElement("button");
@@ -330,13 +334,22 @@ function renderFavoritesList(favorites) {
 
         // --- Teleprompter Setup ---
         // After appending, check if the label overflows its container.
-        // If so, add the 'overflows' class and set the scroll distance.
+        // If so, add the 'overflows' class and set the scroll distance and duration.
         requestAnimationFrame(() => {
-            if (label.scrollWidth > label.clientWidth) {
+            // Compare label's natural width to container's visible width.
+            if (label.scrollWidth > labelContainer.clientWidth) {
                 label.classList.add("overflows");
+
                 // Calculate how far to scroll: negative because we move left.
-                const overflowAmount = label.clientWidth - label.scrollWidth;
-                label.style.setProperty("--overflow-amount", `${overflowAmount}px`);
+                const overflowPx = label.scrollWidth - labelContainer.clientWidth;
+                label.style.setProperty("--overflow-amount", `${-overflowPx}px`);
+
+                // Calculate duration for consistent scroll speed.
+                // Target: ~50 pixels/second for comfortable reading.
+                // Add 30% for the pauses at start/end (15% + 15% in keyframes).
+                const scrollTime = overflowPx / 50; // seconds for the actual scroll
+                const totalDuration = Math.max(3, Math.min(15, scrollTime * 1.3));
+                label.style.setProperty("--scroll-duration", `${totalDuration}s`);
             }
         });
     });

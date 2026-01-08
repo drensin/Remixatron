@@ -436,26 +436,36 @@ body {
 .favorites-list li .fav-icon {
     color: var(--md-sys-color-on-surface-variant);
     font-size: 20px;
+    flex-shrink: 0;
 }
 
-.favorites-list li .fav-label {
+/* --- Favorites Label with Teleprompter Support --- */
+/* The label container clips overflow; the label itself can expand on hover. */
+.favorites-list li .fav-label-container {
     flex-grow: 1;
-    font-size: var(--md-sys-typescale-body-medium);
-    color: var(--md-sys-color-on-surface);
-    /* Truncate long titles */
-    white-space: nowrap;
+    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    /* Prepare for marquee animation */
-    display: inline-block;
     position: relative;
 }
 
+.favorites-list li .fav-label {
+    font-size: var(--md-sys-typescale-body-medium);
+    color: var(--md-sys-color-on-surface);
+    white-space: nowrap;
+    display: inline-block;
+    /* Default: truncate with ellipsis */
+    max-width: 100%;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
 /* --- Teleprompter/Marquee Animation for Long Labels --- */
-/* When hovered and the label overflows, animate it horizontally. */
+/* When hovered and the label overflows, expand to full width and animate. */
+/* Duration is dynamically set via JS based on overflow amount for consistent speed. */
 .favorites-list li:hover .fav-label.overflows {
-    animation: favorites-marquee 6s linear infinite;
-    text-overflow: clip;
+    max-width: none;
+    overflow: visible;
+    animation: favorites-marquee var(--scroll-duration, 6s) linear infinite;
 }
 
 @keyframes favorites-marquee {
