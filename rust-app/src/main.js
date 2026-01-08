@@ -29,6 +29,25 @@ let trackTitleEl;
 let albumArtImg;
 let albumArtPlaceholder;
 
+// Favorites State
+let favoriteBtn;
+let favoritesContainer;
+let favoritesToggle;
+let favoritesDropdown;
+let favoritesSearch;
+let favoritesList;
+let allFavorites = [];          // Full list from backend
+let currentTrackSource = null;  // Track source for the currently playing track
+let currentTrackArtist = null;  // Artist for the currently playing track
+let currentTrackTitle = null;   // Title for the currently playing track
+
+// Undo Toast State
+let undoToast;
+let toastMessage;
+let toastUndoBtn;
+let pendingDelete = null;       // Favorite awaiting permanent deletion
+let toastTimeout = null;        // Timer for auto-commit of delete
+
 /**
  * Initiates the Remixatron workflow.
  * 
@@ -53,6 +72,9 @@ async function startRemix() {
         floatingPlayer.classList.add("loading"); // Start Progress Bar
         analyzeBtn.disabled = true;
 
+        // Clear previous visualization state
+        viz.clear();
+
         // UI: Reset Pause State
         isPaused = false;
         if (pauseBtn) {
@@ -67,6 +89,14 @@ async function startRemix() {
         if (albumArtPlaceholder) albumArtPlaceholder.classList.remove("hidden");
 
         remoteMetadata = null;
+
+        // --- Early Favorites State ---
+        // Set the track source immediately so heart state is correct during loading.
+        // Artist/Title will be updated once metadata is available.
+        currentTrackSource = pathInput.value;
+        currentTrackArtist = null;
+        currentTrackTitle = null;
+        updateFavoriteButtonState();
 
         // 0. Handle URLs (Download First)
         if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -92,6 +122,10 @@ async function startRemix() {
                     albumArtImg.classList.remove("hidden");
                     if (albumArtPlaceholder) albumArtPlaceholder.classList.add("hidden");
                 }
+
+                // Update artist/title for favorites now that we have metadata.
+                currentTrackArtist = metadata.artist || "Unknown Artist";
+                currentTrackTitle = metadata.title || "Unknown Track";
             } catch (e) {
                 console.error("Download Step Failed:", e);
                 throw "Download Failed: " + e;
@@ -142,6 +176,13 @@ async function startRemix() {
         floatingPlayer.classList.remove("loading"); // Hide Progress Bar
         analyzeBtn.disabled = false;
 
+        // --- Favorites: Update artist/title for local files ---
+        // For URLs, these were set after download. For local files, set now.
+        if (!remoteMetadata) {
+            currentTrackArtist = "Unknown Artist";
+            currentTrackTitle = payload.title || "Unknown Track";
+        }
+
     } catch (e) {
         console.error(e);
         statusEl.textContent = "Error: " + e;
@@ -186,9 +227,330 @@ async function stopRemix() {
             statusEl.textContent = "Ready";
         }, 300);
 
+        // Reset favorites state.
+        currentTrackSource = null;
+        currentTrackArtist = null;
+        currentTrackTitle = null;
+
     } catch (e) {
         console.error(e);
     }
+}
+
+// =============================================================================
+// Favorites Functions
+// =============================================================================
+
+/**
+ * Loads all favorites from the backend and populates the dropdown.
+ * 
+ * This function is called on app initialization and after any add/remove operation.
+ * If favorites exist, the container is shown; otherwise, it remains hidden.
+ * 
+ * @returns {Promise<void>}
+ */
+async function loadFavorites() {
+    try {
+        allFavorites = await invoke("list_favorites");
+        console.log("Loaded favorites:", allFavorites.length);
+
+        // Show or hide the favorites container based on whether any exist.
+        if (allFavorites.length > 0) {
+            favoritesContainer.classList.remove("hidden");
+        } else {
+            favoritesContainer.classList.add("hidden");
+        }
+
+        // Render the list (with no filter).
+        renderFavoritesList(allFavorites);
+
+    } catch (e) {
+        console.error("Failed to load favorites:", e);
+    }
+}
+
+/**
+ * Renders the favorites list in the dropdown.
+ * 
+ * @param {Array} favorites - The filtered or full list of favorites to display.
+ */
+function renderFavoritesList(favorites) {
+    if (!favoritesList) return;
+
+    // Clear existing items.
+    favoritesList.innerHTML = "";
+
+    // Show empty state if no favorites.
+    if (favorites.length === 0) {
+        const emptyLi = document.createElement("li");
+        emptyLi.className = "empty-state";
+        emptyLi.textContent = "No favorites found.";
+        favoritesList.appendChild(emptyLi);
+        return;
+    }
+
+    // Create a list item for each favorite.
+    favorites.forEach(fav => {
+        const li = document.createElement("li");
+        li.dataset.source = fav.source; // Store source for selection.
+
+        // Music note icon.
+        const icon = document.createElement("span");
+        icon.className = "material-symbols-outlined fav-icon";
+        icon.textContent = "music_note";
+        li.appendChild(icon);
+
+        // Label: "Artist - Title".
+        const label = document.createElement("span");
+        label.className = "fav-label";
+        label.textContent = `${fav.artist} - ${fav.title}`;
+        li.appendChild(label);
+
+        // Delete button (trash icon).
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "fav-delete-btn";
+        deleteBtn.title = "Remove from Favorites";
+        deleteBtn.innerHTML = '<span class="material-symbols-outlined">delete_outline</span>';
+        li.appendChild(deleteBtn);
+
+        // Delete button click: Show undo toast instead of immediate delete.
+        deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); // Prevent triggering the play handler.
+            initiateDelete(fav);
+        });
+
+        // Click handler: Select and play this favorite.
+        li.addEventListener("click", () => {
+            pathInput.value = fav.source;
+            closeFavoritesDropdown();
+            startRemix();
+        });
+
+        favoritesList.appendChild(li);
+
+        // --- Teleprompter Setup ---
+        // After appending, check if the label overflows its container.
+        // If so, add the 'overflows' class and set the scroll distance.
+        requestAnimationFrame(() => {
+            if (label.scrollWidth > label.clientWidth) {
+                label.classList.add("overflows");
+                // Calculate how far to scroll: negative because we move left.
+                const overflowAmount = label.clientWidth - label.scrollWidth;
+                label.style.setProperty("--overflow-amount", `${overflowAmount}px`);
+            }
+        });
+    });
+}
+
+/**
+ * Filters the favorites list based on the search input.
+ * 
+ * Performs a case-insensitive search against both artist and title.
+ */
+function filterFavorites() {
+    const query = favoritesSearch.value.toLowerCase().trim();
+
+    if (!query) {
+        renderFavoritesList(allFavorites);
+        return;
+    }
+
+    const filtered = allFavorites.filter(fav => {
+        const combined = `${fav.artist} ${fav.title}`.toLowerCase();
+        return combined.includes(query);
+    });
+
+    renderFavoritesList(filtered);
+}
+
+/**
+ * Toggles the Favorite (heart) button state based on whether the current track is a favorite.
+ */
+async function updateFavoriteButtonState() {
+    if (!favoriteBtn || !currentTrackSource) return;
+
+    const isFav = await invoke("check_is_favorite", { source: currentTrackSource });
+    const icon = favoriteBtn.querySelector(".material-symbols-outlined");
+
+    if (isFav) {
+        favoriteBtn.classList.add("active");
+        icon.textContent = "favorite";
+        favoriteBtn.title = "Remove from Favorites";
+    } else {
+        favoriteBtn.classList.remove("active");
+        icon.textContent = "favorite_border";
+        favoriteBtn.title = "Add to Favorites";
+    }
+}
+
+/**
+ * Handles the click on the favorite button: toggle add/remove.
+ */
+async function toggleFavorite() {
+    if (!currentTrackSource) return;
+
+    try {
+        const isFav = await invoke("check_is_favorite", { source: currentTrackSource });
+
+        if (isFav) {
+            // Remove from favorites.
+            await invoke("remove_favorite", { source: currentTrackSource });
+            console.log("Removed from favorites:", currentTrackSource);
+        } else {
+            // Add to favorites.
+            await invoke("add_favorite", {
+                source: currentTrackSource,
+                artist: currentTrackArtist,
+                title: currentTrackTitle,
+            });
+            console.log("Added to favorites:", currentTrackSource);
+        }
+
+        // Refresh UI.
+        await loadFavorites();
+        updateFavoriteButtonState();
+
+    } catch (e) {
+        console.error("Failed to toggle favorite:", e);
+    }
+}
+
+/**
+ * Confirms deletion of a favorite via a simple confirmation (long-press).
+ * 
+ * @param {object} fav - The favorite object to delete.
+ * @deprecated Replaced by initiateDelete() with undo toast.
+ */
+// async function confirmDeleteFavorite(fav) { ... } // REMOVED
+
+// =============================================================================
+// Undo Toast Delete System
+// =============================================================================
+
+/**
+ * Initiates a delete operation with undo capability.
+ * 
+ * The favorite is immediately removed from the UI (optimistic update),
+ * and a toast is shown with an Undo button. If the user does not click Undo
+ * within 5 seconds, the delete is committed to the backend.
+ * 
+ * @param {object} fav - The favorite object to delete.
+ */
+function initiateDelete(fav) {
+    // If there's already a pending delete, commit it first.
+    if (pendingDelete) {
+        commitDelete();
+    }
+
+    // Store the favorite for potential undo.
+    pendingDelete = fav;
+
+    // Optimistically remove from the local list and re-render.
+    allFavorites = allFavorites.filter(f => f.source !== fav.source);
+    renderFavoritesList(allFavorites);
+
+    // Update favorites visibility (hide container if empty).
+    if (allFavorites.length === 0) {
+        favoritesContainer.classList.add("hidden");
+        closeFavoritesDropdown();
+    }
+
+    // Update heart button if the deleted item is the current track.
+    if (currentTrackSource === fav.source) {
+        updateFavoriteButtonState();
+    }
+
+    // Show the undo toast.
+    toastMessage.textContent = `Removed "${fav.title}"`;
+    undoToast.classList.remove("hidden");
+
+    // Auto-commit after 5 seconds.
+    toastTimeout = setTimeout(() => {
+        commitDelete();
+    }, 5000);
+}
+
+/**
+ * Undoes the pending delete operation.
+ * 
+ * Re-adds the favorite to the local list and hides the toast.
+ * No backend call is needed because we never actually deleted it yet.
+ */
+async function undoDelete() {
+    if (!pendingDelete) return;
+
+    // Clear the auto-commit timer.
+    clearTimeout(toastTimeout);
+
+    // Re-add to local list.
+    allFavorites.push(pendingDelete);
+
+    // Re-sort by artist, then title.
+    allFavorites.sort((a, b) => {
+        const artistCmp = a.artist.toLowerCase().localeCompare(b.artist.toLowerCase());
+        if (artistCmp !== 0) return artistCmp;
+        return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+    });
+
+    // Re-render and show container.
+    renderFavoritesList(allFavorites);
+    favoritesContainer.classList.remove("hidden");
+
+    // Update heart button.
+    updateFavoriteButtonState();
+
+    // Hide toast and clear pending state.
+    hideUndoToast();
+    console.log("Undo: Restored favorite:", pendingDelete.title);
+    pendingDelete = null;
+}
+
+/**
+ * Commits the pending delete to the backend.
+ * 
+ * Called either when the toast times out or when a new delete is initiated
+ * while one is already pending.
+ */
+async function commitDelete() {
+    if (!pendingDelete) return;
+
+    try {
+        await invoke("remove_favorite", { source: pendingDelete.source });
+        console.log("Committed delete:", pendingDelete.title);
+    } catch (e) {
+        console.error("Failed to commit delete:", e);
+    }
+
+    // Hide toast and clear state.
+    hideUndoToast();
+    pendingDelete = null;
+}
+
+/**
+ * Hides the undo toast.
+ */
+function hideUndoToast() {
+    clearTimeout(toastTimeout);
+    if (undoToast) undoToast.classList.add("hidden");
+}
+
+/**
+ * Opens the favorites dropdown and marks the toggle button as open.
+ */
+function openFavoritesDropdown() {
+    if (favoritesDropdown) favoritesDropdown.classList.remove("hidden");
+    if (favoritesToggle) favoritesToggle.classList.add("open");
+    if (favoritesSearch) favoritesSearch.focus();
+}
+
+/**
+ * Closes the favorites dropdown and resets the toggle button state.
+ */
+function closeFavoritesDropdown() {
+    if (favoritesDropdown) favoritesDropdown.classList.add("hidden");
+    if (favoritesToggle) favoritesToggle.classList.remove("open");
+    if (favoritesSearch) favoritesSearch.value = ""; // Reset search.
+    renderFavoritesList(allFavorites); // Reset to full list.
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -235,6 +597,55 @@ window.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+
+    // --- Favorites UI Bindings ---
+    favoriteBtn = document.querySelector("#favorite-btn");
+    favoritesContainer = document.querySelector("#favorites-container");
+    favoritesToggle = document.querySelector("#favorites-toggle");
+    favoritesDropdown = document.querySelector("#favorites-dropdown");
+    favoritesSearch = document.querySelector("#favorites-search");
+    favoritesList = document.querySelector("#favorites-list");
+
+    // Load favorites on startup.
+    loadFavorites();
+
+    // --- Undo Toast Bindings ---
+    undoToast = document.querySelector("#undo-toast");
+    toastMessage = document.querySelector("#toast-message");
+    toastUndoBtn = document.querySelector("#toast-undo-btn");
+
+    if (toastUndoBtn) {
+        toastUndoBtn.addEventListener("click", undoDelete);
+    }
+
+    // Bind Favorite (Heart) Button.
+    if (favoriteBtn) {
+        favoriteBtn.addEventListener("click", toggleFavorite);
+    }
+
+    // Bind Favorites Toggle Button (dropdown open/close).
+    if (favoritesToggle) {
+        favoritesToggle.addEventListener("click", () => {
+            const isHidden = favoritesDropdown.classList.contains("hidden");
+            if (isHidden) {
+                openFavoritesDropdown();
+            } else {
+                closeFavoritesDropdown();
+            }
+        });
+    }
+
+    // Bind Search Input for Filtering.
+    if (favoritesSearch) {
+        favoritesSearch.addEventListener("input", filterFavorites);
+    }
+
+    // Close dropdown when clicking outside.
+    document.addEventListener("click", (e) => {
+        if (favoritesContainer && !favoritesContainer.contains(e.target)) {
+            closeFavoritesDropdown();
+        }
+    });
 
     // Listen for Playback Ticks
     listen('playback_tick', (event) => {

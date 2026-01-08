@@ -30,7 +30,8 @@ pub mod audio_backend;
 pub mod workflow;
 pub mod audio;
 pub mod playback_engine;
-pub mod downloader; 
+pub mod downloader;
+pub mod favorites;
 
 use workflow::Remixatron;
 use playback_engine::{JukeboxEngine, Beat};
@@ -322,6 +323,68 @@ async fn set_paused(state: State<'_, AppState>, paused: bool) -> Result<(), Stri
     Ok(())
 }
 
+// =============================================================================
+// Favorites Commands
+// =============================================================================
+
+/// Returns all saved favorites, sorted by artist (ascending), then by title (ascending).
+///
+/// This command reads from the persistent JSON file in the app data directory.
+/// If no favorites exist or the file is missing/corrupted, an empty list is returned.
+///
+/// # Returns
+/// A vector of `Favorite` objects.
+#[tauri::command]
+async fn list_favorites(app: AppHandle) -> Vec<favorites::Favorite> {
+    favorites::load_favorites(&app)
+}
+
+/// Adds a new favorite or updates an existing one (upsert behavior).
+///
+/// If a favorite with the same `source` already exists, its metadata is updated.
+/// Otherwise, a new favorite is created and persisted.
+///
+/// # Arguments
+/// * `source` - The file path or URL of the track.
+/// * `artist` - The artist name for display.
+/// * `title` - The track title for display.
+///
+/// # Returns
+/// The `Favorite` object that was added or updated.
+#[tauri::command]
+async fn add_favorite(
+    app: AppHandle,
+    source: String,
+    artist: String,
+    title: String,
+) -> Result<favorites::Favorite, String> {
+    favorites::add_favorite(&app, source, artist, title)
+}
+
+/// Removes a favorite by its source identifier.
+///
+/// If no favorite with the given source exists, this is a silent no-op.
+///
+/// # Arguments
+/// * `source` - The file path or URL of the track to remove.
+#[tauri::command]
+async fn remove_favorite(app: AppHandle, source: String) -> Result<(), String> {
+    favorites::remove_favorite(&app, &source)
+}
+
+/// Checks whether a given source is already saved as a favorite.
+///
+/// # Arguments
+/// * `source` - The file path or URL to check.
+///
+/// # Returns
+/// `true` if the source exists in the favorites list, `false` otherwise.
+#[tauri::command]
+async fn check_is_favorite(app: AppHandle, source: String) -> bool {
+    favorites::is_favorite(&app, &source)
+}
+
+
 /// Starts the infinite playback loop.
 ///
 /// Spawns a dedicated background thread to handle the playback without blocking the Tauri
@@ -461,8 +524,11 @@ pub fn run() {
             play_track, 
             stop_playback, 
             import_url,
-            set_paused
-        ])
+            set_paused,
+            list_favorites,
+            add_favorite,
+            remove_favorite,
+            check_is_favorite])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

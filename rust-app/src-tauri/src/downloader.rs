@@ -78,9 +78,14 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
         .await
         .map_err(|e| anyhow!("Failed to fetch video info: {}", e))?;
 
-    let title = video.title;
+    let raw_title = video.title;
     let artist = video.channel; // Field is 'channel', not 'uploader', and it is a String (not Option)
     let thumbnail_url = video.thumbnail;
+
+    // 2b. Clean up title to remove redundant artist prefix.
+    // Many YouTube videos are titled "Artist - Song Title", which leads to
+    // "Artist - Artist - Song Title" when displayed in favorites.
+    let title = clean_title(&raw_title, &artist);
 
     let _ = app.emit("downloader_status", "Downloading Audio...");
 
@@ -136,4 +141,65 @@ fn cleanup_downloads(app: &AppHandle) -> Result<()> {
     }
     
     Ok(())
+}
+
+/// Cleans a video title by removing a redundant artist prefix.
+///
+/// Many YouTube videos are titled in the format "Artist - Song Title" while the
+/// channel name (artist) is also available separately. When displayed as
+/// "Artist - Artist - Song Title" in favorites, this is redundant and confusing.
+///
+/// This function detects if the title starts with the artist name (case-insensitive)
+/// and removes it along with any common separator characters (" - ", " – ", " | ", ": ").
+///
+/// # Arguments
+/// * `raw_title` - The original video title from YouTube metadata.
+/// * `artist` - The channel/artist name.
+///
+/// # Returns
+/// A cleaned title with the redundant artist prefix removed, or the original title
+/// if no redundancy was detected.
+///
+/// # Examples
+/// - `clean_title("Peter Gabriel - Big Time", "Peter Gabriel")` → `"Big Time"`
+/// - `clean_title("Big Time", "Peter Gabriel")` → `"Big Time"` (no change)
+/// - `clean_title("PETER GABRIEL: In Your Eyes", "Peter Gabriel")` → `"In Your Eyes"`
+fn clean_title(raw_title: &str, artist: &str) -> String {
+    // Perform case-insensitive comparison.
+    let title_lower = raw_title.to_lowercase();
+    let artist_lower = artist.to_lowercase();
+
+    // Check if the title starts with the artist name.
+    if !title_lower.starts_with(&artist_lower) {
+        // No redundancy detected; return original title.
+        return raw_title.to_string();
+    }
+
+    // Remove the artist prefix.
+    let remainder = &raw_title[artist.len()..];
+
+    // Define common separator patterns to strip.
+    // These are sorted by length (longest first) to ensure proper matching.
+    let separators = [" - ", " – ", " — ", " | ", ": ", "-", "–", "—", "|", ":"];
+
+    let mut cleaned = remainder;
+
+    // Attempt to strip each separator pattern.
+    for sep in separators {
+        if let Some(stripped) = cleaned.strip_prefix(sep) {
+            cleaned = stripped;
+            break;
+        }
+    }
+
+    // Trim any remaining leading/trailing whitespace.
+    let cleaned = cleaned.trim();
+
+    // Safety check: if we stripped everything or only have punctuation left,
+    // fall back to the original title.
+    if cleaned.is_empty() || !cleaned.chars().any(|c| c.is_alphanumeric()) {
+        return raw_title.to_string();
+    }
+
+    cleaned.to_string()
 }

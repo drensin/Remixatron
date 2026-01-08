@@ -40,6 +40,27 @@ export class InfiniteJukeboxViz {
     }
 
     /**
+     * Clears the visualization canvas and resets all state.
+     * 
+     * Should be called when starting a new track to ensure the previous
+     * visualization doesn't persist during loading.
+     */
+    clear() {
+        // Reset data
+        this.beats = [];
+        this.segments = [];
+        this.novelty = null;
+        this.peaks = [];
+        this.duration = 0;
+        this.currentSeqPos = 0;
+        this.currentSeqLen = 0;
+
+        // Clear canvas
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.width, this.height);
+    }
+
+    /**
      * Resizes the canvas to match the parent container (HiDPI aware).
      * 
      * Calculates the radius, center point, and scaling factor for the visualization.

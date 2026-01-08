@@ -34,6 +34,21 @@
 
             <input id="file-path" class="m3-input" type="text" placeholder="Local file path or YouTube URL...">
 
+            <!-- Favorites Dropdown -->
+            <div id="favorites-container" class="favorites-container hidden">
+                <button id="favorites-toggle" class="m3-text-btn">
+                    <span class="material-symbols-outlined">star</span>
+                    <span>Favorites</span>
+                    <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                </button>
+                <div id="favorites-dropdown" class="favorites-dropdown hidden">
+                    <input id="favorites-search" class="favorites-search" type="text" placeholder="Search favorites...">
+                    <ul id="favorites-list" class="favorites-list">
+                        <!-- Populated dynamically by main.js -->
+                    </ul>
+                </div>
+            </div>
+
             <button id="analyze-btn" class="m3-fab-extended">
                 <span class="material-symbols-outlined">play_arrow</span> Start Remix
             </button>
@@ -62,7 +77,16 @@
                 <button id="stop-btn" class="m3-icon-btn" title="Stop Playback">
                     <span class="material-symbols-outlined">stop_circle</span>
                 </button>
+                <button id="favorite-btn" class="m3-icon-btn" title="Add to Favorites">
+                    <span class="material-symbols-outlined">favorite_border</span>
+                </button>
             </div>
+        </div>
+
+        <!-- Undo Toast (for delete confirmation) -->
+        <div id="undo-toast" class="undo-toast hidden interactive">
+            <span id="toast-message" class="toast-message">Removed from Favorites</span>
+            <button id="toast-undo-btn" class="toast-action">Undo</button>
         </div>
 
     </div>
