@@ -41,4 +41,5 @@ rand = "0.8.5"
 rayon = "1.8"
 base64 = "0.22.1"
 yt-dlp = "1.4.7"
+lzma-sys = { version = "0.1", features = ["static"] }
 
