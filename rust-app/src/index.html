@@ -89,6 +89,61 @@
             <button id="toast-undo-btn" class="toast-action">Undo</button>
         </div>
 
+        <!-- Error Snackbar (for detailed error messages) -->
+        <div id="error-snackbar" class="error-snackbar hidden interactive">
+            <span class="material-symbols-outlined snackbar-icon">error</span>
+            <span id="snackbar-message" class="snackbar-message">Error message here</span>
+            <button id="snackbar-copy" class="snackbar-btn" title="Copy error to clipboard">
+                <span class="material-symbols-outlined">content_copy</span>
+            </button>
+            <button id="snackbar-dismiss" class="snackbar-btn" title="Dismiss">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <!-- Missing Dependencies Dialog (blocks app) -->
+        <div id="missing-deps-dialog" class="dialog-overlay hidden">
+            <div class="dialog interactive">
+                <h2>Required Tools Not Found</h2>
+                <p>Remixatron requires <strong>yt-dlp</strong> and <strong>ffmpeg</strong> to download audio from URLs.
+                </p>
+                <div id="deps-status" class="deps-status">
+                    <!-- Populated by JavaScript -->
+                </div>
+                <p class="dialog-hint">Install the missing tools and restart Remixatron.</p>
+                <p class="dialog-link">
+                    <a href="https://github.com/yt-dlp/yt-dlp#installation" target="_blank">yt-dlp Installation
+                        Guide</a>
+                </p>
+                <div class="dialog-actions">
+                    <button id="exit-app-btn" class="m3-fab-extended">Exit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Outdated yt-dlp Dialog (dismissible) -->
+        <div id="outdated-ytdlp-dialog" class="dialog-overlay hidden">
+            <div class="dialog interactive">
+                <h2>Download Failed</h2>
+                <p id="ytdlp-version-msg">Your yt-dlp may be outdated.</p>
+                <p>YouTube frequently changes their API which breaks older versions. Update using the method you
+                    installed with:</p>
+                <ul class="update-options">
+                    <li><code>yt-dlp -U</code> (standalone binary)</li>
+                    <li><code>pip install -U yt-dlp</code> (pip)</li>
+                    <li><code>brew upgrade yt-dlp</code> (Homebrew)</li>
+                </ul>
+                <p class="dialog-link">
+                    <a id="ytdlp-update-link" href="https://github.com/yt-dlp/yt-dlp#update" target="_blank">Full Update
+                        Guide</a>
+                </p>
+                <div class="dialog-actions">
+                    <button id="copy-link-btn" class="m3-text-btn">Copy Link</button>
+                    <button id="dismiss-outdated-btn" class="m3-fab-extended">OK</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
 </body>

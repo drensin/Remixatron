@@ -48,6 +48,14 @@ let toastUndoBtn;
 let pendingDelete = null;       // Favorite awaiting permanent deletion
 let toastTimeout = null;        // Timer for auto-commit of delete
 
+// Dependency Status (from startup check)
+let dependencyStatus = null;    // { ytdlp_version, ffmpeg_version }
+
+// Error Dialog/Snackbar Elements
+let missingDepsDialog;
+let outdatedYtdlpDialog;
+let errorSnackbar;
+
 /**
  * Initiates the Remixatron workflow.
  * 
@@ -132,6 +140,16 @@ async function startRemix() {
                 currentTrackTitle = metadata.title || "Unknown Track";
             } catch (e) {
                 console.error("Download Step Failed:", e);
+
+                // Check if this is an outdated yt-dlp error (403, HTTP Error)
+                const errorStr = String(e);
+                if (errorStr.includes("OUTDATED_YTDLP") ||
+                    errorStr.includes("403") ||
+                    errorStr.includes("HTTP Error")) {
+                    showOutdatedYtdlpDialog();
+                    throw "Download failed - yt-dlp may be outdated";
+                }
+
                 throw "Download Failed: " + e;
             }
         } else {
@@ -189,11 +207,13 @@ async function startRemix() {
 
     } catch (e) {
         console.error(e);
-        statusEl.textContent = "Error: " + e;
+
+        // Show full error in snackbar (not truncated status)
+        showErrorSnackbar(String(e));
+        statusEl.textContent = "Error occurred";
         analyzeBtn.disabled = false;
 
-        // UI Transition: Revert on fatal error?
-        // Keep player visible so error can be seen
+        // UI Transition: Revert on fatal error
         floatingPlayer.classList.remove("loading");
     }
 }
@@ -734,7 +754,186 @@ window.addEventListener("DOMContentLoaded", () => {
         if (meta.title) currentTrackTitle = meta.title;
     });
 
+    // --- Dialog Element Bindings ---
+    missingDepsDialog = document.querySelector("#missing-deps-dialog");
+    outdatedYtdlpDialog = document.querySelector("#outdated-ytdlp-dialog");
+
+    // Exit App Button (in missing deps dialog)
+    const exitAppBtn = document.querySelector("#exit-app-btn");
+    if (exitAppBtn) {
+        exitAppBtn.addEventListener("click", () => {
+            // Close the Tauri window
+            window.__TAURI__.window.getCurrentWindow().close();
+        });
+    }
+
+    // Error Snackbar Binding
+    errorSnackbar = document.querySelector("#error-snackbar");
+    const snackbarDismiss = document.querySelector("#snackbar-dismiss");
+    if (snackbarDismiss) {
+        snackbarDismiss.addEventListener("click", hideErrorSnackbar);
+    }
+
+    // Copy Error Button (in snackbar)
+    const snackbarCopy = document.querySelector("#snackbar-copy");
+    if (snackbarCopy) {
+        snackbarCopy.addEventListener("click", async () => {
+            const msgEl = document.querySelector("#snackbar-message");
+            if (msgEl) {
+                try {
+                    await navigator.clipboard.writeText(msgEl.textContent);
+                    // Visual feedback
+                    snackbarCopy.classList.add("copied");
+                    setTimeout(() => snackbarCopy.classList.remove("copied"), 2000);
+                } catch (e) {
+                    console.error("Failed to copy:", e);
+                }
+            }
+        });
+    }
+
+    // Dismiss outdated dialog
+    const dismissOutdatedBtn = document.querySelector("#dismiss-outdated-btn");
+    if (dismissOutdatedBtn) {
+        dismissOutdatedBtn.addEventListener("click", () => {
+            if (outdatedYtdlpDialog) outdatedYtdlpDialog.classList.add("hidden");
+        });
+    }
+
+    // Copy link button
+    const copyLinkBtn = document.querySelector("#copy-link-btn");
+    if (copyLinkBtn) {
+        copyLinkBtn.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText("https://github.com/yt-dlp/yt-dlp#update");
+                copyLinkBtn.textContent = "Copied!";
+                setTimeout(() => { copyLinkBtn.textContent = "Copy Link"; }, 2000);
+            } catch (e) {
+                console.error("Failed to copy:", e);
+            }
+        });
+    }
+
+    // Check dependencies on startup
+    checkDependencies();
+
 }, false); // End Event Listener
+
+// =============================================================================
+// Dependency Check Functions
+// =============================================================================
+
+/**
+ * Checks if required external tools (yt-dlp, ffmpeg) are available.
+ * Shows a blocking dialog and exits if tools are missing.
+ */
+async function checkDependencies() {
+    try {
+        dependencyStatus = await invoke("check_dependencies");
+        console.log("Dependency status:", dependencyStatus);
+
+        const ytdlpMissing = !dependencyStatus.ytdlp_version;
+        const ffmpegMissing = !dependencyStatus.ffmpeg_version;
+
+        if (ytdlpMissing || ffmpegMissing) {
+            showMissingDepsDialog(dependencyStatus);
+        }
+    } catch (e) {
+        console.error("Failed to check dependencies:", e);
+    }
+}
+
+/**
+ * Shows the missing dependencies dialog with status for each tool.
+ * 
+ * @param {object} status - The dependency status from backend.
+ */
+function showMissingDepsDialog(status) {
+    if (!missingDepsDialog) return;
+
+    // Build status HTML
+    const depsStatusEl = document.querySelector("#deps-status");
+    if (depsStatusEl) {
+        const ytdlpStatus = status.ytdlp_version
+            ? `<div class="dep-item found">✓ yt-dlp (${status.ytdlp_version})</div>`
+            : `<div class="dep-item missing">✗ yt-dlp (not found)</div>`;
+
+        const ffmpegStatus = status.ffmpeg_version
+            ? `<div class="dep-item found">✓ ffmpeg (found)</div>`
+            : `<div class="dep-item missing">✗ ffmpeg (not found)</div>`;
+
+        depsStatusEl.innerHTML = ytdlpStatus + ffmpegStatus;
+    }
+
+    missingDepsDialog.classList.remove("hidden");
+}
+
+/**
+ * Shows the outdated yt-dlp dialog with version info.
+ */
+function showOutdatedYtdlpDialog() {
+    if (!outdatedYtdlpDialog) return;
+
+    // Update version message if we have it
+    const versionMsg = document.querySelector("#ytdlp-version-msg");
+    if (versionMsg && dependencyStatus?.ytdlp_version) {
+        versionMsg.textContent = `Your yt-dlp version: ${dependencyStatus.ytdlp_version}`;
+    }
+
+    outdatedYtdlpDialog.classList.remove("hidden");
+}
+
+// =============================================================================
+// Error Snackbar Functions
+// =============================================================================
+
+/**
+ * Shows the error snackbar with a detailed message.
+ * 
+ * @param {string} message - The full error message to display.
+ */
+function showErrorSnackbar(message) {
+    if (!errorSnackbar) return;
+
+    const msgEl = document.querySelector("#snackbar-message");
+    if (msgEl) {
+        // Clean up error message for display
+        let cleanMsg = message;
+
+        // Remove repetitive "Download Failed:" prefixes
+        cleanMsg = cleanMsg.replace(/^Download Failed:\s*/i, "");
+        cleanMsg = cleanMsg.replace(/^Error:\s*/i, "");
+
+        msgEl.textContent = cleanMsg;
+    }
+
+    errorSnackbar.classList.remove("hidden");
+}
+
+/**
+ * Hides the error snackbar and returns to the onboarding screen.
+ * 
+ * Since an error means the user hit a dead end, we return to the
+ * track loading screen so they can try again.
+ */
+function hideErrorSnackbar() {
+    if (errorSnackbar) {
+        errorSnackbar.classList.add("hidden");
+    }
+
+    // Return to onboarding screen (same as stopRemix but without backend call)
+    if (floatingPlayer) {
+        floatingPlayer.classList.remove("visible");
+        floatingPlayer.classList.remove("loading");
+    }
+
+    // Wait for player to slide down before showing card
+    setTimeout(() => {
+        if (onboardingCard) {
+            onboardingCard.classList.remove("hidden");
+        }
+    }, 400);
+}
 
 // Global Error Handler
 window.addEventListener('error', (event) => {

@@ -593,3 +593,197 @@ body {
 .toast-action:hover {
     background: rgba(170, 204, 255, 0.15);
 }
+
+/* =============================================================================
+ * Error Snackbar (persistent error display)
+ * ============================================================================= */
+
+.error-snackbar {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--md-sys-color-error-container);
+    border: 1px solid var(--md-sys-color-error);
+    border-radius: var(--md-sys-shape-corner-medium);
+    padding: 16px 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 1500;
+    max-width: 600px;
+    min-width: 300px;
+}
+
+.error-snackbar.hidden {
+    display: none;
+}
+
+.error-snackbar .snackbar-icon {
+    color: var(--md-sys-color-error);
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.error-snackbar .snackbar-message {
+    color: var(--md-sys-color-on-error-container);
+    font-size: var(--md-sys-typescale-body-medium);
+    flex-grow: 1;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.error-snackbar .snackbar-btn {
+    background: transparent;
+    border: none;
+    color: var(--md-sys-color-on-error-container);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+.error-snackbar .snackbar-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.error-snackbar .snackbar-btn .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.error-snackbar .snackbar-btn.copied {
+    color: #4CAF50;
+    opacity: 1;
+}
+
+/* =============================================================================
+ * Dialog Overlay (for blocking errors)
+ * ============================================================================= */
+
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    pointer-events: auto;
+}
+
+.dialog-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+    display: none;
+}
+
+.dialog {
+    background-color: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--md-sys-shape-corner-large);
+    padding: 32px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.dialog h2 {
+    font-size: var(--md-sys-typescale-headline-large);
+    font-weight: 600;
+    color: var(--md-sys-color-on-surface);
+    margin: 0 0 16px 0;
+}
+
+.dialog p {
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: var(--md-sys-typescale-body-medium);
+    line-height: 1.6;
+    margin: 0 0 12px 0;
+}
+
+.dialog .dialog-hint {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+.dialog .dialog-link {
+    margin-top: 16px;
+}
+
+.dialog .dialog-link a {
+    color: var(--md-sys-color-primary);
+    text-decoration: none;
+}
+
+.dialog .dialog-link a:hover {
+    text-decoration: underline;
+}
+
+.dialog-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+.dialog-actions .m3-text-btn {
+    width: auto;
+    padding: 12px 20px;
+}
+
+/* Dependency Status List */
+.deps-status {
+    background: var(--md-sys-color-surface-container-high);
+    border-radius: var(--md-sys-shape-corner-small);
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.deps-status .dep-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.deps-status .dep-item.found {
+    color: #4CAF50;
+}
+
+.deps-status .dep-item.missing {
+    color: var(--md-sys-color-error);
+}
+
+/* Update Options List */
+.update-options {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0;
+}
+
+.update-options li {
+    padding: 6px 0;
+    color: var(--md-sys-color-on-surface-variant);
+}
+
+.update-options code {
+    background: var(--md-sys-color-surface-container-high);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    color: var(--md-sys-color-on-surface);
+}

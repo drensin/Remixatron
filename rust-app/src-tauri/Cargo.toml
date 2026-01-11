@@ -40,7 +40,6 @@ num-complex = "0.4.6"
 rand = "0.8.5"
 rayon = "1.8"
 base64 = "0.22.1"
-yt-dlp = "1.4.7"
 nalgebra = "0.33"
 lzma-sys = { version = "0.1", features = ["static"] }
 

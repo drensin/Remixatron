@@ -287,6 +287,18 @@ async fn import_url(app: AppHandle, url: String) -> Result<downloader::VideoMeta
     downloader::download_url(app, url).await.map_err(|e| e.to_string())
 }
 
+/// Checks if required external dependencies (yt-dlp and ffmpeg) are available.
+///
+/// This command should be called at startup. If any dependencies are missing,
+/// the frontend should display an error dialog and exit the application.
+///
+/// # Returns
+/// `DependencyStatus` with version strings for available tools, None for missing.
+#[tauri::command]
+fn check_dependencies() -> downloader::DependencyStatus {
+    downloader::check_dependencies()
+}
+
 /// Signals the running playback thread to stop safely.
 ///
 /// This resolves the "Mutex Deadlock" by allowing the playback thread to exit its loop
@@ -507,14 +519,8 @@ pub fn run() {
                 playback_tx: Arc::new(Mutex::new(None)),
             });
 
-            // Initialize Downloader in background
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match downloader::init_downloader(handle.clone()).await {
-                    Ok(path) => println!("Downloader Initialized at {:?}", path),
-                    Err(e) => eprintln!("Downloader Init Failed: {}", e),
-                }
-            });
+            // NOTE: No downloader init here - frontend checks dependencies on startup
+            // and shows error dialog if yt-dlp/ffmpeg missing.
 
             Ok(())
         })
@@ -524,6 +530,7 @@ pub fn run() {
             play_track, 
             stop_playback, 
             import_url,
+            check_dependencies,
             set_paused,
             list_favorites,
             add_favorite,
