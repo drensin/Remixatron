@@ -47,8 +47,8 @@ impl CQTProcessor {
             self.qdft.qdft_scalar(&sample, &mut dft);
             
             // Decimate output
-            if i > 0 && i % self.hop_length == 0 {
-                if frame_idx < n_frames {
+            if i > 0 && i % self.hop_length == 0
+                && frame_idx < n_frames {
                     for (bin_idx, complex_val) in dft.iter().enumerate() {
                         // Manually compute norm to avoid trait issues
                         let mag = (complex_val.re * complex_val.re + complex_val.im * complex_val.im).sqrt();
@@ -56,7 +56,6 @@ impl CQTProcessor {
                     }
                     frame_idx += 1;
                 }
-            }
         }
 
         

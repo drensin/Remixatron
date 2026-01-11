@@ -10,7 +10,7 @@
 //! 3.  **Mel Spectrogram**: Computes the implementation-specific spectrogram for inputs.
 //! 4.  **Beat Tracking**: Runs `BeatThis` ONNX model to find beat/downbeat instances.
 //! 5.  **Feature Extraction**: synchronized MFCC/Chroma features are extracted per beat.
-//! 6.  **Structural Analysis**: Spectral Clustering is performed (via `structure.rs`).
+//! 6.  **Structural Analysis**: Hybrid novelty+recurrence segmentation (via `structure.rs`).
 //! 7.  **Graph Construction**: The finalized `Beat` structs are assembled with connectivity data.
 
 use anyhow::{Result, anyhow};
@@ -128,13 +128,14 @@ impl Remixatron {
         let mut beats_extended = beats.clone();
         beats_extended.push(duration_seconds); // Add end marker to define the last beat's duration
         
-        let (mut mfcc, mut chroma) = feature_ex.compute_sync_features(&audio, &mel_2d, &beats_extended, 50.0);
+        let (mut mfcc, mut chroma, mut _cqt) = feature_ex.compute_sync_features(&audio, &mel_2d, &beats_extended, 50.0);
         
         // Remove the feature vector corresponding to the end marker
         // because it has 0 duration and is not a playble unit.
         if mfcc.nrows() > 0 {
              mfcc = mfcc.slice(s![0..mfcc.nrows()-1, ..]).to_owned();
              chroma = chroma.slice(s![0..chroma.nrows()-1, ..]).to_owned();
+             _cqt = _cqt.slice(s![0.._cqt.nrows()-1, ..]).to_owned();
         }
         
         // 5. Pre-compute Bar Positions
@@ -159,9 +160,10 @@ impl Remixatron {
         
         // 6. Structural Analysis (The Core Logic)
         progress_callback("Clustering Structure...", 0.95);
-        // Perform Spectral Clustering on the beat-synchronous features.
+        // Perform Checkerboard Novelty Segmentation on the beat-synchronous features.
+        // Uses novelty peaks to find boundaries, then clusters segments between boundaries.
         let analyzer = StructureAnalyzer::new();
-        let result = analyzer.compute_segments_knn(&mfcc, &chroma, None); 
+        let result = analyzer.compute_segments_checkerboard(&mfcc, &chroma, &bar_positions, None); 
         
         // 7. Assembly
         // Convert the raw labels and jump graph into the final `Beat` and `Segment` structs.
@@ -247,7 +249,15 @@ impl Remixatron {
                         let target_seg_id = beat_to_segment_id[*target_idx];
                         if target_seg_id == current_segment_id { continue; }
 
-                        // CHECK 3: Safety
+                        // CHECK 3: Cluster Consistency (DISABLED FOR TESTING)
+                        // This was too strict with checkerboard segmentation where
+                        // segments with the same function (verse1, verse2) get different labels.
+                        // TODO: Re-enable or replace with a smarter similarity check.
+                        // let target_cluster = result.labels[*target_idx];
+                        // let next_beat_cluster = result.labels[next_beat_idx];
+                        // if target_cluster != next_beat_cluster { continue; }
+
+                        // CHECK 4: Safety
                         if *target_idx >= result.labels.len() - 1 { continue; }
 
                         candidates.push(*target_idx);

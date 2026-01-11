@@ -17,9 +17,9 @@
 
 ## What is Remixatron?
 
-Remixatron is an intelligent audio player that transforms any song into an **infinite, seamless remix**. It analyzes the musical structure of a track—detecting beats, timbre, and segmentation—to identify "Jump Points": moments in the song that are acoustically identical but occur at different times.
+Remixatron is an intelligent audio player that transforms any song into an **infinite, seamless remix**. It analyzes the musical structure of a track—detecting beats, timbre, and segmentation—to identify "Jump Points": moments in the song that are acoustically similar but occur at different times.
 
-As the song plays, Remixatron probabilistically jumps between these points in real-time, creating a never-ending version of the track that stays true to the original artist's style but never repeats the exact same pattern twice.
+As the song plays, Remixatron intelligently jumps between these points in musical phrases, creating a never-ending version of the track that stays true to the original artist's style but never repeats the exact same pattern twice.
 
 **Use Cases:**
 *   **Focus Playlists**: Turn your favorite 3-minute track into a 3-hour ambient soundscape.
@@ -73,8 +73,8 @@ You can provide audio in two ways:
 Click the **Analyze** button. The application will:
 1.  (If URL) Download the highest quality audio stream.
 2.  Decode and resample the audio.
-3.  Run a Neural Network (BeatNet) to detect every beat.
-4.  Perform Spectral Clustering to find song structure.
+3.  Run a Neural Network (BeatThis) to detect every beat.
+4.  Perform hybrid segmentation to find song structure.
 5.  Build the Jump Graph.
 
 This process takes approximately **15-45 seconds**, depending on track length and your hardware.
@@ -157,7 +157,7 @@ A: Remixatron provides official builds for:
 *   Linux (Ubuntu/Debian x64)
 
 ### Q: Can I control *when* a jump happens?
-A: Not yet. The playback engine makes real-time probabilistic decisions. Manual "steering" is on the roadmap for a future version.
+A: Not yet. The playback engine makes real-time decisions using structured musical phrases. Manual "steering" is on the roadmap for a future version.
 
 ### Q: Is my music uploaded to the cloud?
 A: **No**. All analysis and playback happen 100% locally on your machine. Your audio files never leave your device.
@@ -166,7 +166,7 @@ A: **No**. All analysis and playback happen 100% locally on your machine. Your a
 A: Remixatron downloads the highest-quality audio stream available (usually AAC or Opus) without any video. This is often a higher bitrate than what YouTube's video player delivers, so it may even sound *better*.
 
 ### Q: How does it detect the beats?
-A: Remixatron uses **BeatNet**, a State-of-the-Art neural network published at ISMIR (a top Music Information Retrieval conference). It runs via the ONNX Runtime for fast, portable inference.
+A: Remixatron uses **BeatThis**, a State-of-the-Art neural network from ISMIR 2024 (a top Music Information Retrieval conference). It runs via the ONNX Runtime for fast, portable inference.
 
 ### Q: Can I use my own ONNX models?
 A: Not through the UI, but advanced users can replace the `.onnx` files in the application bundle's `models/` directory.
@@ -187,8 +187,8 @@ Remixatron is a love letter to **Paul Lamere's** original [Infinite Jukebox](htt
 ### Research & Algorithms
 Remixatron's "secret sauce" is built on the shoulders of giants in the **Music Information Retrieval (MIR)** community:
 
-*   **BeatThis! / BeatNet** — The neural beat tracker used by V3 is based on State-of-the-Art research published at **ISMIR** (International Society for Music Information Retrieval). It uses a Temporal Convolutional Network (TCN) architecture for robust beat and downbeat detection.
-*   **Laplacian Spectral Clustering** — The core segmentation algorithm for grouping similar beats comes from standard **Graph Theory** and **Dimensionality Reduction** techniques, widely documented in MIR literature.
+*   **BeatThis** — The neural beat tracker used by V3 is based on State-of-the-Art research published at **ISMIR 2024**. It uses modern neural network architecture for robust beat and downbeat detection.
+*   **Hybrid Segmentation** — The core segmentation algorithm combines novelty-based boundary detection with recurrence-based clustering, using **Graph Theory** and **Spectral Embedding** techniques.
 *   **MFCC & Chroma Features** — Timbral and harmonic fingerprinting methods standardized in audio analysis research. The original implementation used **[Librosa](https://librosa.org/doc/latest/index.html)** by Brian McFee et al. (See: McFee, B. et al., *"librosa: Audio and Music Signal Analysis in Python,"* Proc. of the 14th Python in Science Conference, 2015. [Paper PDF](https://conference.scipy.org/proceedings/scipy2015/pdfs/proceedings.pdf#page=24)).
 
 ### Key Libraries & Frameworks

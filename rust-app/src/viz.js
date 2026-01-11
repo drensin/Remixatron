@@ -203,7 +203,8 @@ export class InfiniteJukeboxViz {
         }
 
         // 5. Draw Novelty Curve (Debug View) - Bottom 100px
-        this.drawNoveltyCurve(ctx);
+        // DISABLED: Data is still emitted from backend if needed later
+        // this.drawNoveltyCurve(ctx);
     }
 
     /**

@@ -60,14 +60,17 @@ impl FeatureExtractor {
     /// *   `fps` - Frame rate of the Mel Spectrogram.
     ///
     /// # Returns
-    /// A tuple `(MFCCs, Chroma)` where each is `[n_beats, dim]`.
+    /// A tuple `(MFCCs, Chroma, CQT)` where:
+    /// - MFCCs: `[n_beats, 20]` for timbral similarity
+    /// - Chroma: `[n_beats, 12]` for harmonic content  
+    /// - CQT: `[n_beats, 252]` for recurrence matrix (like Python)
     pub fn compute_sync_features(
         &mut self,
         audio: &[f32],
         mel: &Array2<f32>, 
         beats: &[f32], 
         fps: f32
-    ) -> (Array2<f32>, Array2<f32>) {
+    ) -> (Array2<f32>, Array2<f32>, Array2<f32>) {
         let (n_time, _) = mel.dim();
         let n_beats = beats.len();
         
@@ -87,19 +90,32 @@ impl FeatureExtractor {
         
         // 2. Compute CQT & Chroma (from Audio)
         // Result is [CQT_Time, 252]
-        let cqt_spectrogram = self.cqt.process(audio);
-        let (n_cqt_frames, n_bins) = cqt_spectrogram.dim();
+        let cqt_spectrogram_raw = self.cqt.process(audio);
+        let (n_cqt_frames, n_bins) = cqt_spectrogram_raw.dim();
         
-        // CQT hop usually 512. Mel hop?
-        // We need to align CQT frames to Mel frames (or beat frames).
-        // Best approach: Sync CQT to beats directly, using CQT timebase.
+        // Convert to dB scale like Python: C = librosa.amplitude_to_db(np.abs(cqt), ref=np.max)
+        // This normalizes the value range to roughly [-80, 0] dB
+        let max_val = cqt_spectrogram_raw.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let ref_val = if max_val > 1e-10 { max_val } else { 1.0 };
+        
+        let mut cqt_spectrogram = Array2::<f32>::zeros((n_cqt_frames, n_bins));
+        for t in 0..n_cqt_frames {
+            for k in 0..n_bins {
+                // amplitude_to_db: 20 * log10(amplitude / ref)
+                // Clamp to avoid log(0)
+                let amp = cqt_spectrogram_raw[[t, k]].max(1e-10);
+                let db = 20.0 * (amp / ref_val).log10();
+                // Clamp to -80 dB floor (standard librosa default)
+                cqt_spectrogram[[t, k]] = db.max(-80.0);
+            }
+        }
+        
         // CQT timebase: sr / hop_length = 44100 / 512 ~ 86 fps.
-        // Mel fps usually ~50 defined by caller.
-        // We use `self.cqt.hop_length` implicitly via `process`. 
-        // We assume `process` returns frames at `sr/512` rate.
         let cqt_fps = self.sample_rate / 512.0; 
         
-        // Compute Frame-wise Chroma (12 bins) from CQT
+        // Compute Frame-wise Chroma (12 bins) from RAW CQT (before dB conversion)
+        // We use raw magnitudes for chroma because we apply ln(1+x) compression,
+        // which requires positive values.
         let mut chroma_frames = Array2::<f32>::zeros((n_cqt_frames, 12));
         
         for t in 0..n_cqt_frames {
@@ -109,7 +125,7 @@ impl FeatureExtractor {
                 // Semitone index = k / 3.
                 // Chroma class = (k / 3) % 12.
                 let chroma_idx = (k / 3) % 12;
-                chroma_frames[[t, chroma_idx]] += cqt_spectrogram[[t, k]];
+                chroma_frames[[t, chroma_idx]] += cqt_spectrogram_raw[[t, k]];  // Use RAW, not dB
             }
             
             // Log compress
@@ -123,6 +139,8 @@ impl FeatureExtractor {
         let mut mfcc_sync = Array2::<f32>::zeros((n_beats, 20));
         // Chroma sync (using CQT timebase/cqt_fps)
         let mut chroma_sync = Array2::<f32>::zeros((n_beats, 12));
+        // Full CQT sync (252 bins for recurrence matrix - like Python's Csync)
+        let mut cqt_sync = Array2::<f32>::zeros((n_beats, n_bins));
         
         // Mel Beats
         let beat_frames_mel: Vec<usize> = beats.iter().map(|&t| (t * fps).round() as usize).collect();
@@ -144,7 +162,7 @@ impl FeatureExtractor {
             if count > 0.0 {
                 // Median Pooling for MFCC (Robust against transients)
                 for k in 0..20 {
-                    let mut values = Vec::with_capacity((end_c - start_c) as usize);
+                    let mut values = Vec::with_capacity(end_c - start_c);
                     for t in start_c..end_c {
                         values.push(mfcc_frames[[t, k]]);
                     }
@@ -172,6 +190,7 @@ impl FeatureExtractor {
             let end_qc = end_q.min(n_cqt_frames);
             
             if start_qc < end_qc {
+                // Chroma (Median pooling)
                 for k in 0..12 {
                     let mut values = Vec::new();
                     for t in start_qc..end_qc {
@@ -179,7 +198,7 @@ impl FeatureExtractor {
                     }
                     values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                     
-                     let med = if values.len() == 0 { 0.0 }
+                     let med = if values.is_empty() { 0.0 }
                      else if values.len() % 2 == 1 {
                         values[values.len() / 2]
                     } else {
@@ -188,13 +207,49 @@ impl FeatureExtractor {
                     };
                     chroma_sync[[i, k]] = med;
                 }
+                
+                // CQT (Median pooling - 252 bins like Python's Csync)
+                for k in 0..n_bins {
+                    let mut values = Vec::new();
+                    for t in start_qc..end_qc {
+                        values.push(cqt_spectrogram[[t, k]]);
+                    }
+                    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    
+                    let med = if values.is_empty() { 0.0 }
+                    else if values.len() % 2 == 1 {
+                        values[values.len() / 2]
+                    } else {
+                        let mid = values.len() / 2;
+                        (values[mid-1] + values[mid]) / 2.0
+                    };
+                    cqt_sync[[i, k]] = med;
+                }
             } else if start_qc < n_cqt_frames {
                  // Single frame fallback
                  for k in 0..12 { chroma_sync[[i, k]] = chroma_frames[[start_qc, k]]; }
+                 for k in 0..n_bins { cqt_sync[[i, k]] = cqt_spectrogram[[start_qc, k]]; }
             }
         }
         
-        (mfcc_sync, chroma_sync)
+        // L2 normalize each beat's chroma vector.
+        // This converts absolute energy to RELATIVE pitch class distribution,
+        // making frames with the same chord (but different loudness) look similar,
+        // and frames with different chords look different.
+        for i in 0..n_beats {
+            let mut norm_sq = 0.0_f32;
+            for k in 0..12 {
+                norm_sq += chroma_sync[[i, k]] * chroma_sync[[i, k]];
+            }
+            let norm = norm_sq.sqrt();
+            if norm > 1e-10 {
+                for k in 0..12 {
+                    chroma_sync[[i, k]] /= norm;
+                }
+            }
+        }
+        
+        (mfcc_sync, chroma_sync, cqt_sync)
     }
 }
 

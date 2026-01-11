@@ -265,7 +265,7 @@ impl JukeboxEngine {
                     PlaybackCommand::Pause => {
                         println!("CMD: Pause");
                         if !paused {
-                            let _ = clock.pause();
+                            clock.pause();
                             let now = clock.time().ticks;
                             println!("State -> PAUSED. Clock frozen at: {}", now);
                             
@@ -274,7 +274,7 @@ impl JukeboxEngine {
                             while let Some((start, end, mut handle)) = active_handles.pop_front() {
                                 if end <= now {
                                     // It should be done. Kill it to be sure.
-                                    let _ = handle.stop(Tween::default());
+                                    handle.stop(Tween::default());
                                 } else {
                                     alive_handles.push_back((start, end, handle));
                                 }
@@ -285,7 +285,7 @@ impl JukeboxEngine {
                             for (start_tick, end_tick, handle) in active_handles.iter_mut() {
                                 if *start_tick <= now {
                                     println!("  [PAUSE] Handle {}-{} (now {}). Pausing.", start_tick, end_tick, now);
-                                    let _ = handle.pause(Tween::default());
+                                    handle.pause(Tween::default());
                                 } else {
                                     println!("  [SKIP] Handle {}-{} > now {}. Future.", start_tick, end_tick, now);
                                 }
@@ -296,7 +296,7 @@ impl JukeboxEngine {
                     PlaybackCommand::Resume => {
                         println!("CMD: Resume");
                         if paused {
-                            let _ = clock.start();
+                            clock.start();
                             let now = clock.time().ticks; 
                             println!("State -> RUNNING. Clock resumed at: {}", now);
                             
@@ -304,7 +304,7 @@ impl JukeboxEngine {
                             let mut alive_handles = VecDeque::new();
                             while let Some((start, end, mut handle)) = active_handles.pop_front() {
                                 if end <= now {
-                                    let _ = handle.stop(Tween::default());
+                                    handle.stop(Tween::default());
                                 } else {
                                     alive_handles.push_back((start, end, handle));
                                 }
@@ -315,7 +315,7 @@ impl JukeboxEngine {
                             for (start_tick, end_tick, handle) in active_handles.iter_mut() {
                                 if *start_tick <= now {
                                     println!("  [RESUME] Handle {}-{} (now {}). Resuming.", start_tick, end_tick, now);
-                                    let _ = handle.resume(Tween::default());
+                                    handle.resume(Tween::default());
                                 } else {
                                     println!("  [SKIP] Handle {}-{} > now {}. Future.", start_tick, end_tick, now);
                                 }
@@ -345,7 +345,7 @@ impl JukeboxEngine {
                              // Stop and Remove
                              if let Some((_, _, mut handle)) = active_handles.remove(i) {
                                   // println!("  [AUTO-STOP] Enforcing stop at {}", current_time);
-                                  let _ = handle.stop(Tween::default());
+                                  handle.stop(Tween::default());
                              }
                         } else {
                              i += 1;
@@ -400,7 +400,7 @@ impl JukeboxEngine {
             ) {
                 Ok(mut handle) => {
                      // We still ask Kira to schedule the stop as Plan A
-                     let _ = handle.stop(
+                     handle.stop(
                         Tween {
                             start_time: StartTime::ClockTime(stop_time),
                             ..Default::default()
@@ -425,9 +425,9 @@ impl JukeboxEngine {
     }
 
     /// Determines the next beat to play based on current state.
-    /// This replaces the old `compute_play_vector`.
-    /// Determines the next beat to play based on current state.
-    /// This replaces the old `compute_play_vector`.
+    ///
+    /// This is the core "JIT Walk" logic that replaced the old `compute_play_vector`.
+    /// It makes real-time decisions about whether to continue linearly or jump.
     pub fn get_next_beat(&mut self) -> PlayInstruction {
         // 1. Capture Current State (This is what we will return)
         let current_cursor = self.cursor;

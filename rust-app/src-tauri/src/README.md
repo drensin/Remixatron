@@ -22,9 +22,9 @@ This directory contains the high-performance core of Remixatron, written in Rust
 *   **`audio/`**: Low-level audio decoding utilities (via `symphonia`).
 
 ### Analysis Modules (`analysis/`)
-*   **`structure.rs`**: Implements Spectral Clustering (Laplacian Eigenmaps) to find song sections.
+*   **`structure.rs`**: Implements hybrid segmentation (novelty detection + recurrence clustering).
 *   **`features.rs`**: Computes CQT/MFCC features for similarity comparison.
-*   **`mel.rs`**: Pre-processing for the BeatNet ONNX model.
+*   **`mel.rs`**: Pre-processing for the BeatThis ONNX model.
 *   **`inference.rs`**: Runs the ONNX Runtime session for beat detection.
 
 ## Key binaries

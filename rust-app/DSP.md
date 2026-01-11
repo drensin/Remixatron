@@ -7,6 +7,25 @@ It takes a finite linear audio file (like a 3-minute MP3) and transforms it into
 
 This document explains the Digital Signal Processing (DSP) and Machine Learning (ML) pipeline that makes this possible. We will start with a high-level overview and then descend into the mathematical details of each stage.
 
+### Prerequisites
+This document assumes you're comfortable with:
+- Basic linear algebra (vectors, matrices, dot products)
+- General programming concepts
+- No prior DSP or audio engineering knowledge required — we'll explain as we go!
+
+### Further Reading (Foundational Concepts)
+If you encounter unfamiliar terms, these resources will help:
+
+| Topic | Resource |
+|-------|----------|
+| **Spectrograms & Mel Scale** | [Mel Spectrogram Explained](https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53) |
+| **MFCCs** | [Practical Cryptography - MFCC Tutorial](http://practicalcryptography.com/miscellaneous/machine-learning/guide-mel-frequency-cepstral-coefficients-mfccs/) |
+| **Spectral Clustering** | [Von Luxburg - A Tutorial on Spectral Clustering](https://arxiv.org/abs/0711.0189) |
+| **Self-Similarity Matrices** | [Müller - Music Structure Analysis (Springer)](https://www.audiolabs-erlangen.de/fau/professor/mueller/bookFMP) |
+| **BeatThis Model** | [BeatThis! ISMIR 2024 Paper](https://arxiv.org/abs/2410.03438) |
+| **Cosine Similarity** | [Wikipedia - Cosine Similarity](https://en.wikipedia.org/wiki/Cosine_similarity) |
+| **Eigenvalues & Eigenvectors** | [3Blue1Brown - Eigenvectors Explained (Video)](https://www.youtube.com/watch?v=PFDu9oVAE-g) |
+
 ## Section 1: The "Plain English" Overview
 
 ### The Goal: Folding Time
@@ -38,19 +57,21 @@ graph TD
 
 1.  **Decode & Resample**: We normalize the audio to a standard format (Mono, 22.05kHz) so our math works consistently on any file.
 2.  **Mel Spectrogram**: We turn the audio waves into a "Heat Map" of frequencies that represents how human ears perceive sound.
-3.  **Beat Tracking (AI)**: We use a Neural Network (**BeatNet**) to find exactly where every beat and bar starts. This gives us our "Grid".
+3.  **Beat Tracking (AI)**: We use a Neural Network (**BeatThis**) to find exactly where every beat and bar starts. This gives us our "Grid".
 4.  **Feature Extraction**: For every beat on that grid, we calculate its "Fingerprint"—a list of numbers describing its Timbre (tone color) and Pitch (harmony).
 5.  **Bar Positioning**: We assign every beat a "Phase" (e.g., "Beat 1 of 4"). This ensures we don't jump from the start of a bar to the end of a bar, which would sound jarring.
 6.  **Structural Analysis**: We look at all the fingerprints at once to find the "Shape" of the song. We group similar beats into **Clusters** (e.g., "Verse Beats", "Chorus Beats").
 7.  **Graph Assembly**: Finally, we build the "Jump Graph". We connect beats that share the same Cluster and Phase.
 
 ### The Result: The Infinite Walk
-When you press Play, Remixatron starts walking down the string. Every time it hits a beat with a valid "Jump Connection", it rolls a weighted dice.
+When you press Play, Remixatron starts walking down the string. It plays musical **phrases** (16, 32, or 64 beats) before attempting a jump.
 
-*   **90% of the time**: It keeps playing the next linear beat (Normal playback).
-*   **10% of the time**: It takes the Jump to a different part of the song.
+At the end of each phrase:
+- It looks for a valid Jump connection
+- If found, it seamlessly transitions to a different part of the song
+- If not, it extends the phrase and tries again later
 
-Because the Jump connects to a beat that is **Perceptually Similar** (same Cluster) and **Rythmically Locked** (same Phase), the transition is seamless.
+Because jumps connect to beats that are **Perceptually Similar** and **Rhythmically Locked** (same bar phase), transitions are seamless.
 
 ---
 
@@ -63,7 +84,7 @@ The first step in any Music Information Retrieval (MIR) task is to get the raw d
 
 We support any format supported by **Symphonia** (MP3, WAV, FLAC, AAC).
 
-However, our downstream models (BeatNet) and analysis classifiers expect a very specific input format. We cannot just feed raw 44.1kHz stereo audio.
+However, our downstream models (BeatThis) and analysis classifiers expect a very specific input format. We cannot just feed raw 44.1kHz stereo audio.
 
 **Normalization Specs:**
 *   **Sample Rate**: `22,050 Hz` (Nyquist frequency ~11kHz, sufficient for rhythm/timbre analysis).
@@ -78,7 +99,7 @@ However, our downstream models (BeatNet) and analysis classifiers expect a very 
 
 Once we have beats (which we'll discuss in Section 3), we need to compute the "Fingerprint" of each beat. We use two primary acoustic features:
 
-#### A. Mel Frequency Cepstral Coefficients (MFCC)
+#### A. [Mel Frequency Cepstral Coefficients (MFCC)](http://practicalcryptography.com/miscellaneous/machine-learning/guide-mel-frequency-cepstral-coefficients-mfccs/)
 *   **What it measures**: **Timbre** (Texture, Color, "Sound").
 *   **Dimensions**: 20 coefficients per frame.
 *   **Usage**: Distinguishes between a Guitar Chord and a Synth Chord playing the same note.
@@ -87,7 +108,7 @@ Once we have beats (which we'll discuss in Section 3), we need to compute the "F
     2.  Compute the Discrete Cosine Transform (DCT).
     3.  Keep the first 20 coefficients.
 
-#### B. Chroma Vectors
+#### B. [Chroma Vectors](https://en.wikipedia.org/wiki/Chroma_feature)
 *   **What it measures**: **Pitch Class** (Harmony, Key).
 *   **Dimensions**: 12 bins (C, C#, D, ..., B).
 *   **Usage**: Identifies the chord being played.
@@ -115,12 +136,12 @@ This 32-d point represents the beat in "Acoustic Space".
 
 ---
 
-## Section 3: The Beat Tracker (BeatNet/ONNX)
+## Section 3: The Beat Tracker (BeatThis/ONNX)
 Before we can extract features per beat, we need to know *where the beats are*.
-We use **BeatNet**, a State-of-the-Art Particle Filtering Neural Network.
+We use **BeatThis** (ISMIR 2024), a State-of-the-Art beat tracking neural network.
 
 ### 3.1 The Model Architecture
-BeatNet is a Convolutional Recurrent Neural Network (CRNN).
+BeatThis is a modern neural network optimized for beat and downbeat detection.
 *   **Input**: The Mel Spectrogram.
 *   **Layers**:
     *   **Convolutional Blocks**: To extract local spectral features.
@@ -143,7 +164,7 @@ let session = Session::builder()?.with_optimization_level(GraphOptimizationLevel
 > **Source**: `src-tauri/src/beat_tracker/post_processor.rs` (`MinimalPostProcessor`)
 
 The raw output of the Neural Net is a stream of probabilities (Logits).
-While many systems use complex Hidden Markov Models (HMM) or Dynamic Bayesian Networks (DBN) to decode these probabilities, **BeatNet** is robust enough that we can use a simpler, faster approach: **Peak Picking**.
+While many systems use complex Hidden Markov Models (HMM) or Dynamic Bayesian Networks (DBN) to decode these probabilities, **BeatThis** is robust enough that we can use a simpler, faster approach: **Peak Picking**.
 
 We implement a `MinimalPostProcessor` which:
 1.  **Thresholds**: Ignores any frame with probability < 0.5.
@@ -159,66 +180,78 @@ This "Grid" gives us the time boundaries we used in Section 2.3 to aggregate fea
 
 ---
 
-## Section 4: Spectral Clustering & Segmentation
+## Section 4: Hybrid Segmentation (Novelty + Recurrence)
 
-This is the mathematical core of Remixatron. The goal is to group all the beats in the song into **Perceptual Clusters**.
-*   **Cluster 0**: Verse Beats.
-*   **Cluster 1**: Chorus Beats.
-*   **Cluster 2**: Bridge Beats.
+This is the mathematical core of Remixatron. The goal is to:
+1. Find **Segment Boundaries** (where does the song transition?)
+2. **Cluster Segments** (which sections serve the same musical purpose?)
 
-We use **Laplacian Spectral Clustering**, a powerful technique from Graph Theory that groups points based on connectivity rather than just Euclidean distance.
+We use a **Hybrid Approach** that combines two complementary techniques:
+- **Novelty Detection**: Excels at finding boundaries (structural transitions)
+- **Recurrence Affinity**: Excels at labeling (grouping similar sections)
 
-### 4.1 The Affinity Matrix (Search Graph)
-> **Source**: `src-tauri/src/analysis/structure.rs` (`compute_jump_graph`)
+### 4.1 Self-Similarity Matrix (SSM)
+> **Source**: `src-tauri/src/analysis/structure.rs` (`compute_segments_checkerboard`)
 
-Instead of a dense matrix (checking every beat against every other beat), we build a **Sparse k-Nearest Neighbor Graph**.
-For every beat, we find the 10 most similar other beats in the song using **Cosine Similarity**:
-
-$$
-\text{Sim}(A, B) = \frac{A \cdot B}{||A|| \times ||B||}
-$$
-
-We only keep edges where Similarity > 0.35. This creates a graph where connected nodes are perceptually similar.
-
-### 4.2 The Graph Laplacian (L)
-We treat the song as a Graph where each beat is a node and $R_{ij}$ is the weight of the edge connecting them.
-We compute the **Normalized Laplacian**:
+First, we build a matrix showing how similar each beat is to every other beat:
 
 $$
-L = I - D^{-1/2} R D^{-1/2}
+SSM[i, j] = \frac{A_i \cdot A_j}{||A_i|| \times ||A_j||}
 $$
 
-*   $I$: Identity Matrix.
-*   $D$: Degree Matrix (Diagonal matrix where $D_{ii} = \sum_j R_{ij}$).
+Where $A_i$ is the combined MFCC+Chroma feature vector for beat $i$.
 
-### 4.3 Eigendecomposition (The Magic)
-> **Source**: `src-tauri/src/analysis/structure.rs` (`jacobi_eigenvalue`)
+The SSM reveals the "block structure" of the song. Repeated sections (verses, choruses) appear as bright squares along the diagonal.
 
-We solve for the eigenvectors and eigenvalues of $L$.
+### 4.2 Checkerboard Novelty Detection
+> **Source**: `src-tauri/src/analysis/structure.rs` (`compute_novelty_curve`)
+
+To find where sections change, we convolve a **Checkerboard Kernel** along the SSM diagonal:
 
 $$
-L v = \lambda v
+K = \begin{bmatrix} +1 & -1 \\ -1 & +1 \end{bmatrix}
 $$
 
-The eigenvectors corresponding to the $k$ smallest eigenvalues contain the "Embedding" of the song structure.
-Instead of clustering the raw 32-d features (which are noisy), we cluster these eigenvectors. This transforms the problem from "grouping similar sounds" to "grouping connected components in the graph".
+This kernel responds strongly at points where the music changes (e.g., verse → chorus), producing a **Novelty Curve**. Peaks in this curve indicate structural boundaries.
 
-### 4.4 K-Means on Eigenvectors
-> **Source**: `src-tauri/src/analysis/structure.rs` (`compute_segments_knn`)
+**Peak Detection Parameters:**
+- `window = 16` — Local maxima radius
+- `alpha = 1.25` — Peak must be 25% above local mean
+- `min_dist = 16` — Minimum 16 beats between boundaries
 
-Finally, we run standard **K-Means Clustering** on the first $k$ eigenvectors.
-This assigns a Label (0..k) to every beat.
+### 4.3 Downbeat Snapping
+
+Raw novelty peaks rarely land exactly on musical boundaries. We **snap** each peak to the nearest downbeat (bar start) to ensure segments align with the musical grid.
+
+### 4.4 Recurrence-Based Segment Affinity (The Hybrid Step)
+> **Source**: `src-tauri/src/analysis/structure.rs` (Step 5 of `compute_segments_checkerboard`)
+
+This is where the hybrid approach shines. Instead of clustering based on **pooled segment features** (which fails on homogeneous productions like Uptown Funk), we compute the **average beat-level similarity** between segment pairs:
+
+$$
+Affinity[s_i, s_j] = \frac{1}{|s_i| \cdot |s_j|} \sum_{b \in s_i} \sum_{b' \in s_j} Sim(b, b')
+$$
+
+This captures rhythmic and harmonic patterns that simple feature pooling misses. Two verses might have identical average timbre, but their beat-by-beat recurrence patterns reveal they're structurally related.
+
+### 4.5 [Spectral Clustering](https://arxiv.org/abs/0711.0189) on Segments
+> **Source**: `src-tauri/src/analysis/structure.rs` (`symmetric_eigendecomposition`)
+
+We treat segments as nodes in a graph with edge weights from the recurrence affinity matrix. We compute the **[Normalized Laplacian](https://en.wikipedia.org/wiki/Laplacian_matrix#Symmetric_normalized_Laplacian)**:
+
+$$
+L = I - D^{-1/2} A D^{-1/2}
+$$
+
+Then solve for eigenvectors of $L$ and run **K-Means** on the first $k$ eigenvectors.
 
 **The Result**:
 ```
-Beats:  [0, 1, 2, 3, 4, 5, 6, 7...]
-Labels: [A, A, A, A, B, B, A, A...]
+Segments:  [0, 1, 2, 3, 4, 5, 6, 7]
+Labels:    [Intro, Verse, Bridge, Verse, Chorus, Chorus, Outro, Outro]
 ```
-*   Beats 0-3 are Segment 1 (Label A).
-*   Beats 4-5 are Segment 2 (Label B).
-*   Beats 6-7 are Segment 3 (Label A).
 
-This reveals the "Verse -> Chorus -> Verse" structure.
+This reveals the song's macro-structure.
 
 ---
 
@@ -248,19 +281,21 @@ For the Infinite Jukebox to work, we need **Options**. We want a graph where the
 
 We simulate the jump graph for each $k$ and calculate the **Median Jump Count**—the number of valid jumps available to the "typical" beat.
 
-### 5.3 The Fitness Function (Balanced Connectivity)
-> **Source**: `src-tauri/src/analysis/structure.rs` (`AutoKStrategy::BalancedConnectivity`)
+### 5.3 The Default Strategy: Normalized Eigengap
+> **Source**: `src-tauri/src/analysis/structure.rs` (`AutoKStrategy::EigengapHeuristic`)
 
-We use the **Balanced Connectivity** heuristic (found in `structure.rs`):
+The default strategy is the **Normalized Eigengap Heuristic** from Von Luxburg's "Tutorial on Spectral Clustering":
 
 $$
-Score_k = (100 \times S_{avg}) + \text{Median}(Jumps)
+K^* = \arg\max_k \frac{\lambda_{k+1} - \lambda_k}{\lambda_k}
 $$
 
-*   **$100 \times S_{avg}$**: Heavily weights Cluster Purity (Do these beats sound the same?).
-*   **Median(Jumps)**: Rewards graphs that are "Dense" and playable.
+This selects $K$ where the *relative* eigenvalue gap is largest. Normalizing by $\lambda_k$ naturally prefers proportionally significant gaps without requiring arbitrary caps.
 
-We calculate this score for $k=3..32$ and pick the winner. This ensures we select a complexity level that produces a rich, interconnected remix graph.
+**Alternative Strategies** (available for experimentation):
+- **BalancedConnectivity**: `(100 × Silhouette) + Median(Jumps)`
+- **ConnectivityFirst**: Maximize escape fraction above quality floors
+- **MaxK**: Maximize K subject to quality/connectivity floors
 
 ---
 
@@ -268,7 +303,22 @@ We calculate this score for $k=3..32$ and pick the winner. This ensures we selec
 
 Once we have Features, a Grid, and Cluster Labels, we can finally build the **Jump Graph**.
 
-To decide if Beat A can jump to Beat B, we perform a strict 3-step check.
+### 6.0 Jump Candidate Generation (Adaptive P75 Threshold)
+> **Source**: `src-tauri/src/analysis/structure.rs` (`compute_jump_graph`)
+
+Before filtering, we build the initial jump graph using an **adaptive threshold**.
+
+1. For each beat, find the k=10 nearest neighbors by cosine similarity
+2. Exclude immediate neighbors (within 4 beats) to avoid stutter jumps
+3. Collect all similarity scores across the entire song
+4. Compute the **P75 percentile** as the adaptive threshold
+5. Keep only edges with similarity ≥ P75 (~25% of candidates)
+
+This adaptive approach ensures each song gets an appropriate threshold based on its own similarity distribution. Songs with naturally high self-similarity get a higher threshold; songs with more variation get a lower one.
+
+### Decision-Time Filtering (2-Step Check)
+
+At playback graph construction time, we apply additional musical constraints:
 
 ### 6.1 Look-Ahead Matching
 > **Source**: `src-tauri/src/workflow.rs` (Line ~219 "Loop Look Ahead")
@@ -305,6 +355,10 @@ We generally want to jump to a *structurally identical* part of the song, but in
 *   **Bad**: Jumping from "Verse 1" back to itself (Micro-looping).
 
 We prevent micro-loops by enforcing that `Segment(Target) != Segment(Source)` whenever possible.
+
+> **Note**: A third check (Cluster Consistency) exists in the codebase but is currently **disabled**.
+> With the hybrid segmentation approach, segments with the same function (e.g., Verse 1 and Verse 2)
+> often get different cluster labels, making strict cluster matching too restrictive.
 
 ### The Graph
 The result of this process is a directed graph where every beat has:
