@@ -1882,67 +1882,233 @@ set_property(TARGET oboe_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TR
 
 ---
 
-## 5. Implementation Phases (Updated)
+## 5. Implementation Phases (Ralph Loop Ready)
 
-### Phase 0: Core Extraction (Week 0-1) — NEW
-- [ ] Create `remixatron-core` crate from desktop code
-- [ ] Extract JIT logic from `playback_engine.rs` into `jit/engine.rs`
-- [ ] Remove all Tauri/Kira dependencies from core
-- [ ] Add `#[cfg(feature = "android")]` gates where needed
-- [ ] Verify desktop still builds against new core
+> **Legend**: 🤖 Fully Automated | 👁️ Human Review | 🔄 Hybrid (auto + spot-check)
 
-### Phase 1: Foundation (Week 1-2)
-- [ ] Set up Android project (Gradle, Compose, Hilt)
-- [ ] Configure JitPack repository for youtubedl-android
-- [ ] Create `remixatron-android` Rust crate
-- [ ] Implement JNI library loading with error handling
-- [ ] Bundle ONNX models as assets
-- [ ] Implement asset-to-cache copy for models
+### Phase 0: Core Extraction (Week 0-1) — 91% Automated
 
-### Phase 2: Analysis Pipeline (Week 3-4)
-- [ ] Implement full JNI bridge (AnalysisHandle, JukeboxHandle)
-- [ ] Implement Rust exception → Java exception bridge
-- [ ] Integrate Symphonia/Rubato loading
-- [ ] Test ONNX inference on device (static linking)
-- [ ] Implement progress callback via JNI GlobalRef
-- [ ] Build basic Compose UI (file picker + progress)
+> **Goal**: Extract shared Rust logic into `remixatron-core` crate without breaking desktop.
 
-### Phase 3: Audio Engine (Week 5-7)
-- [ ] Implement Oboe audio stream (C++)
-- [ ] Implement lock-free beat event queue
-- [ ] Implement audio buffer pointer sharing
-- [ ] Implement beat-boundary detection
-- [ ] Wire up Kotlin polling loop for JIT decisions
-- [ ] Implement Play/Pause/Stop with audio focus
+#### 0.1 Workspace Setup
 
-### Phase 4: Media Integration (Week 8)
-- [ ] Implement MediaSessionCompat
-- [ ] Create Foreground Service for background playback
-- [ ] Build notification with playback controls
-- [ ] Handle audio focus changes (duck, pause)
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.1.1 | Create `/Cargo.toml` (workspace root) | `cargo metadata --format-version=1` valid | 🤖 |
+| 0.1.2 | Create `/remixatron-core/` directory | `[ -d remixatron-core ]` | 🤖 |
+| 0.1.3 | Create `/remixatron-core/Cargo.toml` | `cargo check -p remixatron-core` passes | 🤖 |
+| 0.1.4 | Create `/remixatron-core/src/lib.rs` placeholder | `cargo build -p remixatron-core` passes | 🤖 |
+| 0.1.5 | Update desktop Cargo.toml to workspace | `cargo check -p remixatron` passes | 🤖 |
+| 0.1.6 | Verify desktop builds | `cd rust-app && npm run tauri build -- --debug` | 🤖 |
 
-### Phase 5: UI & Visualization (Week 9-10)
-- [ ] Pre-calculate beat positions (VisualizationState)
-- [ ] Implement optimized circular beat Canvas
-- [ ] Implement batch point drawing
-- [ ] Build Floating Player Card (M3)
-- [ ] Implement jump arc rendering
-- [ ] Add Pulse Ring countdown indicator
+#### 0.2 Type Extraction (Beat, Segment, AnalysisResult)
 
-### Phase 6: Download & Favorites (Week 11-12)
-- [ ] Integrate youtubedl-android library
-- [ ] Implement yt-dlp auto-update on app launch
-- [ ] Implement URL input detection with Early Metadata
-- [ ] Build Favorites persistence (Room)
-- [ ] Implement Favorites carousel UI
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.2.1 | Copy `Beat` to `remixatron-core/src/types.rs` | `cargo check -p remixatron-core` | 🤖 |
+| 0.2.2 | Copy `PlayInstruction` to types.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.2.3 | Copy `Segment` to types.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.2.4 | Copy `AnalysisResult` to types.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.2.5 | Add `pub mod types;` to lib.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.2.6 | Re-export types in lib.rs | `cargo doc -p remixatron-core` shows exports | 🤖 |
+| 0.2.7 | Desktop imports `Beat` from core | `cargo check -p remixatron` | 🤖 |
+| 0.2.8 | Desktop imports other types from core | `cargo check -p remixatron` | 🤖 |
+| 0.2.9 | Verify full desktop build | `npm run tauri build -- --debug` | 🤖 |
 
-### Phase 7: Polish & Testing (Week 13-14)
-- [ ] Device matrix testing (Pixel, Samsung, OnePlus)
-- [ ] Performance profiling (Systrace, Perfetto)
-- [ ] Memory leak auditing (LeakCanary)
-- [ ] Audio latency tuning (buffer sizes)
-- [ ] ProGuard testing
-- [ ] Prepare Play Store submission
+#### 0.3 Analysis Module Extraction
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.3.1 | Copy `analysis/` to core | Files exist | 🤖 |
+| 0.3.2 | Add dependencies (ndarray, etc.) to core | `cargo check -p remixatron-core` | 🤖 |
+| 0.3.3 | Add `pub mod analysis;` to lib.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.3.4 | Desktop imports from `remixatron_core::analysis` | `cargo check -p remixatron` | 🤖 |
+| 0.3.5 | Remove duplicate from desktop | Directory deleted | 🤖 |
+| 0.3.6 | Verify desktop build | `npm run tauri build -- --debug` | 🤖 |
+
+#### 0.4 Beat Tracker Extraction
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.4.1 | Copy `beat_tracker/` to core (exclude ONNX) | Files exist | 🤖 |
+| 0.4.2 | Add `ort` dependency to core | `cargo check -p remixatron-core` | 🤖 |
+| 0.4.3 | Add `pub mod beat_tracker;` to lib.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.4.4 | Desktop imports from core | `cargo check -p remixatron` | 🤖 |
+| 0.4.5 | Remove duplicate (keep ONNX files) | Rust files deleted, ONNX remain | 🤖 |
+| 0.4.6 | Verify desktop build | `npm run tauri build -- --debug` | 🤖 |
+
+#### 0.5 Audio Loading Extraction
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.5.1 | Copy `audio/` to core | Files exist | 🤖 |
+| 0.5.2 | Add `symphonia`, `rubato` to core | `cargo check -p remixatron-core` | 🤖 |
+| 0.5.3 | Add `pub mod audio;` to lib.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.5.4 | Desktop imports from core | `cargo check -p remixatron` | 🤖 |
+| 0.5.5 | Remove duplicate from desktop | Directory deleted | 🤖 |
+| 0.5.6 | Verify desktop build | `npm run tauri build -- --debug` | 🤖 |
+
+#### 0.6 Workflow Extraction
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.6.1 | Copy `workflow.rs` to core | File exists | 🤖 |
+| 0.6.2 | Update imports to use local modules | `cargo check -p remixatron-core` | 🤖 |
+| 0.6.3 | Make `Remixatron` public, re-export | `cargo doc` shows `Remixatron` | 🤖 |
+| 0.6.4 | Desktop uses `remixatron_core::Remixatron` | `cargo check -p remixatron` | 🤖 |
+| 0.6.5 | Remove desktop `workflow.rs` | File deleted | 🤖 |
+| 0.6.6 | Verify desktop build | `npm run tauri build -- --debug` | 🤖 |
+
+#### 0.7 JIT Engine Extraction
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.7.1 | Create `remixatron-core/src/jit/mod.rs` | File exists | 🤖 |
+| 0.7.2 | Extract `JukeboxEngine` struct (no Kira) | `cargo check -p remixatron-core` | 🤖 |
+| 0.7.3 | Extract `get_next_beat()` to core | `cargo check -p remixatron-core` | 🤖 |
+| 0.7.4 | Keep `load_track()`, `play_with_callback()` in desktop | Desktop retains Kira audio | 👁️ |
+| 0.7.5 | Add `pub mod jit;` to lib.rs | `cargo check -p remixatron-core` | 🤖 |
+| 0.7.6 | Desktop uses core JukeboxEngine + local audio | `cargo check -p remixatron` | 🤖 |
+| 0.7.7 | Verify desktop build | `npm run tauri build -- --debug` | 🤖 |
+| 0.7.8 | **PARITY TEST**: Analyze test track | Beat/segment counts match expected | 🔄 |
+
+#### 0.8 Final Verification
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 0.8.1 | `cargo clippy -p remixatron-core` | No errors | 🔄 |
+| 0.8.2 | `cargo clippy -p remixatron` | No errors | 🔄 |
+| 0.8.3 | `cargo ndk -t arm64-v8a check -p remixatron-core` | Cross-compile passes | 🤖 |
+| 0.8.4 | Desktop end-to-end test | Works as before | 👁️ |
+| 0.8.5 | Git commit extraction | Commit created | 🤖 |
+
+---
+
+### Phase 1: Android Foundation (Week 1-2) — 72% Automated
+
+#### 1.1 Android Project Setup
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 1.1.1 | Create `android-app/` directory | Directory exists | 🤖 |
+| 1.1.2 | Configure Gradle with compileSdk=34, minSdk=24 | `./gradlew tasks` succeeds | 🤖 |
+| 1.1.3 | Add Jetpack Compose dependencies | `./gradlew assembleDebug` | 🤖 |
+| 1.1.4 | Add Hilt dependencies | `./gradlew assembleDebug` | 🤖 |
+| 1.1.5 | Create empty MainActivity.kt | App launches on emulator | 🔄 |
+| 1.1.6 | Configure ProGuard for JNI | Minified build succeeds | 🤖 |
+
+#### 1.2 Rust JNI Crate
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 1.2.1 | Create `remixatron-android/Cargo.toml` | `cargo check` passes | 🤖 |
+| 1.2.2 | Add `remixatron-core` dependency | `cargo check` passes | 🤖 |
+| 1.2.3 | Add `jni = "0.21"` | `cargo check` passes | 🤖 |
+| 1.2.4 | Create hello-world JNI function | `cargo ndk build` succeeds | 🤖 |
+| 1.2.5 | Copy `.so` to `jniLibs/` | Files exist for all ABIs | 🤖 |
+| 1.2.6 | Create Kotlin `RemixatronBridge.kt` | Compilation succeeds | 🤖 |
+| 1.2.7 | Call hello() from MainActivity | Logcat shows output | 🔄 |
+
+#### 1.3 ONNX Model Bundling
+
+| # | Task | Verification | Type |
+|---|------|--------------|------|
+| 1.3.1 | Symlink models to assets | Symlinks exist | 🤖 |
+| 1.3.2 | Create ModelAssetManager.kt | Compilation succeeds | 🤖 |
+| 1.3.3 | Test model copy on launch | Files in cache dir | 🔄 |
+| 1.3.4 | Rust loads ONNX from cache | No crash | 🔄 |
+
+---
+
+### Phase 2: Analysis Pipeline (Week 3-4) — 30% Automated
+
+| Task | Verification | Type |
+|------|--------------|------|
+| Implement `analyzeTrack()` JNI | `cargo ndk build` | 🤖 |
+| Implement AnalysisHandle/JukeboxHandle | Compilation passes | 🤖 |
+| Implement Rust→Java exception bridge | Exceptions thrown correctly | 🔄 |
+| Progress callback via GlobalRef | UI shows progress | 👁️ |
+| **Parity**: Beat count matches desktop | Same file → same count | 🤖 |
+| Basic file picker UI | User can select file | 👁️ |
+
+---
+
+### Phase 3: Audio Engine (Week 5-7) — 10% Automated
+
+| Task | Verification | Type |
+|------|--------------|------|
+| Oboe audio stream setup | `./gradlew assembleDebug` | 🤖 |
+| Lock-free beat event queue | Compilation passes | 🤖 |
+| Audio buffer pointer sharing | No crash on play | 🔄 |
+| Beat-boundary detection | Logcat shows beat indices | 🔄 |
+| Kotlin polling loop | UI updates on beat | 👁️ |
+| Play/Pause/Stop controls | Works correctly | 👁️ |
+| Audio quality validation | No clicks/pops at jumps | 👁️ |
+
+---
+
+### Phase 4: Media Integration (Week 8) — 20% Automated
+
+| Task | Verification | Type |
+|------|--------------|------|
+| MediaSessionCompat | `adb shell dumpsys media_session` | 🔄 |
+| Foreground Service | Notification appears | 👁️ |
+| Notification controls | Buttons work | 👁️ |
+| Audio focus handling | Pauses for call, resumes | 👁️ |
+
+---
+
+### Phase 5: UI & Visualization (Week 9-10) — 5% Automated
+
+| Task | Verification | Type |
+|------|--------------|------|
+| Pre-calculate beat positions | No jank in profiler | 🔄 |
+| Circular beat Canvas | Visual inspection | 👁️ |
+| Batch point drawing | 60fps in profiler | 🔄 |
+| Floating Player Card | Visual inspection | 👁️ |
+| Jump arc rendering | Visual inspection | 👁️ |
+| Pulse Ring countdown | Matches jump timing | 👁️ |
+
+---
+
+### Phase 6: Download & Favorites (Week 11-12) — 40% Automated
+
+| Task | Verification | Type |
+|------|--------------|------|
+| youtubedl-android integration | Library loads | 🤖 |
+| yt-dlp auto-update | Version increments | 🔄 |
+| URL detection | Metadata appears | 🔄 |
+| Room favorites schema | Unit tests pass | 🤖 |
+| Favorites UI | Visual inspection | 👁️ |
+
+---
+
+### Phase 7: Polish & Testing (Week 13-14) — 0% Automated
+
+| Task | Verification | Type |
+|------|--------------|------|
+| Device matrix (Pixel, Samsung, OnePlus) | Manual testing | 👁️ |
+| Systrace/Perfetto profiling | No major issues | 👁️ |
+| LeakCanary audit | No leaks | 👁️ |
+| Audio latency tuning | Acceptable latency | 👁️ |
+| ProGuard validation | Release build works | 👁️ |
+| Play Store submission | Published | 👁️ |
+
+---
+
+### Automation Summary
+
+| Phase | Tasks | 🤖 Auto | 🔄 Hybrid | 👁️ Human |
+|-------|-------|---------|-----------|----------|
+| 0: Core Extraction | 53 | 48 (91%) | 3 | 2 |
+| 1: Foundation | 18 | 13 (72%) | 5 | 0 |
+| 2: Analysis | 6 | 2 (33%) | 2 | 2 |
+| 3: Audio | 7 | 2 (29%) | 2 | 3 |
+| 4: Media | 4 | 0 (0%) | 1 | 3 |
+| 5: UI | 6 | 0 (0%) | 2 | 4 |
+| 6: Download | 5 | 2 (40%) | 2 | 1 |
+| 7: Polish | 6 | 0 (0%) | 0 | 6 |
+| **Total** | **105** | **67 (64%)** | **17** | **21** |
 
 ---
 
