@@ -212,13 +212,39 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     // Find yt-dlp binary (handles AppImage PATH issues)
     let ytdlp_path = find_binary("yt-dlp")
         .ok_or_else(|| anyhow!("yt-dlp not found. Please install it and ensure it's in your PATH."))?;
+
+    // Find ffmpeg binary (needed for post-processing)
+    let ffmpeg_path = find_binary("ffmpeg");
     
-    let metadata_output = Command::new(&ytdlp_path)
+    // Helper to configure command environment
+    let configure_command = |cmd: &mut Command| {
+        // If we found binaries in a non-standard location, add that directory to PATH
+        // so yt-dlp can find other tools (node, deno, atomicparsley, etc).
+        let ytdlp_dir = std::path::Path::new(&ytdlp_path).parent();
+        if let Some(dir) = ytdlp_dir {
+             if let Some(path_str) = dir.to_str() {
+                 if let Ok(current_path) = std::env::var("PATH") {
+                     let new_path = format!("{}:{}", path_str, current_path);
+                     cmd.env("PATH", new_path);
+                 } else {
+                     cmd.env("PATH", path_str);
+                 }
+             }
+        }
+        
+        // Remove interfering Python env vars
+        cmd.env_remove("PYTHONHOME")
+           .env_remove("PYTHONPATH");
+    };
+
+    // --- 1. Fetch Metadata ---
+    let mut metadata_cmd = Command::new(&ytdlp_path);
+    configure_command(&mut metadata_cmd);
+    
+    let metadata_output = metadata_cmd
         .arg("--dump-json")
         .arg("--no-download")
         .arg(&url)
-        .env_remove("PYTHONHOME")
-        .env_remove("PYTHONPATH")
         .output()
         .map_err(|e| anyhow!("Failed to run yt-dlp: {}", e))?;
 
@@ -261,12 +287,16 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     );
     let output_path = dl_dir.join(&filename);
 
-    // Run yt-dlp to download audio only.
-    // -f bestaudio: Select best audio format
-    // -x: Extract audio (convert to audio-only)
-    // --audio-format m4a: Output as M4A (AAC)
-    // -o: Output path
-    let download_output = Command::new(&ytdlp_path)
+    // --- 5. Run Download Command ---
+    let mut download_cmd = Command::new(&ytdlp_path);
+    configure_command(&mut download_cmd);
+
+    if let Some(ff_path) = &ffmpeg_path {
+        // Explicitly tell yt-dlp where ffmpeg is
+        download_cmd.arg("--ffmpeg-location").arg(ff_path);
+    }
+
+    let download_output = download_cmd
         .arg("-f")
         .arg("bestaudio")
         .arg("-x")
@@ -275,8 +305,6 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
         .arg("-o")
         .arg(&output_path)
         .arg(&url)
-        .env_remove("PYTHONHOME")
-        .env_remove("PYTHONPATH")
         .output()
         .map_err(|e| anyhow!("Failed to run yt-dlp: {}", e))?;
 

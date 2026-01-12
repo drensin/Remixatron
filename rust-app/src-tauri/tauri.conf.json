@@ -1,6 +1,6 @@
 {
     "productName": "Remixatron",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "identifier": "com.remixatron.dev",
     "build": {
         "beforeDevCommand": "npm run dev",
