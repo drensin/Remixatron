@@ -69,8 +69,16 @@ pub fn check_dependencies() -> DependencyStatus {
 /// * `Some(version)` - First line of stdout if command succeeded.
 /// * `None` - If command failed (binary not found or not executable).
 fn get_binary_version(binary: &str, version_flag: &str) -> Option<String> {
-    Command::new(binary)
+    // Use find_binary to locate the executable (handles AppImage PATH issues)
+    let binary_path = find_binary(binary)?;
+    
+    // Clear AppImage's Python environment variables that break yt-dlp.
+    // AppImages set PYTHONHOME/PYTHONPATH which causes Python to fail with
+    // "No module named 'encodings'" when running external Python scripts.
+    Command::new(&binary_path)
         .arg(version_flag)
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
         .output()
         .ok()
         .filter(|output| output.status.success())
@@ -83,6 +91,62 @@ fn get_binary_version(binary: &str, version_flag: &str) -> Option<String> {
                 .to_string()
         })
         .filter(|s| !s.is_empty())
+}
+
+/// Finds a binary by checking PATH and common installation locations.
+///
+/// AppImages have a modified PATH that may not include user directories like
+/// ~/.local/bin. This function checks common locations to ensure we can find
+/// binaries installed via pip, brew, etc.
+///
+/// # Arguments
+/// * `binary` - Name of the binary to find (e.g., "yt-dlp", "ffmpeg").
+///
+/// # Returns
+/// * `Some(path)` - Full path to the binary if found.
+/// * `None` - If binary not found in any location.
+fn find_binary(binary: &str) -> Option<String> {
+    use std::path::Path;
+    
+    // Build list of common binary locations to check.
+    // AppImages have a modified PATH that may not include user directories.
+    let mut paths_to_check: Vec<String> = Vec::new();
+    
+    // Add user-specific paths FIRST (pip installs here on Linux)
+    // This is the most common location for yt-dlp
+    if let Ok(home) = std::env::var("HOME") {
+        paths_to_check.push(format!("{}/.local/bin", home));
+    }
+    
+    // Standard system paths
+    paths_to_check.push("/usr/local/bin".to_string());
+    paths_to_check.push("/usr/bin".to_string());
+    paths_to_check.push("/bin".to_string());
+    
+    // macOS Homebrew locations
+    paths_to_check.push("/opt/homebrew/bin".to_string());
+    
+    // Check each path for the binary
+    for dir in &paths_to_check {
+        let full_path = format!("{}/{}", dir, binary);
+        if Path::new(&full_path).exists() {
+            return Some(full_path);
+        }
+    }
+    
+    // Last resort: try the binary name directly (uses current PATH)
+    // This works in normal shells but may fail in AppImages
+    if Command::new(binary)
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok()
+    {
+        return Some(binary.to_string());
+    }
+    
+    None
 }
 
 // =============================================================================
@@ -145,10 +209,16 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     // 1. Fetch Metadata using yt-dlp --dump-json
     let _ = app.emit("downloader_status", "Fetching metadata...");
     
-    let metadata_output = Command::new("yt-dlp")
+    // Find yt-dlp binary (handles AppImage PATH issues)
+    let ytdlp_path = find_binary("yt-dlp")
+        .ok_or_else(|| anyhow!("yt-dlp not found. Please install it and ensure it's in your PATH."))?;
+    
+    let metadata_output = Command::new(&ytdlp_path)
         .arg("--dump-json")
         .arg("--no-download")
         .arg(&url)
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
         .output()
         .map_err(|e| anyhow!("Failed to run yt-dlp: {}", e))?;
 
@@ -196,7 +266,7 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     // -x: Extract audio (convert to audio-only)
     // --audio-format m4a: Output as M4A (AAC)
     // -o: Output path
-    let download_output = Command::new("yt-dlp")
+    let download_output = Command::new(&ytdlp_path)
         .arg("-f")
         .arg("bestaudio")
         .arg("-x")
@@ -205,6 +275,8 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
         .arg("-o")
         .arg(&output_path)
         .arg(&url)
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
         .output()
         .map_err(|e| anyhow!("Failed to run yt-dlp: {}", e))?;
 
