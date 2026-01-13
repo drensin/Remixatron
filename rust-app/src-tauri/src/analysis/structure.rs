@@ -362,6 +362,7 @@ impl StructureAnalyzer {
 
 // Utils
 
+#[allow(dead_code)]  // Used by disabled clustering code
 fn normalize_rows(a: &Array2<f32>) -> Array2<f32> {
     let mut res = a.clone();
     for i in 0..a.nrows() {
@@ -1474,19 +1475,21 @@ impl StructureAnalyzer {
             all_candidates[i] = candidates;
         }
         
-        // Phase 2: Compute P75 percentile as adaptive threshold
+        // Phase 2: Compute P85 percentile as adaptive threshold (stricter than P75)
         let mut all_sims: Vec<f32> = all_candidates.iter()
             .flat_map(|neighbors| neighbors.iter().map(|(_, sim)| *sim))
             .collect();
         all_sims.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         
         let adaptive_threshold = if !all_sims.is_empty() {
-            all_sims[all_sims.len() / 4]  // P75 (top 25%)
+            // P75 = top 25% (index at 25% from start of sorted-descending list)
+            let p85_index = all_sims.len() * 25 / 100;
+            all_sims[p85_index.min(all_sims.len() - 1)]
         } else {
             0.5  // Fallback
         };
         
-        println!("DEBUG: Adaptive threshold P75 = {:.4}", adaptive_threshold);
+        println!("DEBUG: Adaptive threshold P85 = {:.4}", adaptive_threshold);
         
         // Phase 3: Filter edges using adaptive threshold
         let mut jumps = vec![Vec::new(); n_beats];
@@ -1524,7 +1527,7 @@ impl StructureAnalyzer {
                     let p25_sim = all_sims[3 * all_sims.len() / 4];
                     
                     let _ = writeln!(file, "Total candidates: {}", all_sims.len());
-                    let _ = writeln!(file, "Adaptive threshold (P75): {:.4}", adaptive_threshold);
+                    let _ = writeln!(file, "Adaptive threshold (P85): {:.4}", adaptive_threshold);
                     let _ = writeln!(file, "Edges after filtering: {} ({:.1}%)", 
                         total_edges, 100.0 * total_edges as f32 / all_sims.len() as f32);
                     let _ = writeln!(file, "Min: {:.4}, Max: {:.4}, Median: {:.4}", min_sim, max_sim, median_sim);
@@ -1537,7 +1540,7 @@ impl StructureAnalyzer {
                     for thresh in buckets {
                         let count = all_sims.iter().filter(|&&s| s >= thresh).count();
                         let pct = 100.0 * count as f32 / all_sims.len() as f32;
-                        let marker = if (thresh - adaptive_threshold).abs() < 0.05 { " <- P75" } else { "" };
+                        let marker = if (thresh - adaptive_threshold).abs() < 0.05 { " <- P85" } else { "" };
                         let _ = writeln!(file, "  >= {:.1}: {:5} edges ({:5.1}%){}", thresh, count, pct, marker);
                     }
                 }
@@ -2431,7 +2434,7 @@ impl StructureAnalyzer {
     /// - Novelty detection excels at finding **boundaries** (structural transitions)
     /// - Recurrence-based affinity excels at **labeling** (grouping similar sections)
     /// - Pooled features (SSM on medians) collapse on homogeneous productions
-    pub fn compute_segments_checkerboard(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, bar_positions: &[usize], k_force: Option<usize>) -> SegmentationResult {
+    pub fn compute_segments_checkerboard(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, bar_positions: &[usize], _k_force: Option<usize>) -> SegmentationResult {
         let n_beats = mfcc.nrows();
         
         // Create debug log file (will be appended to by other functions)
@@ -2591,8 +2594,8 @@ impl StructureAnalyzer {
         // patterns that pooled features miss in homogeneous productions.
         
         let best_labels_seg: Vec<usize>;
-        let mut k_final;
-        let best_stats;
+        let k_final;
+        let _best_stats;
 
         println!("    Computing Segment Affinity (Recurrence-Based)...");
         
@@ -2610,13 +2613,36 @@ impl StructureAnalyzer {
             for j in 0..n_chroma { fused[[i, n_mfcc + j]] = chroma_norm[[i, j]]; }
         }
         
-        // Unit-normalize each beat
-        for mut row in fused.rows_mut() {
-            let norm = row.dot(&row).sqrt();
-            if norm > 1e-6 { row /= norm; }
-        }
+        // NOTE: Unit-normalization commented out - it was erasing intensity differences
+        // between beats, making similar segments harder to distinguish.
+        // for mut row in fused.rows_mut() {
+        //     let norm = row.dot(&row).sqrt();
+        //     if norm > 1e-6 { row /= norm; }
+        // }
         
-        // B. Compute Segment Recurrence Matrix (average similarity between segment pairs)
+        // Compute adaptive sigma for Gaussian affinity (median of all pairwise distances)
+        // This follows the legacy Python approach: sim = exp(-dist² / σ²)
+        let mut all_distances: Vec<f32> = Vec::new();
+        for i in 0..n_beats {
+            let row_i = fused.row(i);
+            // Sample neighbors to avoid O(n²) computation
+            for j in (i+1)..(i+50).min(n_beats) {
+                let row_j = fused.row(j);
+                let mut dist_sq = 0.0f32;
+                for k in 0..fused.ncols() {
+                    let d = row_i[k] - row_j[k];
+                    dist_sq += d * d;
+                }
+                all_distances.push(dist_sq.sqrt());
+            }
+        }
+        all_distances.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let sigma = if all_distances.is_empty() { 1.0 } else {
+            all_distances[all_distances.len() / 2]  // Median distance
+        };
+        let sigma_sq = sigma * sigma;
+        
+        // B. Compute Segment Recurrence Matrix (Gaussian affinity between segment pairs)
         let n_s = n_segments;
         let mut s_seg = Array2::<f32>::zeros((n_s, n_s));
         
@@ -2628,8 +2654,8 @@ impl StructureAnalyzer {
                 let sj_start = boundaries[sj];
                 let sj_end = boundaries[sj + 1];
                 
-                // Average cosine similarity between all beat pairs
-                let mut total_sim = 0.0f32;
+                // Average Gaussian affinity between all beat pairs
+                let mut total_affinity = 0.0f32;
                 let mut count = 0;
                 
                 for bi in si_start..si_end {
@@ -2639,18 +2665,104 @@ impl StructureAnalyzer {
                         if bi == bj { continue; }
                         
                         let row_j = fused.row(bj);
-                        let sim = row_i.dot(&row_j); // Already unit norm, so dot = cosine
-                        total_sim += sim;
+                        
+                        // Euclidean distance squared
+                        let mut dist_sq = 0.0f32;
+                        for k in 0..fused.ncols() {
+                            let d = row_i[k] - row_j[k];
+                            dist_sq += d * d;
+                        }
+                        
+                        // Gaussian affinity: exp(-dist² / σ²)
+                        let affinity = (-dist_sq / sigma_sq).exp();
+                        total_affinity += affinity;
                         count += 1;
                     }
                 }
                 
-                let avg_sim = if count > 0 { total_sim / count as f32 } else { 0.0 };
-                s_seg[[si, sj]] = avg_sim.max(0.0);
-                s_seg[[sj, si]] = avg_sim.max(0.0);
+                let avg_affinity = if count > 0 { total_affinity / count as f32 } else { 0.0 };
+                s_seg[[si, sj]] = avg_affinity;
+                s_seg[[sj, si]] = avg_affinity;
             }
         }
         
+        // DEBUG: Log Segment Affinity Matrix to file
+        {
+            use std::io::Write;
+            use std::fs::OpenOptions;
+            if let Ok(mut file) = OpenOptions::new().append(true).open("remixatron_debug.log") {
+                let _ = writeln!(file, "\n=== SEGMENT AFFINITY MATRIX ===");
+                let _ = writeln!(file, "Shows average cosine similarity between segment pairs.");
+                let _ = writeln!(file, "High similarity (>0.7) suggests segments should be in same cluster.\n");
+                
+                // Header row
+                let _ = write!(file, "Seg\\Seg\t");
+                for j in 0..n_s { let _ = write!(file, "{}\t", j); }
+                let _ = writeln!(file);
+                
+                // Matrix rows
+                for i in 0..n_s {
+                    let _ = write!(file, "{}\t", i);
+                    for j in 0..n_s {
+                        let val = s_seg[[i, j]];
+                        let _ = write!(file, "{:.2}\t", val);
+                    }
+                    let _ = writeln!(file);
+                }
+                
+                // Also log segment time ranges for context
+                let _ = writeln!(file, "\n=== SEGMENT TIME RANGES ===");
+                for s in 0..n_s {
+                    let start_beat = boundaries[s];
+                    let end_beat = boundaries[s + 1];
+                    let beat_count = end_beat - start_beat;
+                    let _ = writeln!(file, "Segment {}: beats {}-{} ({} beats)", s, start_beat, end_beat, beat_count);
+                }
+            }
+        }
+        
+        // =====================================================================
+        // CLUSTERING DISABLED - Using Segment Index as Label
+        // =====================================================================
+        // Rationale: We trust novelty peaks as the source of truth for structure.
+        // Instead of clustering segments into groups (which can collapse distinct
+        // sections), we use the segment index directly as the label.
+        // 
+        // Jump quality is determined by beat-level similarity, not cluster labels.
+        // The "don't jump to same segment" rule prevents micro-loops.
+        // =====================================================================
+        
+        k_final = n_segments;
+        
+        // Each segment is its own "cluster" - segment index = label
+        best_labels_seg = (0..n_segments).collect();
+        _best_stats = format!("NoCluster (K=n_segments={})", n_segments);
+        
+        // DEBUG: Log that clustering was skipped
+        {
+            use std::io::Write;
+            use std::fs::OpenOptions;
+            if let Ok(mut file) = OpenOptions::new().append(true).open("remixatron_debug.log") {
+                let _ = writeln!(file, "\n=== CLUSTERING DISABLED ===");
+                let _ = writeln!(file, "Using segment index as label (K = n_segments = {})", n_segments);
+                let _ = writeln!(file, "Each segment is its own unique cluster.");
+                let _ = writeln!(file, "Jump quality determined by beat similarity, not cluster labels.");
+            }
+        }
+        
+        println!("    Skipping clustering: {} segments -> {} labels (segment=cluster)", n_segments, k_final);
+        
+        // 6. Expand Labels to Beats - each beat gets its segment index as label
+        let mut final_labels = vec![0; n_beats];
+        for i in 0..n_segments {
+            let start = boundaries[i];
+            let end = boundaries[i+1];
+            for t in start..end {
+                final_labels[t] = i;  // Segment index IS the label
+            }
+        }
+        
+        /* CLUSTERING CODE DISABLED - keeping for reference
         // C. Laplacian L = I - D^-0.5 * S * D^-0.5
         let mut d_inv_sqrt = Array1::<f32>::zeros(n_s);
         for i in 0..n_s {
@@ -2869,6 +2981,56 @@ impl StructureAnalyzer {
         k_final = k_best;
         println!("-----------------------------\n");
         
+        // DEBUG: Log K selection details to file
+        {
+            use std::io::Write;
+            use std::fs::OpenOptions;
+            if let Ok(mut file) = OpenOptions::new().append(true).open("remixatron_debug.log") {
+                let _ = writeln!(file, "\n=== AUTO-K SELECTION DEBUG ===");
+                let _ = writeln!(file, "K range tested: 2 to {}", max_k_to_test);
+                let _ = writeln!(file, "Ratio threshold: >= 1.5 required for selection");
+                let _ = writeln!(file, "\nK\tSil\tRatio\tMinSeg\tScore\tValid?\tSelected");
+                let _ = writeln!(file, "---\t-----\t-----\t------\t-----\t------\t--------");
+                
+                // Log all K values that were computed
+                for k in 2..=max_k_to_test {
+                    if labels_map.contains_key(&k) {
+                        let sil = *silhouette_map.get(&k).unwrap_or(&0.0);
+                        let ratio = *ratio_map.get(&k).unwrap_or(&0.0);
+                        let ratio_valid = ratio >= 1.5;
+                        
+                        // Recalculate min_seg_len and score for logging
+                        let labels_k = labels_map.get(&k).unwrap();
+                        let mut min_seg_len = usize::MAX;
+                        let mut current_len = 0;
+                        let mut prev_label = usize::MAX;
+                        for &label in labels_k {
+                            if label != prev_label {
+                                if current_len > 0 { min_seg_len = min_seg_len.min(current_len); }
+                                current_len = 1; prev_label = label;
+                            } else { current_len += 1; }
+                        }
+                        if current_len > 0 { min_seg_len = min_seg_len.min(current_len); }
+                        
+                        let score = (k as f32) + (10.0 * sil) + ratio + (min_seg_len.min(8) as f32);
+                        let selected = k == k_final;
+                        
+                        let _ = writeln!(file, "{}\t{:.3}\t{:.2}\t{}\t{:.1}\t{}\t{}", 
+                            k, sil, ratio, min_seg_len, score, 
+                            if ratio_valid { "YES" } else { "NO" },
+                            if selected { "<-- SELECTED" } else { "" });
+                    } else {
+                        let _ = writeln!(file, "{}\t-\t-\t-\t-\t-\t(not computed)", k);
+                    }
+                }
+                
+                let _ = writeln!(file, "\nFinal K selected: {}", k_final);
+                if k_final == 2 {
+                    let _ = writeln!(file, "Note: K=2 selected (fallback or best valid option)");
+                }
+            }
+        }
+        
         // Ensure k_final has a valid label set, fallback to k=2 if best k was not computed
         if !labels_map.contains_key(&k_final) && n_segments >= 2 {
             k_final = 2; 
@@ -2883,18 +3045,7 @@ impl StructureAnalyzer {
              best_stats = "N/A".to_string();
         }
         
-        println!("    Clustering {} segments -> Selected K={} ({})", n_segments, k_final, best_stats);
-        
-        // 6. Expand Labels to Beats
-        let mut final_labels = vec![0; n_beats];
-        for i in 0..n_segments {
-            let start = boundaries[i];
-            let end = boundaries[i+1];
-            let label = best_labels_seg[i];
-            for t in start..end {
-                final_labels[t] = label;
-            }
-        }
+        END OF DISABLED CLUSTERING CODE */
         
         // 7. Compute Jump Graph (same algorithm as k-NN method)
         // Normalize features for jump computation
@@ -2970,7 +3121,7 @@ impl StructureAnalyzer {
         SegmentationResult {
             labels: final_labels,
             k_optimal: k_final,
-            eigenvalues: evals,
+            eigenvalues: vec![],  // No eigenvalues computed - clustering disabled
             novelty_curve: novelty,
             peaks: snapped_peaks,
             jumps: jumps_indices,

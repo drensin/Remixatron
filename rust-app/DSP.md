@@ -60,8 +60,8 @@ graph TD
 3.  **Beat Tracking (AI)**: We use a Neural Network (**BeatThis**) to find exactly where every beat and bar starts. This gives us our "Grid".
 4.  **Feature Extraction**: For every beat on that grid, we calculate its "Fingerprint"—a list of numbers describing its Timbre (tone color) and Pitch (harmony).
 5.  **Bar Positioning**: We assign every beat a "Phase" (e.g., "Beat 1 of 4"). This ensures we don't jump from the start of a bar to the end of a bar, which would sound jarring.
-6.  **Structural Analysis**: We look at all the fingerprints at once to find the "Shape" of the song. We group similar beats into **Clusters** (e.g., "Verse Beats", "Chorus Beats").
-7.  **Graph Assembly**: Finally, we build the "Jump Graph". We connect beats that share the same Cluster and Phase.
+6.  **Structural Analysis**: We use **Novelty Detection** to find structural boundaries (e.g., verse→chorus). Each beat is labeled with its **Segment Index** — no clustering is performed.
+7.  **Graph Assembly**: Finally, we build the "Jump Graph". We connect beats that are acoustically similar and have matching Phase.
 
 ### The Result: The Infinite Walk
 When you press Play, Remixatron starts walking down the string. It plays musical **phrases** (16, 32, or 64 beats) before attempting a jump.
@@ -180,15 +180,19 @@ This "Grid" gives us the time boundaries we used in Section 2.3 to aggregate fea
 
 ---
 
-## Section 4: Hybrid Segmentation (Novelty + Recurrence)
+## Section 4: Hybrid Segmentation (Novelty-Based)
 
 This is the mathematical core of Remixatron. The goal is to:
 1. Find **Segment Boundaries** (where does the song transition?)
-2. **Cluster Segments** (which sections serve the same musical purpose?)
+2. Assign each beat a **Segment Label** (its segment index)
 
-We use a **Hybrid Approach** that combines two complementary techniques:
+> **Note**: Previous versions used spectral clustering to group similar segments.
+> This was removed because it often collapsed distinct sections, reducing structural variety.
+> Now each segment detected by novelty peaks is treated as its own unique label.
+
+We use **Novelty Detection** on a Self-Similarity Matrix:
 - **Novelty Detection**: Excels at finding boundaries (structural transitions)
-- **Recurrence Affinity**: Excels at labeling (grouping similar sections)
+- **Segment Index = Label**: No clustering — each segment is unique
 
 ### 4.1 Self-Similarity Matrix (SSM)
 > **Source**: `src-tauri/src/analysis/structure.rs` (`compute_segments_checkerboard`)
@@ -223,39 +227,43 @@ This kernel responds strongly at points where the music changes (e.g., verse →
 
 Raw novelty peaks rarely land exactly on musical boundaries. We **snap** each peak to the nearest downbeat (bar start) to ensure segments align with the musical grid.
 
-### 4.4 Recurrence-Based Segment Affinity (The Hybrid Step)
-> **Source**: `src-tauri/src/analysis/structure.rs` (Step 5 of `compute_segments_checkerboard`)
+### 4.4 Segment Labeling (No Clustering)
 
-This is where the hybrid approach shines. Instead of clustering based on **pooled segment features** (which fails on homogeneous productions like Uptown Funk), we compute the **average beat-level similarity** between segment pairs:
+> **Previous behavior** (now disabled): The code computed a recurrence-based affinity matrix
+> and used spectral clustering to group similar segments (e.g., Verse 1 = Verse 2).
+> 
+> **Current behavior**: Each segment gets its own unique label (segment index).
+> This preserves all structural granularity from novelty detection.
 
-$$
-Affinity[s_i, s_j] = \frac{1}{|s_i| \cdot |s_j|} \sum_{b \in s_i} \sum_{b' \in s_j} Sim(b, b')
-$$
+Jump quality is determined by **beat-level similarity** (Section 6), not segment labels.
+The "different segment" rule (Section 6.3) prevents micro-loops.
 
-This captures rhythmic and harmonic patterns that simple feature pooling misses. Two verses might have identical average timbre, but their beat-by-beat recurrence patterns reveal they're structurally related.
+### ~~4.5 Spectral Clustering on Segments~~ (Disabled)
 
-### 4.5 [Spectral Clustering](https://arxiv.org/abs/0711.0189) on Segments
-> **Source**: `src-tauri/src/analysis/structure.rs` (`symmetric_eigendecomposition`)
+> This section describes **legacy behavior**. Spectral clustering is currently disabled.
+> It was found to collapse distinct sections on homogeneous productions, reducing variety.
 
-We treat segments as nodes in a graph with edge weights from the recurrence affinity matrix. We compute the **[Normalized Laplacian](https://en.wikipedia.org/wiki/Laplacian_matrix#Symmetric_normalized_Laplacian)**:
-
-$$
-L = I - D^{-1/2} A D^{-1/2}
-$$
-
-Then solve for eigenvectors of $L$ and run **K-Means** on the first $k$ eigenvectors.
-
-**The Result**:
-```
-Segments:  [0, 1, 2, 3, 4, 5, 6, 7]
-Labels:    [Intro, Verse, Bridge, Verse, Chorus, Chorus, Outro, Outro]
-```
-
-This reveals the song's macro-structure.
+The affinity matrix computation and spectral embedding code remain in `structure.rs` but
+are bypassed by the current pipeline.
 
 ---
 
-## Section 5: The "Auto-K" Selection Algorithm
+## ~~Section 5: The "Auto-K" Selection Algorithm~~ (Disabled)
+
+> **This entire section describes legacy behavior.**
+> K selection is no longer performed because clustering is disabled.
+
+With clustering disabled, K = n_segments (each segment is its own cluster).
+The silhouette scores, ratio metrics, and eigengap heuristics are no longer used.
+
+---
+
+
+<details>
+<summary><strong>Section 5 (Legacy): The Auto-K Selection Algorithm</strong> — Click to expand</summary>
+
+> ⚠️ **This section describes disabled legacy behavior.**
+> With clustering disabled, K = n_segments and this selection logic is bypassed.
 
 One critical question remains: **How many clusters ($k$) should we use?**
 If $k=1$, the whole song is one blob.
@@ -296,6 +304,8 @@ This selects $K$ where the *relative* eigenvalue gap is largest. Normalizing by 
 - **BalancedConnectivity**: `(100 × Silhouette) + Median(Jumps)`
 - **ConnectivityFirst**: Maximize escape fraction above quality floors
 - **MaxK**: Maximize K subject to quality/connectivity floors
+
+</details>
 
 ---
 

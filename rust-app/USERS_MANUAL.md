@@ -1,6 +1,6 @@
 # Remixatron User's Manual
 
-**Version 0.7.0**
+**Version 0.9.0**
 
 ---
 
@@ -188,7 +188,7 @@ Remixatron is a love letter to **Paul Lamere's** original [Infinite Jukebox](htt
 Remixatron's "secret sauce" is built on the shoulders of giants in the **Music Information Retrieval (MIR)** community:
 
 *   **BeatThis** — The neural beat tracker used by V3 is based on State-of-the-Art research published at **ISMIR 2024**. It uses modern neural network architecture for robust beat and downbeat detection.
-*   **Hybrid Segmentation** — The core segmentation algorithm combines novelty-based boundary detection with recurrence-based clustering, using **Graph Theory** and **Spectral Embedding** techniques.
+*   **Novelty-Based Segmentation** — The core segmentation algorithm uses novelty detection on a self-similarity matrix to find structural boundaries (verse, chorus, bridge). Each segment is assigned a unique label.
 *   **MFCC & Chroma Features** — Timbral and harmonic fingerprinting methods standardized in audio analysis research. The original implementation used **[Librosa](https://librosa.org/doc/latest/index.html)** by Brian McFee et al. (See: McFee, B. et al., *"librosa: Audio and Music Signal Analysis in Python,"* Proc. of the 14th Python in Science Conference, 2015. [Paper PDF](https://conference.scipy.org/proceedings/scipy2015/pdfs/proceedings.pdf#page=24)).
 
 ### Key Libraries & Frameworks
