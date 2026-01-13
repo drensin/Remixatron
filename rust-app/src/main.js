@@ -190,6 +190,15 @@ async function startRemix() {
         // 2. Setup Viz
         viz.setData(payload);
 
+        // 2.5 Fetch and set waveform envelope for inner ring visualization
+        try {
+            const envelope = await invoke("get_waveform_envelope");
+            viz.setWaveformEnvelope(envelope);
+        } catch (envErr) {
+            console.warn("Failed to get waveform envelope:", envErr);
+            // Non-fatal: visualization still works without waveform ring
+        }
+
         // 3. Play
         await invoke("play_track", { path });
 

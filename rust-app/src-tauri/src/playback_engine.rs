@@ -90,6 +90,10 @@ pub struct JukeboxEngine {
     last_chance_beat: usize,
     acceptable_jump_amounts: Vec<usize>,
     max_beats_between_jumps: usize,
+    
+    /// RMS amplitude envelope for waveform visualization.
+    /// Contains ~720 normalized values (0.0-1.0) representing amplitude at each angle.
+    pub waveform_envelope: Vec<f32>,
 }
 
 impl JukeboxEngine {
@@ -152,6 +156,9 @@ impl JukeboxEngine {
             last_chance_beat: last_chance,
             acceptable_jump_amounts,
             max_beats_between_jumps,
+            
+            // Waveform envelope (computed in load_track)
+            waveform_envelope: Vec::new(),
         }
     }
     
@@ -171,6 +178,47 @@ impl JukeboxEngine {
         println!("Decoding audio with robust decoder...");
         let (samples, sample_rate, channels) = decode_audio_file(path)
             .map_err(|e| format!("Robust decode failed: {}", e))?;
+        
+        // --- Compute Waveform Envelope for Visualization ---
+        // We divide the audio into 720 chunks (2 per degree for smooth 360° ring).
+        // For each chunk, compute RMS amplitude and normalize to 0.0-1.0.
+        const ENVELOPE_SAMPLES: usize = 720;
+        let total_samples = samples.len();
+        let chunk_size = (total_samples / ENVELOPE_SAMPLES).max(1);
+        
+        let mut envelope: Vec<f32> = Vec::with_capacity(ENVELOPE_SAMPLES);
+        let mut max_rms: f32 = 0.0;
+        
+        for i in 0..ENVELOPE_SAMPLES {
+            let start = i * chunk_size;
+            let end = ((i + 1) * chunk_size).min(total_samples);
+            
+            if start >= total_samples {
+                envelope.push(0.0);
+                continue;
+            }
+            
+            // Calculate RMS for this chunk
+            let chunk = &samples[start..end];
+            let sum_sq: f32 = chunk.iter().map(|s| s * s).sum();
+            let rms = (sum_sq / chunk.len() as f32).sqrt();
+            
+            if rms > max_rms {
+                max_rms = rms;
+            }
+            envelope.push(rms);
+        }
+        
+        // Normalize to 0.0-1.0 range
+        if max_rms > 0.0 {
+            for val in &mut envelope {
+                *val /= max_rms;
+            }
+        }
+        
+        self.waveform_envelope = envelope;
+        println!("Computed waveform envelope: {} samples", ENVELOPE_SAMPLES);
+        // --- End Envelope Computation ---
             
         // Convert Vec<f32> interleaved to Vec<Frame> for Kira
         // Kira expects stereo frames. We handle mono/stereo/surround manually.

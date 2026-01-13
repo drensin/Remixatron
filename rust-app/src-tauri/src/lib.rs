@@ -335,6 +335,25 @@ async fn set_paused(state: State<'_, AppState>, paused: bool) -> Result<(), Stri
     Ok(())
 }
 
+/// Returns the pre-computed waveform amplitude envelope for visualization.
+///
+/// The envelope contains ~720 normalized values (0.0-1.0) representing the
+/// RMS amplitude at each position around the 360° ring (2 samples per degree).
+/// This is computed once during `load_track` and cached for the session.
+///
+/// # Returns
+/// A `Vec<f32>` of amplitude values, or an error if no track is loaded.
+#[tauri::command]
+async fn get_waveform_envelope(state: State<'_, AppState>) -> Result<Vec<f32>, String> {
+    let engine_guard = state.engine.lock()
+        .map_err(|_| "Failed to lock engine".to_string())?;
+    
+    let engine = engine_guard.as_ref()
+        .ok_or_else(|| "No track loaded".to_string())?;
+    
+    Ok(engine.waveform_envelope.clone())
+}
+
 // =============================================================================
 // Favorites Commands
 // =============================================================================
@@ -532,6 +551,7 @@ pub fn run() {
             import_url,
             check_dependencies,
             set_paused,
+            get_waveform_envelope,
             list_favorites,
             add_favorite,
             remove_favorite,

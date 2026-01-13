@@ -32,6 +32,14 @@ export class InfiniteJukeboxViz {
             '#FF0055', '#00FF99', '#00CCFF', '#FFAA00', '#CC00FF',
             '#FF3300', '#AAFF00', '#0055FF', '#FF00AA', '#00FF55'
         ];
+
+        // Waveform Ring Configuration
+        this.waveformEnvelope = [];       // 720 amplitude values (0.0-1.0)
+        this.WAVEFORM_WIDTH_RATIO = 1.5;  // 150% of segment ring width
+        this.WAVEFORM_GAP = 3;            // px between segment ring and waveform
+        this.WAVEFORM_MIN_AMPLITUDE = 0.1; // Floor for quiet sections
+        this.WAVEFORM_OPACITY = 0.4;       // Base opacity for non-active segments
+        this.WAVEFORM_ACTIVE_OPACITY = 0.7; // Opacity for current segment
     }
 
     updatePlaybackState(seqPos, seqLen) {
@@ -113,6 +121,16 @@ export class InfiniteJukeboxViz {
         this.draw();
     }
 
+    /**
+     * Sets the waveform amplitude envelope for the inner ring visualization.
+     * 
+     * @param {Array<number>} envelope - Array of ~720 normalized amplitude values (0.0-1.0).
+     */
+    setWaveformEnvelope(envelope) {
+        this.waveformEnvelope = envelope;
+        console.log(`Loaded waveform envelope: ${envelope.length} samples`);
+    }
+
     getAngle(time) {
         return (time / this.duration) * 2 * Math.PI - (Math.PI / 2); // Start at 12 o'clock
     }
@@ -140,6 +158,9 @@ export class InfiniteJukeboxViz {
 
         // Reset Context State
         ctx.lineCap = "butt";
+
+        // 0.5. Draw Waveform Ring (Inner, behind segment ring)
+        this.drawWaveformRing(ctx, activeSegmentIndex);
 
         // 1. Draw Segments (Outer Ring)
         ctx.lineWidth = 15;
@@ -178,7 +199,8 @@ export class InfiniteJukeboxViz {
 
             // 3. Draw Jump Connections (Arcs)
             // Draw lines to all possible jump candidates from this beat
-            ctx.lineWidth = 1;
+            // Each arc is colored by its TARGET segment to show where it leads
+            ctx.lineWidth = 1.5;
             beat.jump_candidates.forEach(targetIdx => {
                 const targetBeat = this.beats[targetIdx];
                 const targetAngle = this.getAngle(targetBeat.start);
@@ -188,12 +210,21 @@ export class InfiniteJukeboxViz {
                 const sx = this.centerX + Math.cos(angle) * (this.radius - 20);
                 const sy = this.centerY + Math.sin(angle) * (this.radius - 20);
 
+                // Get target segment's color
+                const targetSegIdx = targetBeat.segment;
+                const targetSeg = this.segments[targetSegIdx];
+                const targetColor = targetSeg
+                    ? this.colors[targetSeg.label % this.colors.length]
+                    : "#FFFFFF";
+
                 ctx.beginPath();
                 ctx.moveTo(sx, sy);
-                // Bezier curve through center?
+                // Bezier curve through center
                 ctx.quadraticCurveTo(this.centerX, this.centerY, tx, ty);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"; // White for dark background
+                ctx.strokeStyle = targetColor;
+                ctx.globalAlpha = 0.5;
                 ctx.stroke();
+                ctx.globalAlpha = 1.0;
             });
         }
 
@@ -327,5 +358,97 @@ export class InfiniteJukeboxViz {
         ctx.font = "8px sans-serif";
         ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
         ctx.fillText("BRANCH", cx, cy + 12);
+    }
+
+    /**
+     * Draws the waveform amplitude ring inside the segment ring.
+     * 
+     * The waveform is drawn as radial bars (like a linear waveform bent into a circle):
+     * - Each bar extends both inward and outward from a circular baseline
+     * - Bar height is proportional to amplitude at that position
+     * - Colors match the corresponding segment
+     * - Current segment glows brighter than others
+     * 
+     * @param {CanvasRenderingContext2D} ctx - The canvas context.
+     * @param {number} activeSegmentIndex - Index of current playing segment (-1 if none).
+     */
+    drawWaveformRing(ctx, activeSegmentIndex) {
+        if (this.waveformEnvelope.length === 0 || this.segments.length === 0) {
+            return;
+        }
+
+        // Calculate ring dimensions
+        const segmentRingWidth = 15; // Must match segment ring lineWidth
+        const waveformRingWidth = segmentRingWidth * this.WAVEFORM_WIDTH_RATIO;
+        const baselineRadius = this.radius - segmentRingWidth / 2 - this.WAVEFORM_GAP - waveformRingWidth / 2;
+
+        // Bar configuration
+        const numBars = this.waveformEnvelope.length;
+        const barWidth = 1.5; // Width of each radial bar in pixels
+
+        // Pre-compute segment lookup for each bar position
+        const getSegmentAtTime = (time) => {
+            for (let i = 0; i < this.segments.length; i++) {
+                if (time >= this.segments[i].start_time && time < this.segments[i].end_time) {
+                    return i;
+                }
+            }
+            return this.segments.length - 1; // Default to last segment
+        };
+
+        // Draw each radial bar
+        for (let i = 0; i < numBars; i++) {
+            const normalizedPos = i / numBars;
+            const angle = normalizedPos * 2 * Math.PI - (Math.PI / 2); // Start at 12 o'clock
+            const time = normalizedPos * this.duration;
+
+            // Get amplitude with floor
+            let amp = this.waveformEnvelope[i] || 0;
+            amp = Math.max(amp, this.WAVEFORM_MIN_AMPLITUDE);
+
+            // Calculate bar extent (half goes in, half goes out)
+            const barHalfHeight = (waveformRingWidth / 2) * amp;
+            const innerRadius = baselineRadius - barHalfHeight;
+            const outerRadius = baselineRadius + barHalfHeight;
+
+            // Get segment for this position (for active detection)
+            const segIdx = getSegmentAtTime(time);
+
+            // Determine if this segment is active (for glow effect)
+            const isActive = (activeSegmentIndex === -1 || activeSegmentIndex === segIdx);
+
+            // Calculate start and end points of the radial bar
+            const innerX = this.centerX + Math.cos(angle) * innerRadius;
+            const innerY = this.centerY + Math.sin(angle) * innerRadius;
+            const outerX = this.centerX + Math.cos(angle) * outerRadius;
+            const outerY = this.centerY + Math.sin(angle) * outerRadius;
+
+            // Draw the bar
+            ctx.beginPath();
+            ctx.moveTo(innerX, innerY);
+            ctx.lineTo(outerX, outerY);
+
+            ctx.lineWidth = barWidth;
+            ctx.lineCap = "round";
+
+            // Apply glow effect for active segment (white glow), otherwise dim gray
+            if (isActive) {
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = "#FFFFFF";
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = "#FFFFFF";
+            } else {
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 0.35;
+                ctx.strokeStyle = "#AAAAAA";
+            }
+
+            ctx.stroke();
+        }
+
+        // Reset context state
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1.0;
+        ctx.lineCap = "butt";
     }
 }
