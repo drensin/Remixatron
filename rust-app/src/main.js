@@ -96,7 +96,7 @@ async function startRemix() {
 
         // UI: Reset Metadata to Loading State initially
         const filename = path.split(/[/\\]/).pop();
-        if (trackTitleEl) trackTitleEl.textContent = `Loading...`;
+        if (trackTitleEl) setTrackTitle(`Loading...`);
         if (albumArtImg) albumArtImg.classList.add("hidden");
         if (albumArtPlaceholder) albumArtPlaceholder.classList.remove("hidden");
 
@@ -124,7 +124,7 @@ async function startRemix() {
                 // UI: Update Metadata Immediately (Step 0b)
                 if (trackTitleEl) {
                     console.log("Updating Title to:", metadata.title);
-                    trackTitleEl.textContent = metadata.title;
+                    setTrackTitle(metadata.title);
                 }
 
                 // UI: Update Album Art from URL
@@ -154,7 +154,7 @@ async function startRemix() {
             }
         } else {
             // Local file: Show filename
-            if (trackTitleEl) trackTitleEl.textContent = `Loading ${filename}...`;
+            if (trackTitleEl) setTrackTitle(`Loading ${filename}...`);
         }
 
         statusEl.textContent = "Stopping previous playback...";
@@ -177,7 +177,7 @@ async function startRemix() {
         if (remoteMetadata) {
             // Keep the title we already set
         } else {
-            if (trackTitleEl) trackTitleEl.textContent = payload.title;
+            if (trackTitleEl) setTrackTitle(payload.title);
 
             // 1c. Update Album Art (Local Only)
             if (payload.album_art_base64 && albumArtImg) {
@@ -599,6 +599,53 @@ function closeFavoritesDropdown() {
     renderFavoritesList(allFavorites); // Reset to full list.
 }
 
+/**
+ * Updates the track title display with marquee support for long titles.
+ * 
+ * When the title overflows its container, a seamless looping marquee animation
+ * is enabled. The animation duration is calculated based on text length for
+ * consistent readable scrolling speed.
+ * 
+ * @param {string} title - The title text to display.
+ */
+function setTrackTitle(title) {
+    if (!trackTitleEl) return;
+
+    // Find the text spans
+    const textSpans = trackTitleEl.querySelectorAll('.track-title-text');
+    const container = trackTitleEl.closest('.track-title-container');
+
+    // Update text in both spans (primary and duplicate)
+    textSpans.forEach(span => {
+        span.textContent = title;
+    });
+
+    // Remove marquee class first to reset
+    trackTitleEl.classList.remove('marquee-active');
+
+    // Use requestAnimationFrame to ensure DOM has updated dimensions
+    requestAnimationFrame(() => {
+        if (!container) return;
+
+        // Check if the title overflows the container
+        const titleWidth = trackTitleEl.scrollWidth;
+        const containerWidth = container.clientWidth;
+
+        if (titleWidth > containerWidth) {
+            // Calculate animation duration for readable speed (~60 pixels/second)
+            // Since we scroll 50% of total width (one copy), calculate based on that
+            const scrollDistance = titleWidth / 2;
+            const duration = Math.max(8, Math.min(30, scrollDistance / 60));
+
+            // Set CSS custom property for duration
+            trackTitleEl.style.setProperty('--marquee-duration', `${duration}s`);
+
+            // Enable marquee animation
+            trackTitleEl.classList.add('marquee-active');
+        }
+    });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
     // Bind M3 Elements
     statusEl = document.querySelector("#status-msg");
@@ -713,7 +760,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
         const payload = event.payload;
         // Update Metadata
-        if (trackTitleEl) trackTitleEl.textContent = payload.title;
+        if (trackTitleEl) setTrackTitle(payload.title);
 
         // Update Album Art
         if (payload.album_art_base64 && albumArtImg) {
@@ -748,7 +795,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
         // Update track title immediately
         if (trackTitleEl && meta.title) {
-            trackTitleEl.textContent = meta.title;
+            setTrackTitle(meta.title);
         }
 
         // Update album art from thumbnail URL

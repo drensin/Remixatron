@@ -176,6 +176,7 @@ pub struct VideoMetadata {
 /// 1. Cleans up previous downloads to prevent storage bloat.
 /// 2. Fetches video metadata using `yt-dlp --dump-json`.
 /// 3. Downloads the audio using `yt-dlp -x --audio-format m4a`.
+/// 4. If bot detection is triggered, retries with browser cookies.
 ///
 /// # Arguments
 /// * `app` - The Tauri application handle for accessing paths and emitting events.
@@ -216,6 +217,10 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     // Find ffmpeg binary (needed for post-processing)
     let ffmpeg_path = find_binary("ffmpeg");
     
+    // List of browsers to try for cookie extraction (in order of popularity).
+    // yt-dlp will try to extract cookies from the first available browser.
+    let browsers_to_try = ["chrome", "firefox", "edge", "brave", "chromium", "safari", "opera"];
+    
     // Helper to configure command environment
     let configure_command = |cmd: &mut Command| {
         // If we found binaries in a non-standard location, add that directory to PATH
@@ -237,33 +242,85 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
            .env_remove("PYTHONPATH");
     };
 
-    // --- 1. Fetch Metadata ---
-    let mut metadata_cmd = Command::new(&ytdlp_path);
-    configure_command(&mut metadata_cmd);
-    
-    let metadata_output = metadata_cmd
-        .arg("--dump-json")
-        .arg("--no-download")
-        .arg(&url)
-        .output()
-        .map_err(|e| anyhow!("Failed to run yt-dlp: {}", e))?;
+    // --- Helper to run metadata fetch (with optional browser cookies) ---
+    let fetch_metadata = |browser: Option<&str>| -> Result<(String, String, Option<String>)> {
+        let mut cmd = Command::new(&ytdlp_path);
+        configure_command(&mut cmd);
+        
+        cmd.arg("--dump-json")
+           .arg("--no-download");
+        
+        // Add browser cookies if specified
+        if let Some(b) = browser {
+            cmd.arg("--cookies-from-browser").arg(b);
+        }
+        
+        cmd.arg(&url);
+        
+        let output = cmd.output()
+            .map_err(|e| anyhow!("Failed to run yt-dlp: {}", e))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(create_download_error(&stderr));
+        }
+        
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        let metadata: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| anyhow!("Failed to parse yt-dlp metadata: {}", e))?;
+        
+        let raw_title = metadata["title"].as_str().unwrap_or("Unknown Title").to_string();
+        let artist = metadata["channel"].as_str()
+            .or_else(|| metadata["uploader"].as_str())
+            .unwrap_or("Unknown Artist")
+            .to_string();
+        let thumbnail_url = metadata["thumbnail"].as_str().map(|s| s.to_string());
+        
+        Ok((raw_title, artist, thumbnail_url))
+    };
 
-    if !metadata_output.status.success() {
-        let stderr = String::from_utf8_lossy(&metadata_output.stderr);
-        return Err(create_download_error(&stderr));
-    }
-
-    // Parse JSON metadata
-    let json_str = String::from_utf8_lossy(&metadata_output.stdout);
-    let metadata: serde_json::Value = serde_json::from_str(&json_str)
-        .map_err(|e| anyhow!("Failed to parse yt-dlp metadata: {}", e))?;
-
-    let raw_title = metadata["title"].as_str().unwrap_or("Unknown Title").to_string();
-    let artist = metadata["channel"].as_str()
-        .or_else(|| metadata["uploader"].as_str())
-        .unwrap_or("Unknown Artist")
-        .to_string();
-    let thumbnail_url = metadata["thumbnail"].as_str().map(|s| s.to_string());
+    // --- 1. Try metadata fetch without cookies first ---
+    let (raw_title, artist, thumbnail_url, working_browser) = match fetch_metadata(None) {
+        Ok((title, artist, thumb)) => (title, artist, thumb, None),
+        Err(e) => {
+            let err_str = e.to_string();
+            // Check if this is a bot detection error that cookies might fix
+            if err_str.contains("Sign in to confirm") || err_str.contains("bot") {
+                let _ = app.emit("downloader_status", "Bot detected, trying browser cookies...");
+                
+                // Try each browser until one works
+                let mut success = None;
+                for browser in &browsers_to_try {
+                    let _ = app.emit("downloader_status", format!("Trying {} cookies...", browser));
+                    match fetch_metadata(Some(browser)) {
+                        Ok((title, artist, thumb)) => {
+                            println!("Successfully fetched metadata using {} cookies", browser);
+                            success = Some((title, artist, thumb, Some(browser.to_string())));
+                            break;
+                        }
+                        Err(e) => {
+                            // If this browser failed with a different error, note it
+                            let err_str = e.to_string();
+                            if !err_str.contains("could not find") && !err_str.contains("no cookies") {
+                                // This browser exists but still failed - might be a different issue
+                                eprintln!("Browser {} failed: {}", browser, err_str);
+                            }
+                            // Continue to next browser
+                        }
+                    }
+                }
+                
+                match success {
+                    Some((t, a, th, b)) => (t, a, th, b),
+                    None => return Err(anyhow!("Bot detection triggered. No browser cookies found. \
+                        Try logging into YouTube in Chrome or Firefox.")),
+                }
+            } else {
+                // Not a bot detection error, propagate original error
+                return Err(e);
+            }
+        }
+    };
 
     // 2. Clean up title to remove redundant artist prefix.
     let title = clean_title(&raw_title, &artist);
@@ -287,13 +344,18 @@ pub async fn download_url(app: AppHandle, url: String) -> Result<VideoMetadata> 
     );
     let output_path = dl_dir.join(&filename);
 
-    // --- 5. Run Download Command ---
+    // --- 5. Run Download Command (with same browser cookies if they worked) ---
     let mut download_cmd = Command::new(&ytdlp_path);
     configure_command(&mut download_cmd);
 
     if let Some(ff_path) = &ffmpeg_path {
         // Explicitly tell yt-dlp where ffmpeg is
         download_cmd.arg("--ffmpeg-location").arg(ff_path);
+    }
+    
+    // Use the same browser cookies that worked for metadata
+    if let Some(ref browser) = working_browser {
+        download_cmd.arg("--cookies-from-browser").arg(browser);
     }
 
     let download_output = download_cmd

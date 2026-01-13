@@ -179,13 +179,52 @@ body {
     margin-right: 16px;
 }
 
+/* --- Track Title with Seamless Marquee --- */
+.track-title-container {
+    overflow: hidden;
+    position: relative;
+    /* Fade only the right edge for smooth disappearing effect */
+    mask-image: linear-gradient(to right, black 0%, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 0%, black 90%, transparent 100%);
+}
+
 .track-title {
+    display: inline-flex;
+    white-space: nowrap;
     font-weight: 600;
     font-size: var(--md-sys-typescale-title-medium);
     color: var(--md-sys-color-on-surface);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+}
+
+.track-title-text {
+    display: inline-block;
+    padding-right: 3em;
+    /* Gap between end and duplicate start */
+}
+
+/* Duplicate is hidden by default */
+.track-title-duplicate {
+    display: none;
+}
+
+/* When marquee is active, show duplicate and animate */
+.track-title.marquee-active {
+    animation: track-title-scroll var(--marquee-duration, 10s) linear infinite;
+}
+
+.track-title.marquee-active .track-title-duplicate {
+    display: inline-block;
+}
+
+@keyframes track-title-scroll {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        /* Scroll by exactly one copy's width (50% of total) */
+        transform: translateX(-50%);
+    }
 }
 
 .track-status {
