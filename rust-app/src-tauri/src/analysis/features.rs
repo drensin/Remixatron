@@ -70,7 +70,7 @@ impl FeatureExtractor {
         mel: &Array2<f32>, 
         beats: &[f32], 
         fps: f32
-    ) -> (Array2<f32>, Array2<f32>, Array2<f32>) {
+    ) -> (Array2<f32>, Array2<f32>, Array2<f32>, Vec<f32>) {
         let (n_time, _) = mel.dim();
         let n_beats = beats.len();
         
@@ -141,11 +141,15 @@ impl FeatureExtractor {
         let mut chroma_sync = Array2::<f32>::zeros((n_beats, 12));
         // Full CQT sync (252 bins for recurrence matrix - like Python's Csync)
         let mut cqt_sync = Array2::<f32>::zeros((n_beats, n_bins));
+        // RMS Amplitude (per beat)
+        let mut rms_sync = Vec::with_capacity(n_beats);
         
         // Mel Beats
         let beat_frames_mel: Vec<usize> = beats.iter().map(|&t| (t * fps).round() as usize).collect();
         // CQT Beats
         let beat_frames_cqt: Vec<usize> = beats.iter().map(|&t| (t * cqt_fps).round() as usize).collect();
+        // Audio Beats (samples)
+        let beat_samples: Vec<usize> = beats.iter().map(|&t| (t * self.sample_rate).round() as usize).collect();
         
         for i in 0..n_beats {
             // MFCC
@@ -226,9 +230,24 @@ impl FeatureExtractor {
                     cqt_sync[[i, k]] = med;
                 }
             } else if start_qc < n_cqt_frames {
-                 // Single frame fallback
+                // Single frame fallback
                  for k in 0..12 { chroma_sync[[i, k]] = chroma_frames[[start_qc, k]]; }
                  for k in 0..n_bins { cqt_sync[[i, k]] = cqt_spectrogram[[start_qc, k]]; }
+            }
+
+            // 4. RMS Amplitude
+            let start_samp = if i == 0 { 0 } else { beat_samples[i] };
+            let end_samp = if i == n_beats - 1 { audio.len() } else { beat_samples[i+1] };
+            let start_s = start_samp.min(audio.len());
+            let end_s = end_samp.min(audio.len());
+
+            if start_s < end_s {
+                let slice = &audio[start_s..end_s];
+                let sum_sq: f32 = slice.iter().map(|&x| x * x).sum();
+                let rms = (sum_sq / slice.len() as f32).sqrt();
+                rms_sync.push(rms);
+            } else {
+                rms_sync.push(0.0);
             }
         }
         
@@ -249,7 +268,7 @@ impl FeatureExtractor {
             }
         }
         
-        (mfcc_sync, chroma_sync, cqt_sync)
+        (mfcc_sync, chroma_sync, cqt_sync, rms_sync)
     }
 }
 

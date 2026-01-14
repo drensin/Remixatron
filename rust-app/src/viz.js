@@ -202,6 +202,9 @@ export class InfiniteJukeboxViz {
             // Each arc is colored by its TARGET segment to show where it leads
             ctx.lineWidth = 1.5;
             beat.jump_candidates.forEach(targetIdx => {
+                // Skip invalid indices (may occur if beats were truncated)
+                if (targetIdx >= this.beats.length) return;
+
                 const targetBeat = this.beats[targetIdx];
                 const targetAngle = this.getAngle(targetBeat.start);
                 const tx = this.centerX + Math.cos(targetAngle) * (this.radius - 20);

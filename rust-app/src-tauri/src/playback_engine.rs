@@ -286,8 +286,17 @@ impl JukeboxEngine {
         // --- Compute Waveform Envelope for Visualization ---
         // We divide the audio into 720 chunks (2 per degree for smooth 360° ring).
         // For each chunk, compute RMS amplitude and normalize to 0.0-1.0.
+        // RESPECT TRUNCATION: Only compute envelope up to the last valid beat.
+        let effective_limit = if let Some(last_beat) = self.beats.last() {
+            let limit_sec = last_beat.start + last_beat.duration;
+            let limit_samples = (limit_sec * sample_rate as f32) as usize * channels as usize;
+            limit_samples.min(samples.len())
+        } else {
+            samples.len()
+        };
+
         const ENVELOPE_SAMPLES: usize = 720;
-        let total_samples = samples.len();
+        let total_samples = effective_limit; // Use truncated length
         let chunk_size = (total_samples / ENVELOPE_SAMPLES).max(1);
         
         let mut envelope: Vec<f32> = Vec::with_capacity(ENVELOPE_SAMPLES);
@@ -602,6 +611,7 @@ impl JukeboxEngine {
         let display_seq_pos = self.current_sequence;
 
         // 3. Check Jump Trigger (Do we jump AFTER this beat?)
+        // Standard Trigger: Phrase complete OR Panic mode
         let will_jump = (self.current_sequence as isize >= self.min_sequence_len) || 
                         (self.beats_since_jump >= self.max_beats_between_jumps);
         
@@ -635,9 +645,6 @@ impl JukeboxEngine {
                 let min_recency_score = (song_length as f32 * MIN_RECENCY_THRESHOLD) as usize;
                 let in_panic_mode = self.beats_since_jump >= self.max_beats_between_jumps;
                 
-                // Clone for logging before filtering
-                let scored_for_logging = scored_candidates.clone();
-                
                 let viable_candidates: Vec<(usize, usize, usize)> = scored_candidates
                     .into_iter()
                     .filter(|(_, score, _)| {
@@ -658,78 +665,6 @@ impl JukeboxEngine {
                 if let Some(&(best_candidate, _, _)) = sorted_candidates.first() {
                     next_cursor = best_candidate;
                     did_jump = true;
-                }
-                
-                // DEBUG LOGGING: Log every jump attempt for analysis
-                {
-                    use std::io::Write;
-                    use std::fs::OpenOptions;
-                    if let Ok(mut file) = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open("remixatron_debug.log") 
-                    {
-                        let _ = writeln!(file, "\n=== JUMP EVENT ===");
-                        let _ = writeln!(file, "src_beat: {}", current_cursor);
-                        let _ = writeln!(file, "dest_beat: {}", if did_jump { next_cursor as isize } else { -1 });
-                        let _ = writeln!(file, "did_jump: {}", did_jump);
-                        
-                        // Jump trigger reason
-                        let phrase_complete = self.current_sequence as isize >= self.min_sequence_len;
-                        let panic_trigger = self.beats_since_jump >= self.max_beats_between_jumps;
-                        let jump_reason = if phrase_complete && panic_trigger {
-                            "both"
-                        } else if phrase_complete {
-                            "phrase_complete"
-                        } else if panic_trigger {
-                            "panic_triggered"
-                        } else {
-                            "none"
-                        };
-                        let _ = writeln!(file, "jump_reason: {}", jump_reason);
-                        
-                        // State counters
-                        let _ = writeln!(file, "current_sequence: {}", self.current_sequence);
-                        let _ = writeln!(file, "min_sequence_len: {}", self.min_sequence_len);
-                        let _ = writeln!(file, "beats_since_jump: {}", self.beats_since_jump);
-                        let _ = writeln!(file, "panic_mode: {}", in_panic_mode);
-                        let _ = writeln!(file, "max_beats_between_jumps: {}", self.max_beats_between_jumps);
-                        
-                        // Candidate analysis
-                        let _ = writeln!(file, "num_raw_candidates: {}", all_cands.len());
-                        let _ = writeln!(file, "num_viable_after_filter: {}", sorted_candidates.len());
-                        let _ = writeln!(file, "recency_threshold: {}", min_recency_score);
-                        
-                        // Top 10 candidates with scores
-                        let _ = writeln!(file, "top_10_candidates:");
-                        for (i, &(cand_id, score, dist)) in scored_for_logging.iter().take(10).enumerate() {
-                            let viable = score > min_recency_score || in_panic_mode;
-                            let _ = writeln!(
-                                file, 
-                                "  [{}]: beat={}, score={}, dist={}, viable={}", 
-                                i, cand_id, score, dist, viable
-                            );
-                        }
-                        
-                        // Queue state snapshot
-                        let _ = writeln!(file, "queue_size: {}", self.play_history.len());
-                        
-                        // Queue head (oldest 5)
-                        let head: Vec<usize> = self.play_history.iter().take(5).copied().collect();
-                        let _ = writeln!(file, "queue_head (oldest 5): {:?}", head);
-                        
-                        // Queue tail (newest 10)
-                        let tail_start = if self.play_history.len() > 10 { 
-                            self.play_history.len() - 10 
-                        } else { 
-                            0 
-                        };
-                        let tail: Vec<usize> = self.play_history.iter()
-                            .skip(tail_start)
-                            .copied()
-                            .collect();
-                        let _ = writeln!(file, "queue_tail (newest 10): {:?}", tail);
-                    }
                 }
             }
         }
