@@ -399,6 +399,12 @@ impl Remixatron {
                            }
                        }
                   }
+
+                  // Sanitize Jump Candidates (remove stale references to pruned beats)
+                  let final_count = beat_structs.len();
+                  for beat in &mut beat_structs {
+                      beat.jump_candidates.retain(|&cand_id| cand_id < final_count);
+                  }
              }
         }
         

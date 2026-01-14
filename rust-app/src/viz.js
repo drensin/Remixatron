@@ -396,7 +396,7 @@ export class InfiniteJukeboxViz {
                     return i;
                 }
             }
-            return this.segments.length - 1; // Default to last segment
+            return -1; // Return -1 if no segment matches (e.g. Intro gap)
         };
 
         // Draw each radial bar
@@ -418,7 +418,8 @@ export class InfiniteJukeboxViz {
             const segIdx = getSegmentAtTime(time);
 
             // Determine if this segment is active (for glow effect)
-            const isActive = (activeSegmentIndex === -1 || activeSegmentIndex === segIdx);
+            // If segIdx is -1 (Intro/Gap), it is NEVER active.
+            const isActive = (segIdx !== -1) && (activeSegmentIndex === -1 || activeSegmentIndex === segIdx);
 
             // Calculate start and end points of the radial bar
             const innerX = this.centerX + Math.cos(angle) * innerRadius;

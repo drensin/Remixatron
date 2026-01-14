@@ -662,9 +662,36 @@ impl JukeboxEngine {
                 });
                 
                 // Pick the best candidate
-                if let Some(&(best_candidate, _, _)) = sorted_candidates.first() {
+                if let Some(&(best_candidate, score, dist)) = sorted_candidates.first() {
                     next_cursor = best_candidate;
                     did_jump = true;
+
+                    // --- TELEMETRY LOGGING (SURGICAL) ---
+                    // Log the jump decision to diagnose "backward jump" behavior
+                    {
+                        use std::fs::OpenOptions;
+                        use std::io::Write;
+                        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("remixatron_debug.log") {
+                            let trigger = if in_panic_mode { "PANIC" } else { "PHRASE" };
+                            let _ = writeln!(file, "[Beat {}] Trigger: {} ({}/{}). Candidates: Raw {} -> Viable {}. Selected: {} (Score: {}, Dist: {})",
+                                current_cursor,
+                                trigger,
+                                self.beats_since_jump,
+                                self.max_beats_between_jumps,
+                                all_cands.len(),
+                                sorted_candidates.len(),
+                                best_candidate,
+                                score,
+                                dist
+                            );
+                            
+                            // If we bypassed recency, log it explicitly
+                            if in_panic_mode && score <= min_recency_score {
+                                let _ = writeln!(file, "  -> PANIC OVERRIDE: Bypassed Recency Threshold (Score {} <= {})", score, min_recency_score);
+                            }
+                        }
+                    }
+                    // --- END TELEMETRY ---
                 }
             }
         }
@@ -676,7 +703,26 @@ impl JukeboxEngine {
                  self.beats_since_jump = 0;
              } else {
                  // No candidates available - continue linearly
-                 self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
+                 if current_cursor + 1 < self.beats.len() {
+                     self.cursor = current_cursor + 1;
+                 } else {
+                     // WRAP AROUND (Smart Loop)
+                     // Instead of jumping to 0 (which might be a silent intro),
+                     // jump to the first beat that has any connectivity.
+                     // This likely skips the unique/slow intro on the loop.
+                     let smart_start = self.beats.iter()
+                         .position(|b| !b.jump_candidates.is_empty())
+                         .unwrap_or(0);
+                     
+                     println!("[SmartLoop] Wrapped! Found start index: {} (Beat 0 cands: {})", 
+                        smart_start, 
+                        self.beats.get(0).map(|b| b.jump_candidates.len()).unwrap_or(0)
+                     );
+
+                     self.cursor = smart_start;
+                     // Reset panic counter on full loop
+                     self.beats_since_jump = 0; 
+                 }
                  self.beats_since_jump += 1;
              }
              
