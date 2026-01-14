@@ -357,18 +357,23 @@ $$
 \text{Phase}(\text{Target}) \equiv \text{Phase}(\text{Next Linear Beat})
 $$
 
-### 6.3 Segment Diversity
-> **Source**: `src-tauri/src/workflow.rs` (Line ~247 "Structural Diversity")
+### 6.3 Minimum Distance
+> **Source**: `src-tauri/src/workflow.rs` (Line ~256 "Minimum Distance")
 
-We generally want to jump to a *structurally identical* part of the song, but in a *different* time period.
-*   **Good**: Jumping from "Verse 1" to "Verse 2".
-*   **Bad**: Jumping from "Verse 1" back to itself (Micro-looping).
+To prevent jarring micro-jumps (e.g., jumping just 2-3 beats away), we require a minimum spatial separation between source and target beats.
 
-We prevent micro-loops by enforcing that `Segment(Target) != Segment(Source)` whenever possible.
+**Rule**: Jump targets must be at least **8 beats away** from the source:
 
-> **Note**: A third check (Cluster Consistency) exists in the codebase but is currently **disabled**.
-> With the hybrid segmentation approach, segments with the same function (e.g., Verse 1 and Verse 2)
-> often get different cluster labels, making strict cluster matching too restrictive.
+$$
+|\text{Target} - \text{Source}| \geq 8
+$$
+
+This ensures jumps feel intentional and move to meaningfully different parts of the song structure.
+
+> **Note**: The segment diversity check (preventing jumps within the same segment) was **removed**.
+> Recency-based scoring in the playback engine (Section 7.2) now handles micro-loop prevention
+> more effectively by tracking individual beat playback history.
+
 
 ### The Graph
 The result of this process is a directed graph where every beat has:
@@ -399,16 +404,36 @@ Instead, we use a **Structured Sequence Engine**:
 
 This creates meaningful "Phrases" of music rather than random stuttering.
 
-### 7.2 Safety Systems
-> **Source**: `src-tauri/src/playback_engine.rs` (Line ~442 "Recent Segments")
+### 7.2 Recency-Based Jump Selection
+> **Source**: `src-tauri/src/playback_engine.rs` (`get_next_beat`, Line ~619)
 
-To prevent getting stuck, we maintain a **History Buffer**:
-*   **Recent Segments**: We track the last `25%` of unique segments visited.
-*   **The Rule**: You cannot jump to a segment currently in the History Buffer.
-    *   This forces the walker to explore the *entire* song structure before returning to a previous chorus.
+Instead of tracking segment history, Remixatron V3 uses a **FIFO play history queue** to prevent micro-loops:
 
-**Quartile Busting**:
-If the engine fails to find a valid jump for too long (e.g., > 10% of the song), it enters "Panic Mode" and intentionally targets a beat in a different 25% (Quartile) of the song to force a scene change.
+1. **Track Every Beat**: A queue of size = song length tracks every beat played (oldest at front, newest at back)
+2. **Score by Recency**: Candidates are scored based on their **most recent** position in the queue:
+   ```rust
+   recency_score = if let Some(pos) = play_history.rposition(|&id| id == candidate_id) {
+       song_length - pos  // Older (low pos) = high score
+   } else {
+       song_length  // Never played = maximum score
+   }
+   ```
+3. **Filter by Threshold**: Candidates scoring below **25% of song length** are filtered out
+4. **Distance Tiebreaker**: When recency scores tie, prefer more distant candidates
+
+**Dynamic Panic Threshold**:
+
+The system detects when it's stuck playing linearly too long. The panic threshold scales with graph density:
+
+$$
+\text{threshold} = \text{song\_length} \times 0.10 \times \frac{2.5}{\text{avg\_candidates}}
+$$
+
+- **Sparse graphs** (avg=1.7 candidates/beat) → **higher threshold** (~15% of song) → gives recency filter more time
+- **Dense graphs** (avg=2.5 candidates/beat) → **baseline threshold** (~10% of song)
+- When panic mode triggers, the recency filter is bypassed to ensure forward progress
+
+This replaces the legacy "segment history" and "quartile busting" systems with a simpler, more effective approach.
 
 ### Conclusion
 This combination of **Deep Spectral Analysis** (to find the structure) and **Real-Time Probabilistic Logic** (to navigate it) is what allows Remixatron to create an infinite, non-repeating, and musically coherent experience.

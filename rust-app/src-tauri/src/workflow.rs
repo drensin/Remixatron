@@ -230,8 +230,10 @@ impl Remixatron {
                 // Logic:
                 // 1. Phase Consistency: We check the Bar Position (0-3) of the *next* beat.
                 //    Any jump target must have the SAME Bar Position.
-                // 2. Structural Diversity: We only jump to a DIFFERENT segment instance.
-                // 3. Safety: No dead ends.
+                // 2. Safety: No dead ends (avoid jumping to last beat).
+                //
+                // NOTE: Segment diversity check removed - recency-based scoring in playback
+                // engine handles micro-loop prevention more effectively.
                 let mut candidates = Vec::new();
 
                 // Determine the "Target Phase" (The Bar Position of the beat we are about to play)
@@ -245,20 +247,15 @@ impl Remixatron {
                         let candidate_phase = bar_positions[*target_idx];
                         if candidate_phase != target_phase { continue; }
 
-                        // CHECK 2: Structural Diversity
-                        let target_seg_id = beat_to_segment_id[*target_idx];
-                        if target_seg_id == current_segment_id { continue; }
-
-                        // CHECK 3: Cluster Consistency (DISABLED FOR TESTING)
-                        // This was too strict with checkerboard segmentation where
-                        // segments with the same function (verse1, verse2) get different labels.
-                        // TODO: Re-enable or replace with a smarter similarity check.
-                        // let target_cluster = result.labels[*target_idx];
-                        // let next_beat_cluster = result.labels[next_beat_idx];
-                        // if target_cluster != next_beat_cluster { continue; }
-
-                        // CHECK 4: Safety
+                        // CHECK 2: Safety
                         if *target_idx >= result.labels.len() - 1 { continue; }
+
+                        // CHECK 3: Minimum Distance
+                        // Prevent micro-jumps that feel jarring (e.g., jumping just 2-3 beats away).
+                        // Require at least 8 beats (2 bars) between source and target.
+                        let distance = (*target_idx as isize - i as isize).unsigned_abs();
+                        const MIN_JUMP_DISTANCE: usize = 8;
+                        if distance < MIN_JUMP_DISTANCE { continue; }
 
                         candidates.push(*target_idx);
                     }

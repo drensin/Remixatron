@@ -22,6 +22,20 @@ use rand::rngs::StdRng;
 use std::collections::VecDeque;
 use std::sync::mpsc::Receiver;
 
+/// Minimum recency threshold for jump candidate selection (as a fraction of song length).
+///
+/// Candidates are filtered to only include beats that were played MORE THAN this
+/// fraction of the song ago (lower position in play history = played longer ago).
+///
+/// - **Value: 0.25** means candidates must be in the oldest 75% of the play history
+/// - **Example**: In a 500-beat song, won't jump to beats played in the last 125 beats
+/// - **Bypassed in panic mode** (when stuck for 10%+ of song) to ensure forward progress
+///
+/// **Tuning Guide**:
+/// - Lower (0.10): More permissive, allows some repetition
+/// - Higher (0.50): Stricter, forces maximum variety but may feel too random
+const MIN_RECENCY_THRESHOLD: f32 = 0.25;
+
 /// Commands to control the playback loop from another thread.
 pub enum PlaybackCommand {
     /// Stop playback immediately and return from the loop.
@@ -82,12 +96,12 @@ pub struct JukeboxEngine {
     current_sequence: usize,
     min_sequence_len: isize,
     beats_since_jump: usize,
-    failed_jumps: usize,
-    recent_segments: VecDeque<usize>,
+    /// FIFO queue tracking beat IDs in play order (most recent at back).
+    /// Size = song length to enable recency-based jump selection.
+    play_history: VecDeque<usize>,
     rng: StdRng,
     
     // Pre-calculated Metadata
-    last_chance_beat: usize,
     acceptable_jump_amounts: Vec<usize>,
     max_beats_between_jumps: usize,
     
@@ -101,16 +115,7 @@ impl JukeboxEngine {
     pub fn new(beats: Vec<Beat>, clusters: usize) -> Self {
         let mut rng = StdRng::from_entropy();
         
-        // 1. Pre-calculate "Last Chance" beat
-        let mut last_chance = if !beats.is_empty() { beats.len() - 1 } else { 0 };
-        for i in (0..beats.len()).rev() {
-             if !beats[i].jump_candidates.is_empty() {
-                 last_chance = i;
-                 break;
-             }
-        }
-
-        // 2. Pre-calculate Jump Constants
+        // 1. Pre-calculate Jump Constants
         let last_beat_end = if let Some(b) = beats.last() { b.start + b.duration } else { 0.0 };
         let tempo = (beats.len() as f32 / last_beat_end) * 60.0;
         let mut max_sequence_len = ((tempo / 120.0) * 48.0).round() as usize;
@@ -120,21 +125,122 @@ impl JukeboxEngine {
         let mut acceptable_jump_amounts: Vec<usize> = base_amounts.into_iter()
             .filter(|&x| x <= max_sequence_len)
             .collect();
-            
-        // 3/4 Time Adjustment
+
+        // 2. Calculate Dynamic Panic Threshold
+        // 
+        // Panic mode bypasses the recency filter when stuck playing linearly too long.
+        // The threshold must scale with graph density:
+        //
+        // - SPARSE graphs (few jump candidates) → need MORE time for recency filter
+        //   Example: avg=1.7 candidates → threshold = 81 beats (~14.6% of song)
+        //
+        // - DENSE graphs (many jump candidates) → baseline is fine
+        //   Example: avg=2.5 candidates → threshold = 47 beats (10% of song)
+        //
+        // Formula: threshold = song_length × 0.10 × (2.5 / avg_candidates)
+        //          capped at 20% of song length
+        //
+        // The constant 2.5 comes from empirical testing:
+        // - A dense graph with avg=2.5 had 0% panic mode triggers
+        // - This suggests avg=2.5 provides enough options for recency-based selection
+        // - Sparser graphs scale UP from this baseline
+        let song_length = beats.len();
+        let total_candidates: usize = beats.iter().map(|b| b.jump_candidates.len()).sum();
+        let avg_candidates = if song_length > 0 {
+            total_candidates as f32 / song_length as f32
+        } else {
+            1.0
+        };
+        
+        let baseline_threshold = song_length as f32 * 0.10;  // 10% baseline
+        let sparsity_adjusted = baseline_threshold * (2.5 / avg_candidates);
+        let max_threshold = song_length as f32 / 5.0;  // Cap at 20%
+        let max_beats_between_jumps = sparsity_adjusted.min(max_threshold) as usize;
+
+        // 3. Adjust for 3/4 time signature
         let max_bar_pos = beats.iter().map(|b| b.bar_position).max().unwrap_or(4);
         if max_bar_pos + 1 == 3 {
              acceptable_jump_amounts = acceptable_jump_amounts.iter().map(|a| ((*a as f32) * 0.75) as usize).collect();
         }
         
         let safe_amounts = if acceptable_jump_amounts.is_empty() { vec![16] } else { acceptable_jump_amounts.clone() };
-        let max_beats_between_jumps = (beats.len() as f32 * 0.1).round() as usize;
 
-        // 3. Initialize First Phrase Length
+        // 4. Initialize First Phrase Length
         // Use beats[0] as ref, and offset 0 to target BarPos 3 (End of Bar)
         let start_bar_pos = if !beats.is_empty() { beats[0].bar_position } else { 0 };
         let mut min_seq = *safe_amounts.choose(&mut rng).unwrap() as isize - (start_bar_pos as isize);
         if min_seq < 1 { min_seq = 1; }
+
+        // 4. Initialize play history queue with capacity = song length
+        let song_length = beats.len();
+
+        // DEBUG LOGGING: Jump Graph Structure Analysis
+        {
+            use std::io::Write;
+            use std::fs::OpenOptions;
+            if let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("remixatron_debug.log") 
+            {
+                let _ = writeln!(file, "\n\n=== JUMP GRAPH ANALYSIS ===");
+                let _ = writeln!(file, "Song length: {} beats", song_length);
+                let _ = writeln!(file, "Panic threshold: {} beats (10% of song)", max_beats_between_jumps);
+                
+                // Candidate count statistics
+                let candidate_counts: Vec<usize> = beats.iter()
+                    .map(|b| b.jump_candidates.len())
+                    .collect();
+                
+                let total_candidates: usize = candidate_counts.iter().sum();
+                let avg_candidates = if !candidate_counts.is_empty() {
+                    total_candidates as f32 / candidate_counts.len() as f32
+                } else {
+                    0.0
+                };
+                let min_candidates = candidate_counts.iter().min().copied().unwrap_or(0);
+                let max_candidates = candidate_counts.iter().max().copied().unwrap_or(0);
+                
+                // Count beats by candidate count buckets
+                let zero_cands = candidate_counts.iter().filter(|&&c| c == 0).count();
+                let one_cand = candidate_counts.iter().filter(|&&c| c == 1).count();
+                let two_to_five = candidate_counts.iter().filter(|&&c| c >= 2 && c <= 5).count();
+                let six_to_ten = candidate_counts.iter().filter(|&&c| c >= 6 && c <= 10).count();
+                let over_ten = candidate_counts.iter().filter(|&&c| c > 10).count();
+                
+                let _ = writeln!(file, "\nCandidate Count Statistics:");
+                let _ = writeln!(file, "  Total edges: {}", total_candidates);
+                let _ = writeln!(file, "  Average candidates per beat: {:.1}", avg_candidates);
+                let _ = writeln!(file, "  Min/Max candidates: {} / {}", min_candidates, max_candidates);
+                let _ = writeln!(file, "\nBeats by candidate count:");
+                let _ = writeln!(file, "  0 candidates: {} beats ({:.1}%)", zero_cands, 100.0 * zero_cands as f32 / song_length as f32);
+                let _ = writeln!(file, "  1 candidate:  {} beats ({:.1}%)", one_cand, 100.0 * one_cand as f32 / song_length as f32);
+                let _ = writeln!(file, "  2-5 candidates: {} beats ({:.1}%)", two_to_five, 100.0 * two_to_five as f32 / song_length as f32);
+                let _ = writeln!(file, "  6-10 candidates: {} beats ({:.1}%)", six_to_ten, 100.0 * six_to_ten as f32 / song_length as f32);
+                let _ = writeln!(file, "  >10 candidates: {} beats ({:.1}%)", over_ten, 100.0 * over_ten as f32 / song_length as f32);
+                
+                // Full graph structure (first 50 beats + any with <=2 candidates)
+                let _ = writeln!(file, "\nJump Graph Structure (first 50 beats + sparse beats):");
+                for (i, beat) in beats.iter().enumerate() {
+                    if i < 50 || beat.jump_candidates.len() <= 2 {
+                        let cands_str = if beat.jump_candidates.len() <= 10 {
+                            format!("{:?}", beat.jump_candidates)
+                        } else {
+                            format!("[{}... ({} total)]", 
+                                beat.jump_candidates.iter().take(5)
+                                    .map(|c| c.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                beat.jump_candidates.len())
+                        };
+                        let _ = writeln!(file, "  Beat {}: {} candidates {}", 
+                            i, beat.jump_candidates.len(), cands_str);
+                    }
+                }
+                
+                let _ = writeln!(file, "=== END JUMP GRAPH ANALYSIS ===\n");
+            }
+        }
 
         Self {
             beats,
@@ -148,14 +254,12 @@ impl JukeboxEngine {
             current_sequence: 0,
             min_sequence_len: min_seq,
             beats_since_jump: 0,
-            failed_jumps: 0,
-            recent_segments: VecDeque::with_capacity(5), // Dynamic capacity
+            play_history: VecDeque::with_capacity(song_length),
             rng,
             
             // Constants
-            last_chance_beat: last_chance,
             acceptable_jump_amounts,
-            max_beats_between_jumps,
+            max_beats_between_jumps: max_beats_between_jumps,
             
             // Waveform envelope (computed in load_track)
             waveform_envelope: Vec::new(),
@@ -474,24 +578,21 @@ impl JukeboxEngine {
 
     /// Determines the next beat to play based on current state.
     ///
-    /// This is the core "JIT Walk" logic that replaced the old `compute_play_vector`.
-    /// It makes real-time decisions about whether to continue linearly or jump.
+    /// Uses recency-based scoring: candidates are scored by their position in the
+    /// play history queue (oldest = highest score). Avoids long local loops by
+    /// preferring beats that haven't been played recently.
     pub fn get_next_beat(&mut self) -> PlayInstruction {
         // 1. Capture Current State (This is what we will return)
         let current_cursor = self.cursor;
         let current_beat = &self.beats[current_cursor];
         
-        // 2. Update Recent Segments based on CURRENT beat
-        // Ensure recent buffer is sized correctly
-        let segments_count = self.beats.iter().map(|b| b.segment).max().unwrap_or(0) + 1;
-        let recent_depth = (segments_count as f32 * 0.25).round() as usize;
-        let recent_depth = recent_depth.max(1);
+        // 2. Add current beat to play history (FIFO - most recent at back)
+        self.play_history.push_back(current_cursor);
         
-        if !self.recent_segments.contains(&current_beat.segment) {
-            if self.recent_segments.len() >= recent_depth {
-                self.recent_segments.pop_front();
-            }
-            self.recent_segments.push_back(current_beat.segment);
+        // Keep queue size = song length
+        let song_length = self.beats.len();
+        while self.play_history.len() > song_length {
+            self.play_history.pop_front();
         }
 
         self.current_sequence += 1;
@@ -501,7 +602,6 @@ impl JukeboxEngine {
         let display_seq_pos = self.current_sequence;
 
         // 3. Check Jump Trigger (Do we jump AFTER this beat?)
-        // Note: logical offset is now handled in the min_seq calculation
         let will_jump = (self.current_sequence as isize >= self.min_sequence_len) || 
                         (self.beats_since_jump >= self.max_beats_between_jumps);
         
@@ -509,43 +609,128 @@ impl JukeboxEngine {
         let mut next_cursor = 0;
 
         if will_jump {
-            // Strategy 1: Standard Jump
+            // Recency-Based Jump Selection
             let all_cands = &current_beat.jump_candidates;
-            let non_recent: Vec<usize> = all_cands.iter()
-                .filter(|&&c| !self.recent_segments.contains(&self.beats[c].segment))
-                .cloned()
-                .collect();
-
-            if !non_recent.is_empty() {
-                 next_cursor = *non_recent.choose(&mut self.rng).unwrap();
-                 did_jump = true;
-            } else {
-                 // Strategy 2: Quartile Busting
-                 let failure_threshold_10 = (self.beats.len() as f32 * 0.1) as usize;
-                 let current_failed = self.failed_jumps + 1;
-                 
-                 let non_quartile: Vec<usize> = current_beat.jump_candidates.iter()
-                    .filter(|&&c| self.beats[c].quartile != current_beat.quartile)
-                    .cloned()
+            
+            if !all_cands.is_empty() {
+                // Score each candidate by recency
+                let mut scored_candidates: Vec<(usize, usize, usize)> = Vec::new(); // (beat_id, recency_score, distance)
+                
+                for &candidate_id in all_cands {
+                    // Find MOST RECENT position in play history (rposition searches from back)
+                    let recency_score = if let Some(pos) = self.play_history.iter().rposition(|&id| id == candidate_id) {
+                        // Invert position to score: oldest (pos=0) gets highest score (song_length)
+                        // Recent (pos near song_length) gets low score (near 0)
+                        song_length - pos
+                    } else {
+                        song_length  // Never played = maximum score
+                    };
+                    
+                    let distance = (current_cursor as isize - candidate_id as isize).unsigned_abs();
+                    scored_candidates.push((candidate_id, recency_score, distance));
+                }
+                
+                // Apply recency threshold filter using MIN_RECENCY_THRESHOLD constant
+                // In panic mode, accept any candidate to ensure forward progress
+                let min_recency_score = (song_length as f32 * MIN_RECENCY_THRESHOLD) as usize;
+                let in_panic_mode = self.beats_since_jump >= self.max_beats_between_jumps;
+                
+                // Clone for logging before filtering
+                let scored_for_logging = scored_candidates.clone();
+                
+                let viable_candidates: Vec<(usize, usize, usize)> = scored_candidates
+                    .into_iter()
+                    .filter(|(_, score, _)| {
+                        in_panic_mode || *score > min_recency_score
+                    })
                     .collect();
-
-                 if current_failed >= failure_threshold_10 && !non_quartile.is_empty() {
-                      let furthest_dist = non_quartile.iter()
-                          .map(|&c| (current_beat.id as isize - c as isize).abs())
-                          .max().unwrap_or(0);
-                      
-                      if let Some(&target) = non_quartile.iter()
-                          .find(|&&c| (current_beat.id as isize - c as isize).abs() == furthest_dist) {
-                              next_cursor = target;
-                              did_jump = true;
-                      }
-                 }
-                 
-                 // Strategy 3: Nuclear Reset
-                 if !did_jump && current_failed >= (self.beats.len() as f32 * 0.3) as usize {
-                      next_cursor = 0;
-                      did_jump = true;
-                 }
+                
+                // Sort by recency_score (descending), then by distance (descending) as tiebreaker
+                let mut sorted_candidates = viable_candidates;
+                sorted_candidates.sort_by(|a, b| {
+                    match b.1.cmp(&a.1) {  // b.1 vs a.1 for descending recency
+                        std::cmp::Ordering::Equal => b.2.cmp(&a.2),  // b.2 vs a.2 for descending distance
+                        other => other,
+                    }
+                });
+                
+                // Pick the best candidate
+                if let Some(&(best_candidate, _, _)) = sorted_candidates.first() {
+                    next_cursor = best_candidate;
+                    did_jump = true;
+                }
+                
+                // DEBUG LOGGING: Log every jump attempt for analysis
+                {
+                    use std::io::Write;
+                    use std::fs::OpenOptions;
+                    if let Ok(mut file) = OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("remixatron_debug.log") 
+                    {
+                        let _ = writeln!(file, "\n=== JUMP EVENT ===");
+                        let _ = writeln!(file, "src_beat: {}", current_cursor);
+                        let _ = writeln!(file, "dest_beat: {}", if did_jump { next_cursor as isize } else { -1 });
+                        let _ = writeln!(file, "did_jump: {}", did_jump);
+                        
+                        // Jump trigger reason
+                        let phrase_complete = self.current_sequence as isize >= self.min_sequence_len;
+                        let panic_trigger = self.beats_since_jump >= self.max_beats_between_jumps;
+                        let jump_reason = if phrase_complete && panic_trigger {
+                            "both"
+                        } else if phrase_complete {
+                            "phrase_complete"
+                        } else if panic_trigger {
+                            "panic_triggered"
+                        } else {
+                            "none"
+                        };
+                        let _ = writeln!(file, "jump_reason: {}", jump_reason);
+                        
+                        // State counters
+                        let _ = writeln!(file, "current_sequence: {}", self.current_sequence);
+                        let _ = writeln!(file, "min_sequence_len: {}", self.min_sequence_len);
+                        let _ = writeln!(file, "beats_since_jump: {}", self.beats_since_jump);
+                        let _ = writeln!(file, "panic_mode: {}", in_panic_mode);
+                        let _ = writeln!(file, "max_beats_between_jumps: {}", self.max_beats_between_jumps);
+                        
+                        // Candidate analysis
+                        let _ = writeln!(file, "num_raw_candidates: {}", all_cands.len());
+                        let _ = writeln!(file, "num_viable_after_filter: {}", sorted_candidates.len());
+                        let _ = writeln!(file, "recency_threshold: {}", min_recency_score);
+                        
+                        // Top 10 candidates with scores
+                        let _ = writeln!(file, "top_10_candidates:");
+                        for (i, &(cand_id, score, dist)) in scored_for_logging.iter().take(10).enumerate() {
+                            let viable = score > min_recency_score || in_panic_mode;
+                            let _ = writeln!(
+                                file, 
+                                "  [{}]: beat={}, score={}, dist={}, viable={}", 
+                                i, cand_id, score, dist, viable
+                            );
+                        }
+                        
+                        // Queue state snapshot
+                        let _ = writeln!(file, "queue_size: {}", self.play_history.len());
+                        
+                        // Queue head (oldest 5)
+                        let head: Vec<usize> = self.play_history.iter().take(5).copied().collect();
+                        let _ = writeln!(file, "queue_head (oldest 5): {:?}", head);
+                        
+                        // Queue tail (newest 10)
+                        let tail_start = if self.play_history.len() > 10 { 
+                            self.play_history.len() - 10 
+                        } else { 
+                            0 
+                        };
+                        let tail: Vec<usize> = self.play_history.iter()
+                            .skip(tail_start)
+                            .copied()
+                            .collect();
+                        let _ = writeln!(file, "queue_tail (newest 10): {:?}", tail);
+                    }
+                }
             }
         }
 
@@ -554,20 +739,9 @@ impl JukeboxEngine {
              if did_jump {
                  self.cursor = next_cursor;
                  self.beats_since_jump = 0;
-                 self.failed_jumps = 0;
              } else {
-                 self.failed_jumps += 1;
-                 
-                 // Play Next or Loop
-                 if current_cursor == self.last_chance_beat {
-                      if !current_beat.jump_candidates.is_empty() {
-                          self.cursor = *current_beat.jump_candidates.iter().min().unwrap();
-                      } else {
-                          self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
-                      }
-                 } else {
-                      self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
-                 }
+                 // No candidates available - continue linearly
+                 self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
                  self.beats_since_jump += 1;
              }
              
@@ -593,16 +767,8 @@ impl JukeboxEngine {
 
         } else {
             // No Jump Attempt
-             if current_cursor == self.last_chance_beat {
-                  if !current_beat.jump_candidates.is_empty() {
-                      self.cursor = *current_beat.jump_candidates.iter().min().unwrap();
-                  } else {
-                      self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
-                  }
-             } else {
-                  self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
-             }
-             self.beats_since_jump += 1;
+            self.cursor = if current_cursor + 1 < self.beats.len() { current_cursor + 1 } else { 0 };
+            self.beats_since_jump += 1;
         }
 
         // 5. Return the CURRENT instruction (The one we started with)
