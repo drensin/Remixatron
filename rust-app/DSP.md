@@ -135,6 +135,7 @@ We concatenate the two feature sets to create a 32-dimensional vector for every 
 $$
 V_{final} = [ MFCC_{1..20} \oplus Chroma_{1..12} ]
 $$
+
 This 32-d point represents the beat in "Acoustic Space".
 
 ---
@@ -281,6 +282,7 @@ For a given clustering, the Silhouette Score ($S$) measures how well-separated t
 $$
 s(i) = \frac{b(i) - a(i)}{\max(a(i), b(i))}
 $$
+
 *   $a(i)$: Average distance to other points in the *same* cluster (Cohesion).
 *   $b(i)$: Average distance to points in the *nearest neighbor* cluster (Separation).
 
