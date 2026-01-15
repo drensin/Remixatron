@@ -122,13 +122,16 @@ Raw features are computed frame-by-frame (e.g., every 20ms). But music happens i
 To analyze "Beat Similarity", we must aggregate these frames into a single vector per beat.
 
 We use **Median Aggregation**:
+
 $$
 V_{beat} = median(F_{start} ... F_{end})
 $$
+
 We take the median of all MFCC/Chroma frames within the beat's duration. We use Median instead of Mean to be robust against transient noise (like a snare drum hit happening in the middle of a beat).
 
 **Final Feature Vector ($V_{final}$):**
 We concatenate the two feature sets to create a 32-dimensional vector for every beat:
+
 $$
 V_{final} = [ MFCC_{1..20} \oplus Chroma_{1..12} ]
 $$
