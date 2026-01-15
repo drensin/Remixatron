@@ -431,7 +431,7 @@ Instead of tracking segment history, Remixatron V3 uses a **FIFO play history qu
 The system detects when it's stuck playing linearly too long. The panic threshold scales with graph density:
 
 $$
-\text{threshold} = \text{song\_length} \times 0.10 \times \frac{2.5}{\text{avg\_candidates}}
+\text{threshold} = \text{song\\_length} \times 0.10 \times \frac{2.5}{\text{avg\\_candidates}}
 $$
 
 - **Sparse graphs** (avg=1.7 candidates/beat) → **higher threshold** (~15% of song) → gives recency filter more time
