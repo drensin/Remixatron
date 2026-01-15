@@ -35,6 +35,14 @@ use std::sync::mpsc::Receiver;
 /// - Lower (0.10): More permissive, allows some repetition
 /// - Higher (0.50): Stricter, forces maximum variety but may feel too random
 const MIN_RECENCY_THRESHOLD: f32 = 0.25;
+/// Recency threshold used during Panic Mode.
+///
+/// When the engine is stuck (Panic), we lower the bar effectively allowing
+/// repetition, but we still BAN extremely recent beats to prevent
+/// immediate micro-loops.
+///
+/// **Value: 0.05** means valid candidates must be older than 5% of the song.
+const PANIC_RECENCY_THRESHOLD: f32 = 0.05;
 
 /// Commands to control the playback loop from another thread.
 pub enum PlaybackCommand {
@@ -643,14 +651,17 @@ impl JukeboxEngine {
                 }
                 
                 // Apply recency threshold filter using MIN_RECENCY_THRESHOLD constant
-                // In panic mode, accept any candidate to ensure forward progress
-                let min_recency_score = (song_length as f32 * MIN_RECENCY_THRESHOLD) as usize;
                 let in_panic_mode = self.beats_since_jump >= self.max_beats_between_jumps;
+                
+                // STANDARD: 25% of song. PANIC: 5% of song (Soft Panic).
+                let threshold_fraction = if in_panic_mode { PANIC_RECENCY_THRESHOLD } else { MIN_RECENCY_THRESHOLD };
+                let min_recency_score = (song_length as f32 * threshold_fraction) as usize;
                 
                 let viable_candidates: Vec<(usize, usize, usize)> = scored_candidates
                     .into_iter()
                     .filter(|(_, score, _)| {
-                        in_panic_mode || *score > min_recency_score
+                        // Soft Panic: We enforce the threshold even in panic mode, just a lower one.
+                        *score > min_recency_score
                     })
                     .collect();
                 
@@ -687,9 +698,9 @@ impl JukeboxEngine {
                                 dist
                             );
                             
-                            // If we bypassed recency, log it explicitly
-                            if in_panic_mode && score <= min_recency_score {
-                                let _ = writeln!(file, "  -> PANIC OVERRIDE: Bypassed Recency Threshold (Score {} <= {})", score, min_recency_score);
+                            // If we utilized the lower panic threshold, log it
+                            if in_panic_mode && score <= (song_length as f32 * MIN_RECENCY_THRESHOLD) as usize {
+                                let _ = writeln!(file, "  -> SOFT PANIC: Used Lower Recency Threshold (Score {} > {})", score, min_recency_score);
                             }
                         }
                     }
