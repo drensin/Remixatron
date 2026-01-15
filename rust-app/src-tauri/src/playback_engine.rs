@@ -629,9 +629,11 @@ impl JukeboxEngine {
                 for &candidate_id in all_cands {
                     // Find MOST RECENT position in play history (rposition searches from back)
                     let recency_score = if let Some(pos) = self.play_history.iter().rposition(|&id| id == candidate_id) {
-                        // Invert position to score: oldest (pos=0) gets highest score (song_length)
-                        // Recent (pos near song_length) gets low score (near 0)
-                        song_length - pos
+                        // "How many beats ago was this?"
+                        // pos is 0-indexed from start. history.len()-1 is the current beat.
+                        // Example: Hist=[A,B,C] (len=3). Find B (pos=1). 
+                        // Beats ago = 3 - 1 - 1 = 1.
+                        self.play_history.len() - 1 - pos
                     } else {
                         song_length  // Never played = maximum score
                     };
