@@ -339,34 +339,44 @@
          * connect back to the user's desktop for audio and visualization data.
          */
         function initCast() {
-            console.log('[Cast] Initializing Cast Receiver Framework');
+            try {
+                console.log('[Cast] Initializing Cast Receiver Framework');
 
-            const context = cast.framework.CastReceiverContext.getInstance();
+                const context = cast.framework.CastReceiverContext.getInstance();
 
-            // Listen for custom CONFIG messages on our namespace
-            context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
-                console.log('[Cast] Received message:', event.data);
+                // Listen for custom CONFIG messages on our namespace
+                context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
+                    console.log('[Cast] Received message:', event.data);
 
-                if (event.data && event.data.type === 'CONFIG' && event.data.host) {
-                    castConfigHost = event.data.host;
-                    console.log('[Cast] Host configured:', castConfigHost);
+                    if (event.data && event.data.type === 'CONFIG' && event.data.host) {
+                        castConfigHost = event.data.host;
+                        console.log('[Cast] Host configured:', castConfigHost);
 
-                    // Now that we have the host, connect to the desktop
-                    connectWebSocket();
+                        // Now that we have the host, connect to the desktop
+                        connectWebSocket();
+                    }
+                });
+
+                // Configure receiver options
+                const options = new cast.framework.CastReceiverOptions();
+                options.disableIdleTimeout = true;  // Keep receiver alive during playback
+                options.customNamespaces = {};
+                options.customNamespaces[CAST_NAMESPACE] = cast.framework.system.MessageType.JSON;
+
+                // Start the Cast receiver
+                context.start(options);
+                console.log('[Cast] Receiver started, waiting for CONFIG message');
+
+                statusText.textContent = 'Cast connected - waiting for host config...';
+            } catch (e) {
+                console.error('[Cast] INIT ERROR:', e);
+                statusText.textContent = 'Cast Error: ' + e.message;
+                // Also show in loading text for visibility
+                const loadingText = document.querySelector('.loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Cast Error: ' + e.message;
                 }
-            });
-
-            // Configure receiver options
-            const options = new cast.framework.CastReceiverOptions();
-            options.disableIdleTimeout = true;  // Keep receiver alive during playback
-            options.customNamespaces = {};
-            options.customNamespaces[CAST_NAMESPACE] = cast.framework.system.MessageType.JSON;
-
-            // Start the Cast receiver
-            context.start(options);
-            console.log('[Cast] Receiver started, waiting for CONFIG message');
-
-            statusText.textContent = 'Cast connected - waiting for host config...';
+            }
         }
 
         /**
