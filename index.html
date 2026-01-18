@@ -619,9 +619,21 @@
             audio.muted = true;
 
             // DEBUG: Catch pause/error/stalled events
+            let pauseRetries = 0;
             audio.addEventListener('pause', () => {
                 console.log('[Audio] PAUSED at', audio.currentTime);
-                statusText.textContent = 'PAUSED at ' + audio.currentTime.toFixed(1);
+                // If paused near the start, something is killing playback - retry
+                if (audio.currentTime < 1.0 && pauseRetries < 3) {
+                    pauseRetries++;
+                    statusText.textContent = 'PAUSED - retrying (' + pauseRetries + ')...';
+                    setTimeout(() => {
+                        audio.play().catch(e => {
+                            statusText.textContent = 'Retry failed: ' + e.message;
+                        });
+                    }, 500);
+                } else {
+                    statusText.textContent = 'PAUSED at ' + audio.currentTime.toFixed(1);
+                }
             });
             audio.addEventListener('error', (e) => {
                 console.error('[Audio] ERROR:', audio.error);
