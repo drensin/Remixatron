@@ -321,15 +321,13 @@
                 connectWebSocket();
             } else if (pageHost && pageHost !== 'localhost' && pageHost !== '127.0.0.1' &&
                 pageHost !== '' && !pageHost.includes('github.io') && !pageHost.includes('dkr.bio')) {
-                // Page has a real hostname (not GitHub Pages or custom domain) - we're being served locally from Axum
-                // This takes priority over Cast SDK because after Cast redirect we land here
-                // and window.cast is still defined, but there's no active Cast session.
+                // Page has a real hostname (not GitHub Pages/dkr.bio) - we're being served locally from Axum
                 console.log('[Receiver] Connecting to same origin:', pageHost);
-                if (loadingText) loadingText.textContent = 'Same-origin: ' + pageHost;
+                if (loadingText) loadingText.textContent = 'Same-origin mode...';
                 connectWebSocket();
             } else if (window.cast && window.cast.framework) {
-                // Cast SDK present and we're on GitHub Pages - we're on Chromecast
-                // Wait for sender to provide host via CONFIG message, then redirect
+                // Cast SDK present - we're on Chromecast
+                // Use PlayerManager for audio playback, WebSocket for viz data
                 console.log('[Receiver] Initializing Cast, waiting for CONFIG');
                 if (loadingText) loadingText.textContent = 'Cast mode - initializing...';
                 initCast();
@@ -362,21 +360,10 @@
                     console.log('[Cast] Received message:', event.data);
 
                     if (event.data && event.data.type === 'CONFIG' && event.data.host) {
-                        const host = event.data.host;
-                        console.log('[Cast] Host configured:', host);
-
-                        // REDIRECT to the user's local receiver!
-                        // This bypasses HTTPS->HTTP mixed content issues.
-                        // The local receiver serves everything over HTTP from the same origin.
-                        const localReceiverUrl = `http://${host}:${WS_PORT}/receiver/`;
-                        console.log('[Cast] Redirecting to local receiver:', localReceiverUrl);
-
-                        statusText.textContent = 'Redirecting to local receiver...';
-
-                        // Brief delay so user sees the message
-                        setTimeout(() => {
-                            window.location.href = localReceiverUrl;
-                        }, 500);
+                        castConfigHost = event.data.host;
+                        console.log('[Cast] Host configured:', castConfigHost);
+                        // TODO: Will be replaced with PlayerManager.load() in next step
+                        connectWebSocket();
                     }
                 });
 
@@ -618,31 +605,6 @@
             // Start muted (always allowed) and unmute when playing starts
             audio.muted = true;
 
-            // DEBUG: Catch pause/error/stalled events
-            let pauseRetries = 0;
-            audio.addEventListener('pause', () => {
-                console.log('[Audio] PAUSED at', audio.currentTime);
-                // If paused near the start, something is killing playback - retry
-                if (audio.currentTime < 1.0 && pauseRetries < 3) {
-                    pauseRetries++;
-                    statusText.textContent = 'PAUSED - retrying (' + pauseRetries + ')...';
-                    setTimeout(() => {
-                        audio.play().catch(e => {
-                            statusText.textContent = 'Retry failed: ' + e.message;
-                        });
-                    }, 500);
-                } else {
-                    statusText.textContent = 'PAUSED at ' + audio.currentTime.toFixed(1);
-                }
-            });
-            audio.addEventListener('error', (e) => {
-                console.error('[Audio] ERROR:', audio.error);
-                statusText.textContent = 'ERROR: ' + (audio.error?.message || 'unknown');
-            });
-            audio.addEventListener('stalled', () => {
-                console.log('[Audio] STALLED');
-                statusText.textContent = 'STALLED';
-            });
 
             // Calibrate sync offset when audio ACTUALLY starts playing.
             // This fires after buffering is complete and sound is output.
@@ -662,13 +624,7 @@
                         `audio=${audio.currentTime.toFixed(2)}s, bufferStart=${bufferStartStreamTime.toFixed(2)}s`);
                     statusText.textContent = 'Synced';
 
-                    // DEBUG: Monitor audio state every second (but don't overwrite error messages)
-                    setInterval(() => {
-                        const current = statusText.textContent;
-                        if (!current.startsWith('PAUSED') && !current.startsWith('ERROR') && !current.startsWith('STALLED')) {
-                            statusText.textContent = `t=${audio.currentTime.toFixed(1)} p=${audio.paused} m=${audio.muted} v=${audio.volume}`;
-                        }
-                    }, 1000);
+
                 } else if (!hasOffset) {
                     console.warn('[Sync] No bufferStartStreamTime captured, using fallback');
                     // Fallback: use latest entry minus estimated buffer time
