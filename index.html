@@ -671,7 +671,20 @@
                 })
                 .catch(e => {
                     console.error('[Cast] Load failed:', e);
-                    statusText.textContent = 'Load failed: ' + (e.message || e);
+                    // Try to extract useful error info
+                    let errorMsg = 'unknown';
+                    if (e && e.message) {
+                        errorMsg = e.message;
+                    } else if (e && e.type) {
+                        errorMsg = e.type + (e.reason ? ': ' + e.reason : '');
+                    } else {
+                        try {
+                            errorMsg = JSON.stringify(e);
+                        } catch (ex) {
+                            errorMsg = String(e);
+                        }
+                    }
+                    statusText.textContent = 'Load failed: ' + errorMsg;
                 });
         }
 
