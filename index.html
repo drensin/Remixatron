@@ -222,6 +222,20 @@
         const AUDIO_PATH = '/stream.mp3';
         const WS_PATH = '/viz';
 
+        /**
+         * Get the host to connect to.
+         * 
+         * When served from GitHub Pages (for Chromecast), the receiver needs
+         * to connect back to the user's desktop. The desktop app appends
+         * ?host=<ip-or-hostname> to the URL when launching the Cast session.
+         * 
+         * @returns {string} The host to connect to for WebSocket and audio.
+         */
+        function getHost() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('host') || window.location.hostname || 'localhost';
+        }
+
         // DOM Elements
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -304,7 +318,7 @@
          * Connect to the WebSocket endpoint.
          */
         function connectWebSocket() {
-            const host = window.location.hostname || 'localhost';
+            const host = getHost();
             const wsUrl = `ws://${host}:${WS_PORT}${WS_PATH}`;
 
             statusText.textContent = 'Connecting...';
@@ -485,7 +499,7 @@
          * Uses 'playing' event to know when audio actually starts (after buffering).
          */
         function startAudio() {
-            const host = window.location.hostname || 'localhost';
+            const host = getHost();
             audio.src = `http://${host}:${WS_PORT}${AUDIO_PATH}`;
 
             // Start buffering - capture the first stream_time we receive
