@@ -351,12 +351,7 @@
                     castConfigHost = event.data.host;
                     console.log('[Cast] Host configured:', castConfigHost);
 
-                    // IMPORTANT: Start audio IMMEDIATELY while still in the user gesture
-                    // context from the Cast session. This bypasses autoplay restrictions.
-                    console.log('[Cast] Starting audio immediately (user gesture context)');
-                    startAudio();
-
-                    // Then connect to WebSocket for visualization
+                    // Now that we have the host, connect to the desktop
                     connectWebSocket();
                 }
             });
@@ -587,10 +582,17 @@
             isBuffering = true;
             bufferStartStreamTime = null;
 
+            // Start muted (always allowed) and unmute when playing starts
+            audio.muted = true;
+
             // Calibrate sync offset when audio ACTUALLY starts playing.
             // This fires after buffering is complete and sound is output.
             audio.addEventListener('playing', () => {
                 isBuffering = false;
+
+                // Unmute now that we're playing
+                audio.muted = false;
+                console.log('[Audio] Playing - unmuted');
 
                 if (!hasOffset && bufferStartStreamTime !== null) {
                     // Use the stream_time from when buffering started - that's
@@ -611,13 +613,14 @@
                 }
             }, { once: true });
 
+            // Play muted - should always succeed
             audio.play().catch(e => {
-                console.warn('[Audio] Autoplay blocked:', e);
+                console.warn('[Audio] Even muted autoplay blocked:', e);
                 statusText.textContent = 'Click to play';
                 document.body.addEventListener('click', () => {
-                    // Reset buffering state on click (user interaction)
                     isBuffering = true;
                     bufferStartStreamTime = null;
+                    audio.muted = false;
                     audio.play();
                     statusText.textContent = 'Buffering...';
                 }, { once: true });
