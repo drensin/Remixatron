@@ -618,6 +618,20 @@
             // Start muted (always allowed) and unmute when playing starts
             audio.muted = true;
 
+            // DEBUG: Catch pause/error/stalled events
+            audio.addEventListener('pause', () => {
+                console.log('[Audio] PAUSED at', audio.currentTime);
+                statusText.textContent = 'PAUSED at ' + audio.currentTime.toFixed(1);
+            });
+            audio.addEventListener('error', (e) => {
+                console.error('[Audio] ERROR:', audio.error);
+                statusText.textContent = 'ERROR: ' + (audio.error?.message || 'unknown');
+            });
+            audio.addEventListener('stalled', () => {
+                console.log('[Audio] STALLED');
+                statusText.textContent = 'STALLED';
+            });
+
             // Calibrate sync offset when audio ACTUALLY starts playing.
             // This fires after buffering is complete and sound is output.
             audio.addEventListener('playing', () => {
