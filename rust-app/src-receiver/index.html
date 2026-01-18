@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remixatron Receiver</title>
+    <!-- Google Cast Receiver SDK -->
+    <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
     <style>
         * {
             margin: 0;
@@ -225,16 +227,26 @@
         /**
          * Get the host to connect to.
          * 
-         * When served from GitHub Pages (for Chromecast), the receiver needs
-         * to connect back to the user's desktop. The desktop app appends
-         * ?host=<ip-or-hostname> to the URL when launching the Cast session.
+         * Priority order:
+         * 1. Cast CONFIG message (set by initCast when running on Chromecast)
+         * 2. URL parameter ?host=<hostname>
+         * 3. Current page hostname (for local serving)
+         * 4. Fallback to localhost
          * 
          * @returns {string} The host to connect to for WebSocket and audio.
          */
+        let castConfigHost = null;  // Set by Cast framework if running on Chromecast
+
         function getHost() {
+            if (castConfigHost) {
+                return castConfigHost;
+            }
             const params = new URLSearchParams(window.location.search);
             return params.get('host') || window.location.hostname || 'localhost';
         }
+
+        // Cast namespace for custom configuration messages
+        const CAST_NAMESPACE = 'urn:x-cast:com.remixatron';
 
         // DOM Elements
         const canvas = document.getElementById('canvas');
@@ -281,16 +293,72 @@
 
         /**
          * Initialize the receiver.
+         * 
+         * When loaded with ?host= URL parameter (browser testing), connect directly.
+         * When loaded on Chromecast (no URL params), initialize Cast and wait for CONFIG.
          */
         function init() {
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
 
-            // Start WebSocket connection
-            connectWebSocket();
+            // Check for URL parameter first - this means browser testing mode
+            const params = new URLSearchParams(window.location.search);
+            const urlHost = params.get('host');
+
+            if (urlHost) {
+                // URL param provided - connect directly (browser testing or manual Cast URL)
+                console.log('[Receiver] Host from URL param:', urlHost);
+                connectWebSocket();
+            } else if (window.cast && window.cast.framework) {
+                // No URL param but Cast SDK available - we're likely on a Chromecast
+                // Initialize Cast and wait for CONFIG message with host
+                initCast();
+            } else {
+                // No URL param, no Cast SDK - connect to same origin (local hosting)
+                console.log('[Receiver] Connecting to same origin');
+                connectWebSocket();
+            }
 
             // Start render loop
             requestAnimationFrame(renderLoop);
+        }
+
+        /**
+         * Initialize the Google Cast Receiver Framework.
+         * 
+         * Sets up the Cast context to receive CONFIG messages from the sender
+         * application. The sender sends the host address, and we use that to
+         * connect back to the user's desktop for audio and visualization data.
+         */
+        function initCast() {
+            console.log('[Cast] Initializing Cast Receiver Framework');
+
+            const context = cast.framework.CastReceiverContext.getInstance();
+
+            // Listen for custom CONFIG messages on our namespace
+            context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
+                console.log('[Cast] Received message:', event.data);
+
+                if (event.data && event.data.type === 'CONFIG' && event.data.host) {
+                    castConfigHost = event.data.host;
+                    console.log('[Cast] Host configured:', castConfigHost);
+
+                    // Now that we have the host, connect to the desktop
+                    connectWebSocket();
+                }
+            });
+
+            // Configure receiver options
+            const options = new cast.framework.CastReceiverOptions();
+            options.disableIdleTimeout = true;  // Keep receiver alive during playback
+            options.customNamespaces = {};
+            options.customNamespaces[CAST_NAMESPACE] = cast.framework.system.MessageType.JSON;
+
+            // Start the Cast receiver
+            context.start(options);
+            console.log('[Cast] Receiver started, waiting for CONFIG message');
+
+            statusText.textContent = 'Cast connected - waiting for host config...';
         }
 
         /**
