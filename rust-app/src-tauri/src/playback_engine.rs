@@ -21,6 +21,9 @@ use rand::prelude::*;
 use rand::rngs::StdRng;
 use std::collections::VecDeque;
 use std::sync::mpsc::Receiver;
+use crossbeam_channel::Sender;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 /// Minimum recency threshold for jump candidate selection (as a fraction of song length).
 ///
@@ -116,6 +119,25 @@ pub struct JukeboxEngine {
     /// RMS amplitude envelope for waveform visualization.
     /// Contains ~720 normalized values (0.0-1.0) representing amplitude at each angle.
     pub waveform_envelope: Vec<f32>,
+
+    /// Optional channel to broadcast raw audio frames (Stereo Interleaved F32).
+    /// Used for synchronized streaming during playback.
+    broadcast_tx: Option<Sender<Vec<f32>>>,
+
+    /// Shared sample rate handle for the transcoder.
+    /// Updated when a new track is loaded.
+    broadcast_sample_rate: Option<Arc<AtomicU32>>,
+
+    /// Raw decoded audio samples (Interleaved Stereo F32).
+    /// Stored for beat-synchronized broadcast during playback.
+    raw_samples: Vec<f32>,
+
+    /// Sample rate of the loaded audio (e.g., 44100, 48000).
+    /// Used by the transcoder to encode at the correct rate.
+    audio_sample_rate: u32,
+
+    /// Number of audio channels (typically 2 for stereo).
+    audio_channels: u16,
 }
 
 impl JukeboxEngine {
@@ -271,26 +293,94 @@ impl JukeboxEngine {
             
             // Waveform envelope (computed in load_track)
             waveform_envelope: Vec::new(),
+            
+            // Broadcasting
+            broadcast_tx: None,
+            broadcast_sample_rate: None,
+            
+            // Raw audio storage (populated in load_track)
+            raw_samples: Vec::new(),
+            audio_sample_rate: 0,
+            audio_channels: 0,
         }
+    }
+
+    /// Enables broadcasting mode.
+    ///
+    /// This method configures the engine to send audio samples to the broadcast
+    /// transcoder during playback. Must be called BEFORE `load_track`.
+    ///
+    /// # Arguments
+    ///
+    /// * `tx` - Channel sender for PCM audio samples.
+    /// * `sample_rate_handle` - Shared atomic for dynamic sample rate updates.
+    pub fn enable_broadcasting(
+        &mut self, 
+        tx: Sender<Vec<f32>>,
+        sample_rate_handle: Arc<AtomicU32>,
+    ) {
+        self.broadcast_tx = Some(tx);
+        self.broadcast_sample_rate = Some(sample_rate_handle);
+        println!("Broadcasting enabled for JukeboxEngine.");
     }
     
     /// Loads and decodes the audio file into memory.
     ///
-    /// This uses a robust custom decoder (`rodio` based) to handle various formats,
-    /// then converts the raw samples into `Kira` frames.
+    /// This method performs several critical tasks:
+    /// 1. Decodes audio using a robust multi-format decoder (rodio-based).
+    /// 2. Computes the waveform envelope for visualization.
+    /// 3. Optionally sends decoded samples to the broadcast transcoder (Pre-Kira tap).
+    /// 4. Converts samples to Kira `Frame` format for playback.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Absolute path to the audio file (MP3, WAV, FLAC, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if audio decoding fails or the audio manager cannot be initialized.
+    ///
+    /// # Broadcasting (Pre-Kira Tap)
+    ///
+    /// If `enable_broadcasting()` was called before this method, the decoded PCM samples
+    /// are sent to the transcoder channel *before* being converted to Kira frames. This
+    /// "Pre-Kira" approach decouples the broadcast from Kira's internal mixer, improving
+    /// stability and maintainability. The transcoder receives the full decoded audio
+    /// upfront, then streams it in sync with playback.
     pub fn load_track(&mut self, path: &str) -> Result<(), String> {
         use crate::audio_backend::decoder::decode_audio_file;
         use kira::Frame;
         use std::sync::Arc;
 
+        // Initialize the Kira audio manager.
         let manager = AudioManager::new(AudioManagerSettings::default())
             .map_err(|e| format!("Failed to initialize audio manager: {}", e))?;
-            
-        // Use our robust decoder
+
+        // Decode the audio file to raw PCM samples.
         println!("Decoding audio with robust decoder...");
         let (samples, sample_rate, channels) = decode_audio_file(path)
             .map_err(|e| format!("Robust decode failed: {}", e))?;
-        
+
+        // --- STORE RAW AUDIO FOR BROADCAST ---
+        // Instead of sending samples now (which would stream the linear song),
+        // we store them for beat-synchronized broadcast during playback.
+        // This ensures the broadcast matches the remixed/jumped audio.
+        self.raw_samples = samples.clone();
+        self.audio_sample_rate = sample_rate;
+        self.audio_channels = channels as u16;
+
+        // Signal the transcoder about the actual sample rate.
+        if let Some(rate_handle) = &self.broadcast_sample_rate {
+            rate_handle.store(sample_rate, Ordering::Relaxed);
+            println!("[Broadcast] Updated transcoder sample rate to {}Hz.", sample_rate);
+        }
+
+        println!(
+            "[Broadcast] Stored {} samples ({}Hz, {} channels) for playback sync.", 
+            samples.len(), sample_rate, channels
+        );
+        // --- END STORE RAW AUDIO ---
+
         // --- Compute Waveform Envelope for Visualization ---
         // We divide the audio into 720 chunks (2 per degree for smooth 360° ring).
         // For each chunk, compute RMS amplitude and normalize to 0.0-1.0.
@@ -306,42 +396,42 @@ impl JukeboxEngine {
         const ENVELOPE_SAMPLES: usize = 720;
         let total_samples = effective_limit; // Use truncated length
         let chunk_size = (total_samples / ENVELOPE_SAMPLES).max(1);
-        
+
         let mut envelope: Vec<f32> = Vec::with_capacity(ENVELOPE_SAMPLES);
         let mut max_rms: f32 = 0.0;
-        
+
         for i in 0..ENVELOPE_SAMPLES {
             let start = i * chunk_size;
             let end = ((i + 1) * chunk_size).min(total_samples);
-            
+
             if start >= total_samples {
                 envelope.push(0.0);
                 continue;
             }
-            
+
             // Calculate RMS for this chunk
             let chunk = &samples[start..end];
             let sum_sq: f32 = chunk.iter().map(|s| s * s).sum();
             let rms = (sum_sq / chunk.len() as f32).sqrt();
-            
+
             if rms > max_rms {
                 max_rms = rms;
             }
             envelope.push(rms);
         }
-        
+
         // Normalize to 0.0-1.0 range
         if max_rms > 0.0 {
             for val in &mut envelope {
                 *val /= max_rms;
             }
         }
-        
+
         self.waveform_envelope = envelope;
         println!("Computed waveform envelope: {} samples", ENVELOPE_SAMPLES);
         // --- End Envelope Computation ---
-            
-        // Convert Vec<f32> interleaved to Vec<Frame> for Kira
+
+        // Convert Vec<f32> interleaved to Vec<Frame> for Kira.
         // Kira expects stereo frames. We handle mono/stereo/surround manually.
         let mut frames = Vec::with_capacity(samples.len() / channels as usize);
         if channels == 1 {
@@ -355,23 +445,24 @@ impl JukeboxEngine {
                 }
             }
         } else {
-             // Fallback for >2 channels: just take first 2 (Left/Right)
-             for chunk in samples.chunks(channels as usize) {
-                 if chunk.len() >= 2 {
-                     frames.push(Frame::new(chunk[0], chunk[1]));
-                 } else if chunk.len() == 1 {
-                      frames.push(Frame::new(chunk[0], chunk[0]));
-                 }
-             }
+            // Fallback for >2 channels: just take first 2 (Left/Right)
+            for chunk in samples.chunks(channels as usize) {
+                if chunk.len() >= 2 {
+                    frames.push(Frame::new(chunk[0], chunk[1]));
+                } else if chunk.len() == 1 {
+                    frames.push(Frame::new(chunk[0], chunk[0]));
+                }
+            }
         }
-        
+
+        // Create the static sound data with default settings.
         let sound_data = StaticSoundData {
             sample_rate,
             frames: Arc::from(frames),
             settings: StaticSoundSettings::default(),
             slice: None,
         };
-             
+
         self.audio_manager = Some(manager);
         self.sound_data = Some(sound_data);
         Ok(())
@@ -553,11 +644,29 @@ impl JukeboxEngine {
             
             // 3. Queue Notification
             pending_events.push_back((scheduled_start_ticks, instruction));
-            
+
+            // 3.5. BROADCAST: Send this beat's audio to the transcoder
+            // This ensures the broadcast matches the remixed audio, not the linear file.
+            if let Some(tx) = &self.broadcast_tx {
+                // Calculate sample range for this beat.
+                // samples are interleaved stereo, so multiply by channels.
+                let channels = self.audio_channels as usize;
+                let sample_rate = self.audio_sample_rate as f32;
+                let start_sample = (beat.start * sample_rate) as usize * channels;
+                let end_sample = ((beat.start + beat.duration) * sample_rate) as usize * channels;
+                let end_sample = end_sample.min(self.raw_samples.len());
+
+                if start_sample < self.raw_samples.len() {
+                    let beat_samples = &self.raw_samples[start_sample..end_sample];
+                    // Non-blocking send: dropped messages are acceptable for latency.
+                    let _ = tx.try_send(beat_samples.to_vec());
+                }
+            }
+
             // 4. Schedule Audio
             let start_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks, fraction: 0.0 };
             let stop_time = ClockTime { clock: clock.id(), ticks: scheduled_start_ticks + duration_ticks, fraction: 0.0 };
-            
+
             // println!("Scheduling Beat {} at {}", instruction.beat_id, scheduled_start_ticks);
 
             match manager.play(

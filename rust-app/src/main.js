@@ -247,8 +247,6 @@ async function stopRemix() {
 
         // Reset State
         isPaused = false;
-        // Reset State
-        isPaused = false;
         if (pauseBtn) {
             const icon = pauseBtn.querySelector(".material-symbols-outlined");
             if (icon) icon.textContent = "pause_circle";
@@ -741,7 +739,7 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
     // Listen for Playback Ticks
-    listen('playback_tick', (event) => {
+    listen('playback_tick', async (event) => {
         // payload: { beat_index, segment_index, seq_len, seq_pos }
         const { beat_index, segment_index, seq_len, seq_pos } = event.payload;
 

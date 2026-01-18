@@ -43,3 +43,14 @@ base64 = "0.22.1"
 nalgebra = "0.33"
 lzma-sys = { version = "0.1", features = ["static"] }
 
+# Broadcasting / Chromecast
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+mp3lame-encoder = "0.1"
+crossbeam-channel = "0.5"
+rust_cast = "0.21.0"
+mdns = "3.0"
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"
+bytes = "1"

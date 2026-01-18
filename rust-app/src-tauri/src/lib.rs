@@ -31,10 +31,17 @@ pub mod workflow;
 pub mod audio;
 pub mod playback_engine;
 pub mod downloader;
+
 pub mod favorites;
+pub mod broadcasting;
 
 use workflow::Remixatron;
 use playback_engine::{JukeboxEngine, Beat};
+use crossbeam_channel::Sender as CrossbeamSender;
+use tokio::sync::{broadcast, watch};
+use broadcasting::server::{VizInitData, VizUpdateData};
+
+use std::sync::atomic::AtomicU32;
 
 /// Global Application State.
 ///
@@ -47,8 +54,23 @@ use playback_engine::{JukeboxEngine, Beat};
 struct AppState {
     engine: Arc<Mutex<Option<JukeboxEngine>>>,
     /// Channel Sender to control the active playback thread.
-    /// Kept separate from `engine` lock to prevent deadlocks.
     playback_tx: Arc<Mutex<Option<Sender<PlaybackCommand>>>>,
+    
+    /// Broadcasting audio channel.
+    broadcast_audio_tx: CrossbeamSender<Vec<f32>>,
+    
+    /// Shared sample rate for the transcoder.
+    broadcast_sample_rate: Arc<AtomicU32>,
+    
+    /// Watch sender for static visualization data (beats, segments, waveform).
+    viz_init_tx: watch::Sender<VizInitData>,
+    
+    /// Broadcast sender for dynamic viz updates (current beat, sequence state).
+    viz_update_tx: broadcast::Sender<VizUpdateData>,
+    
+    /// Last download metadata (from YouTube). Used to provide metadata to receiver
+    /// when the downloaded file doesn't have embedded metadata.
+    last_download_metadata: Arc<Mutex<Option<downloader::VideoMetadata>>>,
 }
 
 /// The payload returned to the Frontend after a successful analysis.
@@ -248,6 +270,12 @@ async fn analyze_track(
     // 2. Initialize Jukebox Engine
     // We create the engine with the analyzed beats. It is not yet playing.
     let mut jukebox = JukeboxEngine::new(analysis_result.beat_structs.clone(), analysis_result.k_optimal);
+    
+    // Enable Broadcasting (Always on for now)
+    jukebox.enable_broadcasting(
+        state.broadcast_audio_tx.clone(),
+        state.broadcast_sample_rate.clone(),
+    );
 
     // 3. Compute Jump Candidates
     // Note: This logic is now handled upstream in the Analysis Pipeline (workflow.rs).
@@ -264,12 +292,56 @@ async fn analyze_track(
     let beats_with_jumps = jukebox.beats.clone();
 
     // Acquire the lock on the global state and replace the engine.
+    let waveform_envelope = jukebox.waveform_envelope.clone();
     let mut engine_guard = state.engine.lock().map_err(|_| "Failed to lock state".to_string())?;
     *engine_guard = Some(jukebox);
 
-    // 6. Metadata already extracted above!
-    // We just return it now.
+    // 6. Broadcast viz init data to WebSocket clients.
+    // Prefer YouTube metadata if we just downloaded, otherwise use file metadata.
+    let (viz_title, viz_artist, viz_thumbnail) = {
+        let download_meta = state.last_download_metadata.lock().ok().and_then(|g| g.clone());
+        if let Some(meta) = download_meta {
+            // Use YouTube metadata and clear it (consumed)
+            if let Ok(mut guard) = state.last_download_metadata.lock() {
+                *guard = None;
+            }
+            (
+                meta.title,
+                meta.artist,
+                meta.thumbnail_url.unwrap_or_default(),
+            )
+        } else {
+            // Use file-extracted metadata
+            (
+                title.clone(),
+                artist.clone(),
+                album_art_base64.clone().unwrap_or_default(),
+            )
+        }
+    };
     
+    // Converts beats and segments to JSON values for the receiver.
+    let viz_init = VizInitData {
+        beats: beats_with_jumps.iter().map(|b| serde_json::json!({
+            "id": b.id,
+            "start": b.start,
+            "duration": b.duration,
+            "segment": b.segment,
+            "jump_candidates": b.jump_candidates,
+        })).collect(),
+        segments: analysis_result.segments.iter().map(|s| serde_json::json!({
+            "label": s.label,
+            "start_time": s.start_time,
+            "end_time": s.end_time,
+        })).collect(),
+        waveform: waveform_envelope,
+        title: viz_title,
+        artist: viz_artist,
+        thumbnail: viz_thumbnail,
+    };
+    let _ = state.viz_init_tx.send(viz_init);
+    println!("[Broadcast] Sent viz init data to WebSocket clients.");
+
     // 7. Return Structure to Frontend
     Ok(StructurePayload {
         segments: analysis_result.segments,
@@ -283,8 +355,21 @@ async fn analyze_track(
 }
 
 #[tauri::command]
-async fn import_url(app: AppHandle, url: String) -> Result<downloader::VideoMetadata, String> {
-    downloader::download_url(app, url).await.map_err(|e| e.to_string())
+async fn import_url(
+    app: AppHandle,
+    url: String,
+    state: State<'_, AppState>
+) -> Result<downloader::VideoMetadata, String> {
+    let metadata = downloader::download_url(app, url)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // Store metadata for use by analyze_track when building VizInitData
+    if let Ok(mut guard) = state.last_download_metadata.lock() {
+        *guard = Some(metadata.clone());
+    }
+    
+    Ok(metadata)
 }
 
 /// Checks if required external dependencies (yt-dlp and ffmpeg) are available.
@@ -315,6 +400,12 @@ async fn stop_playback(state: State<'_, AppState>) -> Result<(), String> {
         let _ = tx.send(PlaybackCommand::Stop);
     }
     
+    // 3. Notify WebSocket clients that playback has stopped.
+    let _ = state.viz_update_tx.send(VizUpdateData {
+        stopped: true,
+        ..Default::default()
+    });
+    
     // We do NOT wait for join here. The Frontend handles the flow.
     Ok(())
 }
@@ -324,13 +415,18 @@ async fn stop_playback(state: State<'_, AppState>) -> Result<(), String> {
 async fn set_paused(state: State<'_, AppState>, paused: bool) -> Result<(), String> {
     // 1. Acquire Sender Lock
     let tx_guard = state.playback_tx.lock().map_err(|_| "Failed to lock playback_tx".to_string())?;
-    
     // 2. Send Command
     if let Some(tx) = tx_guard.as_ref() {
         let cmd = if paused { PlaybackCommand::Pause } else { PlaybackCommand::Resume };
         // Ignore errors (if thread dead, nothing to pause)
         let _ = tx.send(cmd);
     }
+
+    // 3. Notify WebSocket clients about pause state.
+    let _ = state.viz_update_tx.send(VizUpdateData {
+        paused,
+        ..Default::default()
+    });
     
     Ok(())
 }
@@ -415,7 +511,6 @@ async fn check_is_favorite(app: AppHandle, source: String) -> bool {
     favorites::is_favorite(&app, &source)
 }
 
-
 /// Starts the infinite playback loop.
 ///
 /// Spawns a dedicated background thread to handle the playback without blocking the Tauri
@@ -453,18 +548,45 @@ async fn play_track(
         // NOTE: This lock is held for the entire duration of playback (until the song ends or errors).
         if let Ok(mut guard) = state_clone.engine.lock() {
             if let Some(engine) = guard.as_mut() {
+                // Clone beats for duration lookup in the closure.
+                let beats_for_sync = engine.beats.clone();
+
+                // Track cumulative audio duration for sync.
+                // This directly corresponds to audio.currentTime on the client.
+                let mut cumulative_audio_time: f32 = 0.0;
+
                 // Play with callback and RECEIVER
+                let viz_tx = state_clone.viz_update_tx.clone();
                 let _ = engine.play_with_callback(rx, move |instruction, segment_idx| {
-                    // Emit event to Frontend
-                    // We ignore errors here (e.g., if app is closing).
                     let beat_idx = instruction.beat_id;
-                    
+
+                    // Emit event to Frontend
                     let _ = app_handle.emit("playback_tick", PlaybackTick {
                         beat_index: beat_idx,
                         segment_index: segment_idx,
                         seq_len: instruction.seq_len,
                         seq_pos: instruction.seq_pos,
                     });
+
+                    // Broadcast to WebSocket clients
+                    // stream_time is the position at START of this beat.
+                    let _ = viz_tx.send(VizUpdateData {
+                        active_beat: beat_idx,
+                        active_seg: segment_idx,
+                        seq_pos: instruction.seq_pos,
+                        seq_len: instruction.seq_len,
+                        stream_time: cumulative_audio_time,
+                        stopped: false,
+                        paused: false,
+                    });
+
+                    // Update cumulative time AFTER sending (for next beat)
+                    let beat_duration = if beat_idx < beats_for_sync.len() {
+                        beats_for_sync[beat_idx].duration
+                    } else {
+                        0.5 // Fallback: typical beat duration
+                    };
+                    cumulative_audio_time += beat_duration as f32;
                 });
             }
         }
@@ -532,10 +654,73 @@ pub fn run() {
                 }
             }
 
-            // Manage state
+            // =================================================================
+            // BROADCASTING SERVICES INITIALIZATION
+            // =================================================================
+            // The broadcasting pipeline consists of three components that run
+            // for the lifetime of the application:
+            //
+            // 1. Audio Tee Channel: A bounded crossbeam channel that receives
+            //    raw PCM audio samples from the playback engine during track
+            //    loading. This is the "Pre-Kira Tap" approach.
+            //
+            // 2. Transcoder: A dedicated OS thread that reads PCM samples,
+            //    encodes them to MP3 using LAME, and publishes chunks to a
+            //    tokio broadcast channel.
+            //
+            // 3. Web Server: An Axum HTTP server that streams MP3 audio to
+            //    clients via chunked transfer encoding.
+            //
+            // The pipeline is always running but only transmits data when
+            // a track is loaded/playing. This enables instant casting without
+            // waiting for server initialization.
+            // =================================================================
+
+            // Channel for PCM samples (Playback Engine -> Transcoder).
+            // REDUCED: 64 chunks (~1.5 seconds) to minimize stream latency.
+            // Smaller buffer means viz and audio stay in sync.
+            let (audio_tx, audio_rx) = crossbeam_channel::bounded::<Vec<f32>>(64);
+
+            // Broadcast channel for MP3 bytes (Transcoder -> HTTP Clients).
+            // REDUCED: 4 chunks to minimize latency; slow clients skip.
+            let (mp3_tx, _) = broadcast::channel(4);
+
+            // Sample rate handle: updated by engine when track loads.
+            let sample_rate_handle = broadcasting::transcoder::create_sample_rate_handle();
+
+            // Spawn the transcoder background thread with sample rate handle.
+            broadcasting::transcoder::spawn_transcoder(
+                audio_rx, 
+                mp3_tx.clone(), 
+                sample_rate_handle.clone()
+            );
+
+            // Visualization state channels.
+            // - viz_init: watch channel for static data (beats, segments, waveform)
+            // - viz_update: broadcast channel for dynamic playback state
+            let (viz_init_tx, viz_init_rx) = watch::channel(VizInitData::default());
+            let (viz_update_tx, _) = broadcast::channel(64);
+
+            // Spawn the web server in Tauri's async runtime.
+            let mp3_tx_clone = mp3_tx.clone();
+            let viz_init_rx_clone = viz_init_rx.clone();
+            let viz_update_tx_clone = viz_update_tx.clone();
+            tauri::async_runtime::spawn(async move {
+                broadcasting::server::start_server(
+                    mp3_tx_clone,
+                    viz_init_rx_clone,
+                    viz_update_tx_clone,
+                ).await;
+            });
+
             app.manage(AppState {
                 engine: Arc::new(Mutex::new(None)),
                 playback_tx: Arc::new(Mutex::new(None)),
+                broadcast_audio_tx: audio_tx,
+                broadcast_sample_rate: sample_rate_handle,
+                viz_init_tx,
+                viz_update_tx,
+                last_download_metadata: Arc::new(Mutex::new(None)),
             });
 
             // NOTE: No downloader init here - frontend checks dependencies on startup
