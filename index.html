@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remixatron Receiver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #viz-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Play bar at bottom - matches desktop .floating-player */
+        #play-bar {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 30, 0.25);
+            padding: 12px 24px;
+            border-radius: 9999px;
+            /* Stadium shape */
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        #thumbnail {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+
+        .track-info {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        #track-title {
+            font-size: 16px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        #track-artist {
+            font-size: 13px;
+            opacity: 0.7;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #sync-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* Hidden audio element */
+        #audio {
+            display: none;
+        }
+
+        /* Loading overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 26, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+
+        #loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00ff99;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: #fff;
+            margin-top: 20px;
+            font-size: 14px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="viz-container">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div id="play-bar">
+            <img id="thumbnail" src="" alt="">
+            <div class="track-info">
+                <div id="track-title">Waiting for track...</div>
+                <div id="track-artist"></div>
+            </div>
+            <div id="sync-status">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </div>
+
+        <!-- Audio element for streaming -->
+        <audio id="audio" crossorigin="anonymous"></audio>
+
+        <!-- Loading overlay -->
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <div class="loading-text">Waiting for connection...</div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Remixatron Web Receiver
+         * 
+         * Connects to the desktop app via WebSocket for visualization data
+         * and plays the audio stream from the HTTP endpoint.
+         */
+
+        // Configuration
+        const WS_PORT = 3030;
+        const AUDIO_PATH = '/stream.mp3';
+        const WS_PATH = '/viz';
+
+        // DOM Elements
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const audio = document.getElementById('audio');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const thumbnailImg = document.getElementById('thumbnail');
+        const trackTitle = document.getElementById('track-title');
+        const trackArtist = document.getElementById('track-artist');
+
+        // Visualization State
+        let beats = [];
+        let segments = [];
+        let waveformEnvelope = [];
+        let duration = 0;
+        let activeBeatIndex = -1;
+        let activeSegmentIndex = -1;
+        let currentSeqPos = 0;
+        let currentSeqLen = 0;
+
+        // Audio Sync State
+        // We build a table of (stream_time, beat_id) pairs and use
+        // audio.currentTime + offset to find the current beat.
+        let syncTable = [];          // Array of { streamTime, beatId, segId }
+        let streamOffset = 0;        // offset = bufferStartStreamTime when audio starts
+        let hasOffset = false;       // True once we've calibrated
+        let bufferStartStreamTime = null;  // First stream_time when buffering started
+        let isBuffering = false;     // True when we're waiting for audio to start
+
+        // Canvas dimensions
+        let width, height, centerX, centerY, radius;
+
+        // Color palette (matches desktop app)
+        const colors = [
+            '#FF0055', '#00FF99', '#00CCFF', '#FFAA00', '#CC00FF',
+            '#FF3300', '#AAFF00', '#0055FF', '#FF00AA', '#00FF55'
+        ];
+
+        // WebSocket connection
+        let ws = null;
+        let reconnectTimer = null;
+
+        /**
+         * Initialize the receiver.
+         */
+        function init() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // Start WebSocket connection
+            connectWebSocket();
+
+            // Start render loop
+            requestAnimationFrame(renderLoop);
+        }
+
+        /**
+         * Resize canvas for HiDPI displays.
+         */
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.parentElement.getBoundingClientRect();
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+
+            ctx.scale(dpr, dpr);
+            width = rect.width;
+            height = rect.height;
+            radius = Math.min(width, height) / 2.2;
+            centerX = width / 2;
+            centerY = height / 2;
+        }
+
+        /**
+         * Connect to the WebSocket endpoint.
+         */
+        function connectWebSocket() {
+            const host = window.location.hostname || 'localhost';
+            const wsUrl = `ws://${host}:${WS_PORT}${WS_PATH}`;
+
+            statusText.textContent = 'Connecting...';
+            statusDot.classList.remove('connected');
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('[WS] Connected');
+                statusText.textContent = 'Connected - Waiting for data...';
+                statusDot.classList.add('connected');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleMessage(msg);
+                } catch (e) {
+                    console.error('[WS] Failed to parse message:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('[WS] Disconnected');
+                statusText.textContent = 'Disconnected - Reconnecting...';
+                statusDot.classList.remove('connected');
+
+                // Reconnect after delay
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+                reconnectTimer = setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('[WS] Error:', err);
+            };
+        }
+
+        /**
+         * Handle incoming WebSocket messages.
+         */
+        function handleMessage(msg) {
+            switch (msg.type) {
+                case 'init':
+                    // Initialize with full visualization data
+                    beats = msg.beats || [];
+                    segments = msg.segments || [];
+                    waveformEnvelope = msg.waveform || [];
+
+                    if (beats.length > 0) {
+                        const lastBeat = beats[beats.length - 1];
+                        duration = lastBeat.start + lastBeat.duration;
+                    }
+
+                    // Update play bar with track metadata
+                    trackTitle.textContent = msg.title || 'Unknown Title';
+                    trackArtist.textContent = msg.artist || 'Unknown Artist';
+                    if (msg.thumbnail) {
+                        thumbnailImg.src = msg.thumbnail;
+                        thumbnailImg.style.display = 'block';
+                    } else {
+                        thumbnailImg.style.display = 'none';
+                    }
+
+                    // Reset sync state for new track
+                    syncTable = [];
+                    hasOffset = false;
+                    streamOffset = 0;
+                    bufferStartStreamTime = null;
+                    isBuffering = false;
+
+                    console.log(`[Viz] Loaded: ${beats.length} beats, ${segments.length} segments, title: "${msg.title}"`);
+
+                    // Start audio playback (will restart if already playing)
+                    startAudio();
+                    loadingOverlay.classList.add('hidden');
+                    break;
+
+                case 'update':
+                    // Check for stop signal
+                    if (msg.stopped) {
+                        stopPlayback();
+                        break;
+                    }
+
+                    // Check for pause signal
+                    if (msg.paused !== undefined) {
+                        if (msg.paused) {
+                            pausePlayback();
+                        } else {
+                            resumePlayback();
+                        }
+                        break;
+                    }
+
+                    // Debug: log first few updates
+                    if (syncTable.length < 5) {
+                        console.log(`[Update] beat=${msg.active_beat}, stream_time=${msg.stream_time}, audio=${audio.currentTime.toFixed(2)}, buffering=${isBuffering}`);
+                    }
+
+                    // Capture the first stream_time when we start buffering.
+                    // This is the audio content that will be at the head of the buffer.
+                    if (isBuffering && bufferStartStreamTime === null && msg.stream_time !== undefined) {
+                        bufferStartStreamTime = msg.stream_time;
+                        console.log(`[Sync] Captured buffer start: stream_time=${bufferStartStreamTime.toFixed(2)}`);
+                    }
+
+                    // Add to sync table (keep last 60 seconds)
+                    if (msg.stream_time !== undefined) {
+                        syncTable.push({
+                            streamTime: msg.stream_time,
+                            beatId: msg.active_beat,
+                            segId: msg.active_seg,
+                            seqPos: msg.seq_pos,
+                            seqLen: msg.seq_len,
+                        });
+
+                        // Prune old entries
+                        const cutoff = msg.stream_time - 60;
+                        while (syncTable.length > 0 && syncTable[0].streamTime < cutoff) {
+                            syncTable.shift();
+                        }
+                    }
+
+                    // Show sync status in console
+                    if (!hasOffset && syncTable.length > 3) {
+                        console.log('[Sync] Waiting for audio to start playing...');
+                    }
+                    break;
+
+                default:
+                    console.warn('[WS] Unknown message type:', msg.type);
+            }
+        }
+
+        /**
+         * Stop playback and reset state completely.
+         */
+        function stopPlayback() {
+            console.log('[Playback] Stopped by server');
+            audio.pause();
+            audio.src = '';  // Clear buffer completely
+            activeBeatIndex = -1;
+            activeSegmentIndex = -1;
+            currentSeqPos = 0;
+            currentSeqLen = 0;
+            statusText.textContent = 'Stopped';
+            loadingOverlay.classList.remove('hidden');
+            document.querySelector('.loading-text').textContent = 'Waiting for playback...';
+        }
+
+        /**
+         * Pause playback (keeps buffer).
+         */
+        function pausePlayback() {
+            console.log('[Playback] Paused by server');
+            audio.pause();
+            statusText.textContent = 'Paused';
+        }
+
+        /**
+         * Resume playback from where we left off.
+         */
+        function resumePlayback() {
+            console.log('[Playback] Resumed by server');
+            audio.play().catch(e => {
+                console.warn('[Audio] Resume failed:', e);
+                statusText.textContent = 'Click to resume';
+                document.body.addEventListener('click', () => {
+                    audio.play();
+                    statusText.textContent = 'Playing';
+                }, { once: true });
+            });
+            statusText.textContent = 'Playing';
+        }
+
+        /**
+         * Start streaming audio.
+         * Uses 'playing' event to know when audio actually starts (after buffering).
+         */
+        function startAudio() {
+            const host = window.location.hostname || 'localhost';
+            audio.src = `http://${host}:${WS_PORT}${AUDIO_PATH}`;
+
+            // Start buffering - capture the first stream_time we receive
+            isBuffering = true;
+            bufferStartStreamTime = null;
+
+            // Calibrate sync offset when audio ACTUALLY starts playing.
+            // This fires after buffering is complete and sound is output.
+            audio.addEventListener('playing', () => {
+                isBuffering = false;
+
+                if (!hasOffset && bufferStartStreamTime !== null) {
+                    // Use the stream_time from when buffering started - that's
+                    // the audio content at the head of the buffer (what we're hearing)
+                    streamOffset = bufferStartStreamTime - audio.currentTime;
+                    hasOffset = true;
+                    console.log(`[Sync] Calibrated: offset=${streamOffset.toFixed(2)}s, ` +
+                        `audio=${audio.currentTime.toFixed(2)}s, bufferStart=${bufferStartStreamTime.toFixed(2)}s`);
+                    statusText.textContent = 'Synced';
+                } else if (!hasOffset) {
+                    console.warn('[Sync] No bufferStartStreamTime captured, using fallback');
+                    // Fallback: use latest entry minus estimated buffer time
+                    if (syncTable.length > 0) {
+                        const latestEntry = syncTable[syncTable.length - 1];
+                        streamOffset = latestEntry.streamTime - audio.currentTime - 5.0; // Rough estimate
+                        hasOffset = true;
+                    }
+                }
+            }, { once: true });
+
+            audio.play().catch(e => {
+                console.warn('[Audio] Autoplay blocked:', e);
+                statusText.textContent = 'Click to play';
+                document.body.addEventListener('click', () => {
+                    // Reset buffering state on click (user interaction)
+                    isBuffering = true;
+                    bufferStartStreamTime = null;
+                    audio.play();
+                    statusText.textContent = 'Buffering...';
+                }, { once: true });
+            });
+        }
+
+        /**
+         * Convert time to angle (radians).
+         */
+        function getAngle(time) {
+            return (time / duration) * 2 * Math.PI - (Math.PI / 2);
+        }
+
+        /**
+         * Main render loop.
+         * Uses audio.currentTime + offset to find the correct beat from sync table.
+         * stream_time is now cumulative audio duration, matching audio.currentTime.
+         */
+        function renderLoop() {
+            if (beats.length > 0) {
+                // If we have sync data and offset, use audio.currentTime for lookup
+                if (hasOffset && syncTable.length > 0) {
+                    // audio_stream_position = audio.currentTime + join_offset
+                    // This maps to cumulative_audio_time on the server.
+                    const audioStreamPosition = audio.currentTime + streamOffset;
+
+                    // Find closest sync entry
+                    let entry = null;
+                    for (let i = syncTable.length - 1; i >= 0; i--) {
+                        if (syncTable[i].streamTime <= audioStreamPosition) {
+                            entry = syncTable[i];
+                            break;
+                        }
+                    }
+
+                    if (entry) {
+                        activeBeatIndex = entry.beatId;
+                        activeSegmentIndex = entry.segId;
+                        currentSeqPos = entry.seqPos;
+                        currentSeqLen = entry.seqLen;
+                    }
+                }
+                // Otherwise use direct updates from WebSocket (set in handleMessage fallback)
+
+                draw();
+            }
+            requestAnimationFrame(renderLoop);
+        }
+
+        /**
+         * Draw the visualization.
+         */
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.lineCap = 'butt';
+
+            // 1. Draw Waveform Ring (inner)
+            drawWaveformRing();
+
+            // 2. Draw Segment Ring (outer)
+            ctx.lineWidth = 15;
+            segments.forEach((seg, i) => {
+                const startAngle = getAngle(seg.start_time);
+                const endAngle = getAngle(seg.end_time);
+
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.strokeStyle = colors[seg.label % colors.length];
+                ctx.globalAlpha = (activeSegmentIndex === -1 || activeSegmentIndex === i) ? 1.0 : 0.3;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            });
+
+            // 3. Draw Beat Cursor
+            if (activeBeatIndex !== -1 && activeBeatIndex < beats.length) {
+                const beat = beats[activeBeatIndex];
+                const angle = getAngle(beat.start);
+
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+
+                // Glow effect
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#FFFFFF';
+
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // 4. Draw Jump Arcs
+                ctx.lineWidth = 1.5;
+                beat.jump_candidates.forEach(targetIdx => {
+                    if (targetIdx >= beats.length) return;
+
+                    const targetBeat = beats[targetIdx];
+                    const targetAngle = getAngle(targetBeat.start);
+
+                    const tx = centerX + Math.cos(targetAngle) * (radius - 20);
+                    const ty = centerY + Math.sin(targetAngle) * (radius - 20);
+                    const sx = centerX + Math.cos(angle) * (radius - 20);
+                    const sy = centerY + Math.sin(angle) * (radius - 20);
+
+                    const targetSeg = segments[targetBeat.segment];
+                    const targetColor = targetSeg ? colors[targetSeg.label % colors.length] : '#FFFFFF';
+
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.quadraticCurveTo(centerX, centerY, tx, ty);
+                    ctx.strokeStyle = targetColor;
+                    ctx.globalAlpha = 0.5;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                });
+            }
+
+            // 5. Draw Countdown Ring
+            if (activeBeatIndex !== -1 && currentSeqLen > 0) {
+                drawCountdown();
+            }
+        }
+
+        /**
+         * Draw the waveform amplitude ring.
+         */
+        function drawWaveformRing() {
+            if (waveformEnvelope.length === 0 || segments.length === 0) return;
+
+            const segmentRingWidth = 15;
+            const waveformRingWidth = segmentRingWidth * 1.5;
+            const baselineRadius = radius - segmentRingWidth / 2 - 3 - waveformRingWidth / 2;
+            const numBars = waveformEnvelope.length;
+            const barWidth = 1.5;
+
+            for (let i = 0; i < numBars; i++) {
+                const normalizedPos = i / numBars;
+                const angle = normalizedPos * 2 * Math.PI - (Math.PI / 2);
+                const time = normalizedPos * duration;
+
+                let amp = waveformEnvelope[i] || 0;
+                amp = Math.max(amp, 0.1);
+
+                const barHalfHeight = (waveformRingWidth / 2) * amp;
+                const innerRadius = baselineRadius - barHalfHeight;
+                const outerRadius = baselineRadius + barHalfHeight;
+
+                // Find segment for this time
+                let segIdx = -1;
+                for (let s = 0; s < segments.length; s++) {
+                    if (time >= segments[s].start_time && time < segments[s].end_time) {
+                        segIdx = s;
+                        break;
+                    }
+                }
+
+                const isActive = (segIdx !== -1) && (activeSegmentIndex === -1 || activeSegmentIndex === segIdx);
+
+                const innerX = centerX + Math.cos(angle) * innerRadius;
+                const innerY = centerY + Math.sin(angle) * innerRadius;
+                const outerX = centerX + Math.cos(angle) * outerRadius;
+                const outerY = centerY + Math.sin(angle) * outerRadius;
+
+                ctx.beginPath();
+                ctx.moveTo(innerX, innerY);
+                ctx.lineTo(outerX, outerY);
+                ctx.lineWidth = barWidth;
+                ctx.lineCap = 'round';
+
+                if (isActive) {
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = '#FFFFFF';
+                    ctx.globalAlpha = 1.0;
+                    ctx.strokeStyle = '#FFFFFF';
+                } else {
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 0.35;
+                    ctx.strokeStyle = '#AAAAAA';
+                }
+
+                ctx.stroke();
+            }
+
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1.0;
+            ctx.lineCap = 'butt';
+        }
+
+        /**
+         * Draw the countdown pulse ring.
+         */
+        function drawCountdown() {
+            const remaining = currentSeqLen - currentSeqPos;
+            const pct = currentSeqPos / currentSeqLen;
+
+            const cx = centerX;
+            const cy = centerY;
+            const innerRadius = 28;
+            const bgRadius = innerRadius + 5;
+
+            // Determine pulse color
+            let color = '#00FF99'; // Green
+            if (remaining <= 2) {
+                color = '#FF0055'; // Red
+            } else if (remaining <= 4) {
+                color = '#FFAA00'; // Orange
+            }
+
+            // Background track
+            ctx.beginPath();
+            ctx.arc(cx, cy, bgRadius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Progress arc
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + pct * 2 * Math.PI;
+            ctx.beginPath();
+            ctx.arc(cx, cy, bgRadius, startAngle, endAngle);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Number
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = color;
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText(remaining.toString(), cx, cy - 2);
+
+            // Label
+            ctx.font = '8px sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.fillText('BRANCH', cx, cy + 12);
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+
+</html>
