@@ -33,7 +33,7 @@ use futures::stream::StreamExt;
 use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::sync::{broadcast, watch};
-use tower_http::services::ServeDir;
+use tower_http::{cors::CorsLayer, services::ServeDir};
 
 /// The port on which the broadcast server listens.
 const SERVER_PORT: u16 = 3030;
@@ -116,10 +116,12 @@ pub async fn start_server(
     };
 
     // Build the router with all broadcast endpoints.
+    // CORS layer allows cross-origin requests from GitHub Pages receiver.
     let app = Router::new()
         .route("/stream.mp3", get(handle_audio_stream))
         .route("/viz", get(handle_websocket))
         .nest_service("/receiver", ServeDir::new("../src-receiver"))
+        .layer(CorsLayer::permissive())
         .with_state(state);
 
     // Bind to all interfaces on the configured port.
