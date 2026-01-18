@@ -650,9 +650,12 @@
                         `audio=${audio.currentTime.toFixed(2)}s, bufferStart=${bufferStartStreamTime.toFixed(2)}s`);
                     statusText.textContent = 'Synced';
 
-                    // DEBUG: Monitor audio state every second
+                    // DEBUG: Monitor audio state every second (but don't overwrite error messages)
                     setInterval(() => {
-                        statusText.textContent = `t=${audio.currentTime.toFixed(1)} p=${audio.paused} m=${audio.muted} v=${audio.volume}`;
+                        const current = statusText.textContent;
+                        if (!current.startsWith('PAUSED') && !current.startsWith('ERROR') && !current.startsWith('STALLED')) {
+                            statusText.textContent = `t=${audio.currentTime.toFixed(1)} p=${audio.paused} m=${audio.muted} v=${audio.volume}`;
+                        }
                     }, 1000);
                 } else if (!hasOffset) {
                     console.warn('[Sync] No bufferStartStreamTime captured, using fallback');
