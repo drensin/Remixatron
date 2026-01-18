@@ -294,28 +294,36 @@
         /**
          * Initialize the receiver.
          * 
-         * When loaded with ?host= URL parameter (browser testing), connect directly.
-         * When loaded on Chromecast (no URL params), initialize Cast and wait for CONFIG.
+         * Connection priority:
+         * 1. URL ?host= parameter - explicit host override (browser testing, remote access)
+         * 2. Same-origin connection - when served from Axum (local hosting)
+         * 3. Cast CONFIG message - when loaded on Chromecast with no URL params
          */
         function init() {
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
 
-            // Check for URL parameter first - this means browser testing mode
             const params = new URLSearchParams(window.location.search);
             const urlHost = params.get('host');
+            const pageHost = window.location.hostname;
 
             if (urlHost) {
-                // URL param provided - connect directly (browser testing or manual Cast URL)
+                // Explicit host override via URL param
                 console.log('[Receiver] Host from URL param:', urlHost);
                 connectWebSocket();
+            } else if (pageHost && pageHost !== 'localhost' && pageHost !== '127.0.0.1' && pageHost !== '') {
+                // Page has a real hostname - we're being served locally from Axum
+                // Connect to same origin (the server serving this page is also the data source)
+                console.log('[Receiver] Connecting to same origin:', pageHost);
+                connectWebSocket();
             } else if (window.cast && window.cast.framework) {
-                // No URL param but Cast SDK available - we're likely on a Chromecast
-                // Initialize Cast and wait for CONFIG message with host
+                // No hostname available but Cast SDK present - we're on Chromecast
+                // Wait for sender to provide host via CONFIG message
+                console.log('[Receiver] Initializing Cast, waiting for CONFIG');
                 initCast();
             } else {
-                // No URL param, no Cast SDK - connect to same origin (local hosting)
-                console.log('[Receiver] Connecting to same origin');
+                // Fallback - try localhost
+                console.log('[Receiver] Fallback to localhost');
                 connectWebSocket();
             }
 
@@ -343,7 +351,12 @@
                     castConfigHost = event.data.host;
                     console.log('[Cast] Host configured:', castConfigHost);
 
-                    // Now that we have the host, connect to the desktop
+                    // IMPORTANT: Start audio IMMEDIATELY while still in the user gesture
+                    // context from the Cast session. This bypasses autoplay restrictions.
+                    console.log('[Cast] Starting audio immediately (user gesture context)');
+                    startAudio();
+
+                    // Then connect to WebSocket for visualization
                     connectWebSocket();
                 }
             });
