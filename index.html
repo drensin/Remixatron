@@ -389,6 +389,22 @@
                     }
                 );
 
+                // Add ERROR event listener to catch media loading/playback errors
+                playerManager.addEventListener(
+                    cast.framework.events.EventType.ERROR,
+                    (event) => {
+                        console.error('[Cast] ERROR event:', event);
+                        let errorDetail = 'unknown';
+                        if (event.detailedErrorCode) {
+                            errorDetail = `code=${event.detailedErrorCode}`;
+                        }
+                        if (event.error) {
+                            errorDetail += ` error=${JSON.stringify(event.error)}`;
+                        }
+                        statusText.textContent = 'ERROR: ' + errorDetail;
+                    }
+                );
+
                 // Listen for custom CONFIG messages on our namespace
                 context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
                     console.log('[Cast] Received message:', event.data);
