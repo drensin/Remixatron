@@ -677,6 +677,13 @@
                     console.log('[Cast] Media loaded successfully');
                     castLoadInProgress = false;
                     statusText.textContent = 'Playing';
+
+                    // DEBUG: Show sync state every second
+                    setInterval(() => {
+                        const pt = playerManager.getCurrentTimeSec();
+                        const state = playerManager.getPlayerState();
+                        statusText.textContent = `t=${pt.toFixed(1)} off=${hasOffset} buf=${bufferStartStreamTime?.toFixed(1) || 'null'} st=${state}`;
+                    }, 1000);
                 })
                 .catch(e => {
                     console.error('[Cast] Load failed:', e);
