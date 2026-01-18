@@ -320,8 +320,8 @@
                 if (loadingText) loadingText.textContent = 'URL param mode...';
                 connectWebSocket();
             } else if (pageHost && pageHost !== 'localhost' && pageHost !== '127.0.0.1' &&
-                pageHost !== '' && !pageHost.includes('github.io')) {
-                // Page has a real hostname (not GitHub Pages) - we're being served locally from Axum
+                pageHost !== '' && !pageHost.includes('github.io') && !pageHost.includes('dkr.bio')) {
+                // Page has a real hostname (not GitHub Pages or custom domain) - we're being served locally from Axum
                 // This takes priority over Cast SDK because after Cast redirect we land here
                 // and window.cast is still defined, but there's no active Cast session.
                 console.log('[Receiver] Connecting to same origin:', pageHost);
