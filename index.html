@@ -350,11 +350,21 @@
                     console.log('[Cast] Received message:', event.data);
 
                     if (event.data && event.data.type === 'CONFIG' && event.data.host) {
-                        castConfigHost = event.data.host;
-                        console.log('[Cast] Host configured:', castConfigHost);
+                        const host = event.data.host;
+                        console.log('[Cast] Host configured:', host);
 
-                        // Now that we have the host, connect to the desktop
-                        connectWebSocket();
+                        // REDIRECT to the user's local receiver!
+                        // This bypasses HTTPS->HTTP mixed content issues.
+                        // The local receiver serves everything over HTTP from the same origin.
+                        const localReceiverUrl = `http://${host}:${WS_PORT}/receiver/`;
+                        console.log('[Cast] Redirecting to local receiver:', localReceiverUrl);
+
+                        statusText.textContent = 'Redirecting to local receiver...';
+
+                        // Brief delay so user sees the message
+                        setTimeout(() => {
+                            window.location.href = localReceiverUrl;
+                        }, 500);
                     }
                 });
 
