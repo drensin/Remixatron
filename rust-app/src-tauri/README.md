@@ -9,6 +9,6 @@ This directory contains the Rust environment and configuration for the Remixatro
     *   Security capabilities (filesystem access, shell commands)
     *   Bundle settings (app name, version, identifier)
     *   Content Security Policy (CSP)
-*   **`Cargo.toml`**: The Rust dependency manifest. Manages crates like `kira` (Audio), `ort` (ONNX), and `symphonia` (decoding).
+*   **`Cargo.toml`**: The Rust dependency manifest. Manages crates like `kira` (Audio), `ort` (ONNX), `symphonia` (decoding), `axum` (HTTP/WebSocket), and `mp3lame-encoder` (streaming).
 *   **`build.rs`**: Build script used to handle native library linking (e.g., linking `libonnxruntime.so` on Linux).
 *   **`capabilities/`**: Directory containing fine-grained permission files for Tauri v2's security model.

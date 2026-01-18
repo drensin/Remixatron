@@ -24,6 +24,7 @@ It exists to:
 *   **Load Local Audio**: Drag and drop your favorite MP3, WAV, or FLAC files.
 *   **Stream from the Web**: Paste a YouTube or SoundCloud URL, and Remixatron will automatically download the highest quality audio for analysis.
 *   **Visualize the Walk**: Watch the dazzling real-time visualization that maps every beat, segment, and jump decision as it happens.
+*   **Cast to Any Screen**: Stream the visualization to any device on your network. Open `http://<your-ip>:3030/receiver/` on your TV, tablet, or phone.
 *   **Control the Vibes**: Play, Pause, and Resume the infinite walk with zero latency.
 
 ---
@@ -90,6 +91,7 @@ Remixatron is a hybrid application. The UI logic lives in JavaScript, while the 
 *   **Audio Engine**: [Kira](https://github.com/tesselode/kira) (Low-latency scheduling).
 *   **Machine Learning**: [ONNX Runtime](https://onnxruntime.ai/) (Running the **BeatThis** model for beat tracking).
 *   **Decoding**: [Symphonia](https://github.com/pdeljanov/Symphonia) (MP3/WAV/FLAC/AAC support).
+*   **Streaming**: [Axum](https://github.com/tokio-rs/axum) (HTTP/WebSocket), [mp3lame-encoder](https://crates.io/crates/mp3lame-encoder) (Real-time MP3).
 
 ## Directory Layout
 The project is split into three main zones.
@@ -107,9 +109,15 @@ This is the "Brain" of the application. It runs natively on the OS.
 *   **`analysis/`**: Contains the hard math.
     *   **`inference.rs`**: Wraps the ONNX Runtime session.
     *   **`structure.rs`**: Implements novelty-based segmentation (spectral clustering disabled).
+*   **`broadcasting/`**: Network streaming infrastructure.
+    *   **`transcoder.rs`**: Real-time PCM→MP3 encoding.
+    *   **`server.rs`**: Axum HTTP/WebSocket server for `/stream.mp3` and `/viz`.
 *   **`downloader.rs`**: Wraps `yt-dlp` to provide the "Universal Downloader" capability.
 
-### 3. Verification (`scripts/`)
+### 3. The Receiver (`src-receiver/`)
+A self-contained web UI that displays the visualization on remote devices. See **[BROADCAST.md](BROADCAST.md)** for architecture details.
+
+### 4. Verification (`scripts/`)
 *   **`generate_gold_standard.py`**: The Source of Truth. This Python script runs the original V1 algorithm (Librosa/Sklearn) to generate reference data. The Rust test suite uses this data to ensure the new engine produces mathematically identical results to the original research code.
 
 ## How it Fits Together
@@ -120,6 +128,7 @@ This is the "Brain" of the application. It runs natively on the OS.
 5.  **Frontend** sends this payload to the Visualizer (`viz.js`).
 6.  **Frontend** calls `invoke('play_track')`.
 7.  **Playback Engine** (`playback_engine.rs`) takes over the audio thread, scheduling audio blocks and making jump decisions in real-time.
+8.  **Broadcasting** (optional): The **Transcoder** encodes audio to MP3 and streams to connected receivers via Axum.
 
 ---
 

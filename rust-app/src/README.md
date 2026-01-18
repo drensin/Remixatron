@@ -7,6 +7,7 @@ This directory contains the user interface and visualization logic for the Remix
     *   Tauri Backend Communication (Invoke/Listen)
     *   UI State Management (Loading, Playback, Download)
     *   Audio Analysis Pipeline Orchestration
+    *   Network Receiver Sync (beat/segment updates for `/receiver`)
 *   **`viz.js`**: The visualization engine. Handles:
     *   HTML5 Canvas Rendering of the "Infinite Walk"
     *   Dynamic Beat Cursor & Segment Arcs

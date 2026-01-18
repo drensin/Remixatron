@@ -10,8 +10,9 @@
 3.  [Getting Started](#getting-started)
 4.  [The Interface](#the-interface)
 5.  [Core Features](#core-features)
-6.  [Troubleshooting](#troubleshooting)
-7.  [Frequently Asked Questions](#frequently-asked-questions)
+6.  [Network Receiver (Cast to Any Screen)](#network-receiver-cast-to-any-screen)
+7.  [Troubleshooting](#troubleshooting)
+8.  [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
 
@@ -126,6 +127,37 @@ Click the stop button to end playback entirely and return to the onboarding scre
 
 ---
 
+## Network Receiver (Cast to Any Screen)
+
+Remixatron can stream its visualization and audio to **any device on your local network**. Watch the infinite remix on your TV, tablet, or phone—no special hardware required.
+
+### How It Works
+
+When Remixatron is running, it starts a local server on port 3030. Any device on your network can connect via a web browser to see a perfectly synchronized copy of the visualization with audio.
+
+### Using the Receiver
+
+1.  **Start playback** on your laptop (the main Remixatron app).
+2.  **Find your laptop's IP address**:
+    *   **macOS**: System Preferences → Network → Wi-Fi → IP Address
+    *   **Windows**: Open CMD, type `ipconfig`, look for "IPv4 Address"
+    *   **Linux**: Run `ip addr` or `hostname -I`
+3.  **On your TV/tablet/phone**, open a web browser and go to:
+    ```
+    http://<your-laptop-ip>:3030/receiver/
+    ```
+    Example: `http://192.168.1.42:3030/receiver/`
+4.  The visualization appears and audio plays in sync!
+
+### Notes
+
+*   Both devices must be on the **same Wi-Fi network**.
+*   There's a **3-5 second initial buffer** while the audio loads.
+*   The receiver shows the same visualization as the main app, including the play bar with track info and thumbnail.
+*   You can open **multiple receivers** simultaneously (e.g., TV + phone).
+
+---
+
 ## Troubleshooting
 
 ### "Download Failed" Error
@@ -145,6 +177,12 @@ Click the stop button to end playback entirely and return to the onboarding scre
 *   The first run may be slower as components initialize.
 *   Try with a shorter track (under 5 minutes) first.
 *   Extremely long tracks (> 20 minutes) may take several minutes to analyze.
+
+### Receiver Won't Connect
+*   Ensure both devices are on the **same Wi-Fi network**.
+*   Check that your firewall isn't blocking port **3030**.
+*   Try `http://localhost:3030/receiver/` on the laptop itself to verify the server is running.
+*   If using a VPN, try disconnecting it.
 
 ---
 
@@ -167,6 +205,9 @@ A: Remixatron downloads the highest-quality audio stream available (usually AAC 
 
 ### Q: How does it detect the beats?
 A: Remixatron uses **BeatThis**, a State-of-the-Art neural network from ISMIR 2024 (a top Music Information Retrieval conference). It runs via the ONNX Runtime for fast, portable inference.
+
+### Q: Can I watch on my TV?
+A: **Yes!** Open `http://<your-laptop-ip>:3030/receiver/` in any browser on your smart TV or a device connected to your TV. See the [Network Receiver](#network-receiver-cast-to-any-screen) section for details.
 
 ### Q: Can I use my own ONNX models?
 A: Not through the UI, but advanced users can replace the `.onnx` files in the application bundle's `models/` directory.
@@ -203,6 +244,8 @@ Remixatron's "secret sauce" is built on the shoulders of giants in the **Music I
 | **Rubato** | High-fidelity audio resampling | [crates.io/crates/rubato](https://crates.io/crates/rubato) |
 | **yt-dlp** | Universal video/audio downloader | [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) |
 | **Linfa** | Pure-Rust machine learning toolkit | [github.com/rust-ml/linfa](https://github.com/rust-ml/linfa) |
+| **Axum** | Async HTTP/WebSocket server | [github.com/tokio-rs/axum](https://github.com/tokio-rs/axum) |
+| **mp3lame-encoder** | Real-time MP3 encoding (LAME) | [crates.io/crates/mp3lame-encoder](https://crates.io/crates/mp3lame-encoder) |
 
 #### Legacy (V1/V2 - Python)
 | Library | Purpose |
