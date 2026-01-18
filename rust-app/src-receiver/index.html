@@ -325,7 +325,7 @@
                 // This takes priority over Cast SDK because after Cast redirect we land here
                 // and window.cast is still defined, but there's no active Cast session.
                 console.log('[Receiver] Connecting to same origin:', pageHost);
-                if (loadingText) loadingText.textContent = 'Same-origin mode...';
+                if (loadingText) loadingText.textContent = 'Same-origin: ' + pageHost;
                 connectWebSocket();
             } else if (window.cast && window.cast.framework) {
                 // Cast SDK present and we're on GitHub Pages - we're on Chromecast
