@@ -291,6 +291,10 @@
         let ws = null;
         let reconnectTimer = null;
 
+        // Cast mode state
+        let isCastMode = false;      // True when running on Chromecast via Cast SDK
+        let playerManager = null;    // Cast PlayerManager instance (only set in Cast mode)
+
         /**
          * Initialize the receiver.
          * 
@@ -346,14 +350,43 @@
          * Initialize the Google Cast Receiver Framework.
          * 
          * Sets up the Cast context to receive CONFIG messages from the sender
-         * application. The sender sends the host address, and we use that to
-         * connect back to the user's desktop for audio and visualization data.
+         * application. Uses PlayerManager for audio playback and WebSocket for
+         * visualization data.
          */
         function initCast() {
             try {
                 console.log('[Cast] Initializing Cast Receiver Framework');
+                isCastMode = true;
 
                 const context = cast.framework.CastReceiverContext.getInstance();
+                playerManager = context.getPlayerManager();
+
+                // Add PLAYING event listener for sync calibration
+                // This fires when audio actually starts playing (after buffering)
+                playerManager.addEventListener(
+                    cast.framework.events.EventType.PLAYING,
+                    () => {
+                        console.log('[Cast] PLAYING event fired');
+                        isBuffering = false;
+
+                        if (!hasOffset && bufferStartStreamTime !== null) {
+                            // Calibrate offset using same logic as HTML5 audio
+                            streamOffset = bufferStartStreamTime - playerManager.getCurrentTimeSec();
+                            hasOffset = true;
+                            console.log(`[Cast Sync] Calibrated: offset=${streamOffset.toFixed(2)}s, ` +
+                                `playerTime=${playerManager.getCurrentTimeSec().toFixed(2)}s, ` +
+                                `bufferStart=${bufferStartStreamTime.toFixed(2)}s`);
+                            statusText.textContent = 'Synced';
+                        } else if (!hasOffset) {
+                            console.warn('[Cast Sync] No bufferStartStreamTime captured, using fallback');
+                            if (syncTable.length > 0) {
+                                const latestEntry = syncTable[syncTable.length - 1];
+                                streamOffset = latestEntry.streamTime - playerManager.getCurrentTimeSec() - 5.0;
+                                hasOffset = true;
+                            }
+                        }
+                    }
+                );
 
                 // Listen for custom CONFIG messages on our namespace
                 context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
@@ -362,7 +395,8 @@
                     if (event.data && event.data.type === 'CONFIG' && event.data.host) {
                         castConfigHost = event.data.host;
                         console.log('[Cast] Host configured:', castConfigHost);
-                        // TODO: Will be replaced with PlayerManager.load() in next step
+                        // Connect WebSocket to get beat data; startAudio() will be called
+                        // when 'init' message arrives, which triggers startAudioCast()
                         connectWebSocket();
                     }
                 });
@@ -554,8 +588,13 @@
          */
         function stopPlayback() {
             console.log('[Playback] Stopped by server');
-            audio.pause();
-            audio.src = '';  // Clear buffer completely
+            if (isCastMode) {
+                // Stop the PlayerManager
+                playerManager.stop();
+            } else {
+                audio.pause();
+                audio.src = '';  // Clear buffer completely
+            }
             activeBeatIndex = -1;
             activeSegmentIndex = -1;
             currentSeqPos = 0;
@@ -570,7 +609,11 @@
          */
         function pausePlayback() {
             console.log('[Playback] Paused by server');
-            audio.pause();
+            if (isCastMode) {
+                playerManager.pause();
+            } else {
+                audio.pause();
+            }
             statusText.textContent = 'Paused';
         }
 
@@ -579,22 +622,71 @@
          */
         function resumePlayback() {
             console.log('[Playback] Resumed by server');
-            audio.play().catch(e => {
-                console.warn('[Audio] Resume failed:', e);
-                statusText.textContent = 'Click to resume';
-                document.body.addEventListener('click', () => {
-                    audio.play();
+            if (isCastMode) {
+                playerManager.play();
+                statusText.textContent = 'Playing';
+            } else {
+                audio.play().catch(e => {
+                    console.warn('[Audio] Resume failed:', e);
+                    statusText.textContent = 'Click to resume';
+                    document.body.addEventListener('click', () => {
+                        audio.play();
+                        statusText.textContent = 'Playing';
+                    }, { once: true });
+                });
+                statusText.textContent = 'Playing';
+            }
+        }
+
+        /**
+         * Start streaming audio via Cast PlayerManager.
+         * Called from startAudio() when in Cast mode.
+         */
+        function startAudioCast() {
+            const host = getHost();
+            const streamUrl = `http://${host}:${WS_PORT}${AUDIO_PATH}`;
+
+            console.log('[Cast] Loading audio:', streamUrl);
+
+            // Reset sync state for new track
+            isBuffering = true;
+            bufferStartStreamTime = null;
+
+            // Build the load request
+            const loadRequest = new cast.framework.messages.LoadRequestData();
+            loadRequest.requestId = 0;  // Receiver-initiated
+            loadRequest.autoplay = true;
+            loadRequest.media = new cast.framework.messages.MediaInformation();
+            loadRequest.media.contentUrl = streamUrl;
+            loadRequest.media.contentType = 'audio/mpeg';
+            loadRequest.media.streamType = cast.framework.messages.StreamType.LIVE;
+            loadRequest.media.duration = -1;  // Required for LIVE streams
+
+            statusText.textContent = 'Loading audio...';
+
+            playerManager.load(loadRequest)
+                .then(() => {
+                    console.log('[Cast] Media loaded successfully');
                     statusText.textContent = 'Playing';
-                }, { once: true });
-            });
-            statusText.textContent = 'Playing';
+                })
+                .catch(e => {
+                    console.error('[Cast] Load failed:', e);
+                    statusText.textContent = 'Load failed: ' + (e.message || e);
+                });
         }
 
         /**
          * Start streaming audio.
-         * Uses 'playing' event to know when audio actually starts (after buffering).
+         * Uses Cast PlayerManager in Cast mode, HTML5 audio element otherwise.
          */
         function startAudio() {
+            // Cast mode uses PlayerManager
+            if (isCastMode) {
+                startAudioCast();
+                return;
+            }
+
+            // Browser/Party mode uses HTML5 audio element
             const host = getHost();
             audio.src = `http://${host}:${WS_PORT}${AUDIO_PATH}`;
 
@@ -674,16 +766,18 @@
 
         /**
          * Main render loop.
-         * Uses audio.currentTime + offset to find the correct beat from sync table.
-         * stream_time is now cumulative audio duration, matching audio.currentTime.
+         * Uses audio.currentTime (or PlayerManager time in Cast mode) + offset
+         * to find the correct beat from sync table.
          */
         function renderLoop() {
             if (beats.length > 0) {
-                // If we have sync data and offset, use audio.currentTime for lookup
+                // If we have sync data and offset, use local playback time for lookup
                 if (hasOffset && syncTable.length > 0) {
-                    // audio_stream_position = audio.currentTime + join_offset
-                    // This maps to cumulative_audio_time on the server.
-                    const audioStreamPosition = audio.currentTime + streamOffset;
+                    // Get current playback time from appropriate source
+                    const currentTime = isCastMode
+                        ? playerManager.getCurrentTimeSec()
+                        : audio.currentTime;
+                    const audioStreamPosition = currentTime + streamOffset;
 
                     // Find closest sync entry
                     let entry = null;
