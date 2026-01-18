@@ -627,14 +627,29 @@
             // Play muted - should always succeed
             audio.play().catch(e => {
                 console.warn('[Audio] Even muted autoplay blocked:', e);
-                statusText.textContent = 'Click to play';
-                document.body.addEventListener('click', () => {
+                statusText.textContent = 'Press OK to play';
+
+                // Handle both mouse clicks AND TV remote keypresses
+                const startPlayback = () => {
                     isBuffering = true;
                     bufferStartStreamTime = null;
                     audio.muted = false;
                     audio.play();
                     statusText.textContent = 'Buffering...';
-                }, { once: true });
+                    // Remove both listeners
+                    document.body.removeEventListener('click', startPlayback);
+                    document.removeEventListener('keydown', handleKeydown);
+                };
+
+                const handleKeydown = (e) => {
+                    // OK/Enter/Select buttons on TV remotes
+                    if (e.key === 'Enter' || e.key === 'OK' || e.keyCode === 13) {
+                        startPlayback();
+                    }
+                };
+
+                document.body.addEventListener('click', startPlayback);
+                document.addEventListener('keydown', handleKeydown);
             });
         }
 
