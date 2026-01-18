@@ -311,17 +311,18 @@
                 // Explicit host override via URL param
                 console.log('[Receiver] Host from URL param:', urlHost);
                 connectWebSocket();
-            } else if (window.cast && window.cast.framework) {
-                // Cast SDK present - we're on Chromecast
-                // Wait for sender to provide host via CONFIG message
-                console.log('[Receiver] Initializing Cast, waiting for CONFIG');
-                initCast();
             } else if (pageHost && pageHost !== 'localhost' && pageHost !== '127.0.0.1' &&
                 pageHost !== '' && !pageHost.includes('github.io')) {
                 // Page has a real hostname (not GitHub Pages) - we're being served locally from Axum
-                // Connect to same origin (the server serving this page is also the data source)
+                // This takes priority over Cast SDK because after Cast redirect we land here
+                // and window.cast is still defined, but there's no active Cast session.
                 console.log('[Receiver] Connecting to same origin:', pageHost);
                 connectWebSocket();
+            } else if (window.cast && window.cast.framework) {
+                // Cast SDK present and we're on GitHub Pages - we're on Chromecast
+                // Wait for sender to provide host via CONFIG message, then redirect
+                console.log('[Receiver] Initializing Cast, waiting for CONFIG');
+                initCast();
             } else {
                 // Fallback - try localhost
                 console.log('[Receiver] Fallback to localhost');
