@@ -277,6 +277,7 @@
         let hasOffset = false;       // True once we've calibrated
         let bufferStartStreamTime = null;  // First stream_time when buffering started
         let isBuffering = false;     // True when we're waiting for audio to start
+        let castLoadInProgress = false;  // Guard against duplicate Cast loads
 
         // Canvas dimensions
         let width, height, centerX, centerY, radius;
@@ -643,10 +644,17 @@
          * Called from startAudio() when in Cast mode.
          */
         function startAudioCast() {
+            // Guard against duplicate loads (LOAD_CANCELLED error)
+            if (castLoadInProgress) {
+                console.warn('[Cast] Load already in progress, skipping duplicate call');
+                return;
+            }
+            castLoadInProgress = true;
+
             const host = getHost();
             const streamUrl = `http://${host}:${WS_PORT}${AUDIO_PATH}`;
 
-            console.log('[Cast] Loading audio:', streamUrl);
+            console.log('[Cast] startAudioCast() called, loading:', streamUrl);
 
             // Reset sync state for new track
             isBuffering = true;
@@ -667,10 +675,12 @@
             playerManager.load(loadRequest)
                 .then(() => {
                     console.log('[Cast] Media loaded successfully');
+                    castLoadInProgress = false;
                     statusText.textContent = 'Playing';
                 })
                 .catch(e => {
                     console.error('[Cast] Load failed:', e);
+                    castLoadInProgress = false;
                     // Try to extract useful error info
                     let errorMsg = 'unknown';
                     if (e && e.message) {
