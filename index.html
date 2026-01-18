@@ -698,7 +698,11 @@
                     setInterval(() => {
                         const pt = playerManager.getCurrentTimeSec();
                         const state = playerManager.getPlayerState();
-                        statusText.textContent = `t=${pt.toFixed(1)} off=${hasOffset} buf=${bufferStartStreamTime?.toFixed(1) || 'null'} st=${state}`;
+                        const media = playerManager.getMediaInformation();
+                        const url = media?.contentUrl || 'no-url';
+                        // Truncate URL for display
+                        const shortUrl = url.length > 30 ? '...' + url.slice(-27) : url;
+                        statusText.textContent = `st=${state} t=${pt.toFixed(1)} url=${shortUrl}`;
                     }, 1000);
                 })
                 .catch(e => {
