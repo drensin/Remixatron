@@ -539,11 +539,14 @@
                 isStreamingAudio = true;
 
                 // Check if AudioContext needs user gesture
+                // Note: If context was suspended by code (e.g. stop()), resume() works without gesture.
+                // If it was suspended by browser policy (autoplay), gesture is needed.
                 if (audioContext && audioContext.state === 'suspended') {
                     console.log('[Audio] Context suspended, waiting for user gesture');
                     statusText.textContent = 'Tap/Click to Play';
                     const loadingText = document.querySelector('.loading-text');
                     if (loadingText) loadingText.textContent = 'Tap anywhere to start audio';
+                    loadingOverlay.classList.remove('hidden'); // Ensure visible
 
                     // Set up one-time click handler to resume context
                     const startAudioHandler = () => {
@@ -559,6 +562,13 @@
                     document.body.addEventListener('click', startAudioHandler);
                     document.body.addEventListener('keydown', startAudioHandler);
                 } else {
+                    loadingOverlay.classList.add('hidden');
+                }
+            } else if (isStreamingAudio && audioContext && audioContext.state === 'running') {
+                // If we're already streaming and context is running, ensure overlay is hidden.
+                // This fixes the case where context auto-resumes (via server signal) while
+                // the "Tap to Play" prompt was showing.
+                if (!loadingOverlay.classList.contains('hidden')) {
                     loadingOverlay.classList.add('hidden');
                 }
             }
