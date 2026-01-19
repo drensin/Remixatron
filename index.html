@@ -635,6 +635,11 @@
                 return;
             }
 
+            // Only schedule if we are in streaming mode (buffer full)
+            if (!isStreamingAudio) {
+                return;
+            }
+
             if (audioQueue.length === 0) {
                 // No chunks to schedule - wait for more to arrive
                 return;
