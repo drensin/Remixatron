@@ -773,6 +773,8 @@
         function resumeAudioStream() {
             isPausedByServer = false;  // Start accepting audio frames again
             if (audioContext) {
+                // Show buffering feedback
+                if (statusText) statusText.textContent = "Buffering...";
                 console.log('[Audio] Resuming, queue:', audioQueue.length, 'streaming:', isStreamingAudio, 'ctx state:', audioContext.state);
 
                 // Clear any stale buffered chunks (shouldn't be any since we ignored during pause)
