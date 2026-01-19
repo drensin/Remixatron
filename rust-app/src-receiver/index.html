@@ -564,11 +564,13 @@
                 } else {
                     loadingOverlay.classList.add('hidden');
                 }
-            } else if (isStreamingAudio && audioContext && audioContext.state === 'running') {
-                // If we're already streaming and context is running, ensure overlay is hidden.
-                // This fixes the case where context auto-resumes (via server signal) while
-                // the "Tap to Play" prompt was showing.
+            }
+
+            // Always check: If we're streaming and context is running, ensure overlay is hidden.
+            // This fixes the race condition where context auto-resumes after the prompt is shown.
+            if (isStreamingAudio && audioContext && audioContext.state === 'running') {
                 if (!loadingOverlay.classList.contains('hidden')) {
+                    console.log('[Audio] Context running, forcing overlay hidden');
                     loadingOverlay.classList.add('hidden');
                 }
             }
