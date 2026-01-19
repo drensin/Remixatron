@@ -1017,6 +1017,9 @@ function hideErrorSnackbar() {
  * Opens the Cast device picker dialog.
  * Triggers mDNS discovery to find available Chromecast devices.
  */
+// State for Manual IP persistence
+let lastManualCastIp = "";
+
 function openCastDialog() {
     castDialog = castDialog || document.querySelector("#cast-dialog");
     castDevicesList = castDevicesList || document.querySelector("#cast-devices-list");
@@ -1044,7 +1047,7 @@ function openCastDialog() {
 
     // Reset state
     selectedCastDevice = null;
-    castManualIp.value = "";
+    castManualIp.value = lastManualCastIp;
     updateCastConnectButton();
 
     // Show dialog
@@ -1106,6 +1109,9 @@ function bindCastDialogEvents() {
     // Manual IP input - enable Cast button when typing
     if (castManualIp) {
         castManualIp.addEventListener("input", () => {
+            // Save state as user types
+            lastManualCastIp = castManualIp.value;
+
             // If user types manual IP, deselect any discovered device
             if (castManualIp.value.trim()) {
                 deselectAllDevices();

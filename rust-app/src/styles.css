@@ -371,8 +371,8 @@ body {
     background: transparent;
     border: 1px solid var(--md-sys-color-outline);
     color: var(--md-sys-color-on-surface-variant);
-    padding: 12px 16px;
-    border-radius: var(--md-sys-shape-corner-small);
+    padding: 16px 24px;
+    border-radius: var(--md-sys-shape-corner-large);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -887,8 +887,13 @@ body {
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .cast-devices-list {
