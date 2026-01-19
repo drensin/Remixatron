@@ -423,6 +423,18 @@
                 context.start(options);
                 console.log('[Cast] Receiver started, waiting for CONFIG message');
 
+                // Manual key handler for "Back" button (Chromecast remote often sends Backspace or Escape)
+                // This is required because disableIdleTimeout=true prevents system auto-exit.
+                window.addEventListener('keydown', (e) => {
+                    // Backspace (8), Escape (27), or BrowserBack
+                    if (e.code === 'Backspace' || e.code === 'Escape' || e.key === 'BrowserBack') {
+                        console.log('[Cast] Back button detected via keydown:', e.code);
+                        stopAllScheduledSources();
+                        if (ws) ws.close();
+                        context.stop();
+                    }
+                });
+
                 statusText.textContent = 'Cast connected - waiting for host config...';
             } catch (e) {
                 console.error('[Cast] INIT ERROR:', e);
@@ -647,10 +659,12 @@
                     source.buffer = buffer;
                     source.connect(gainNode);
 
-                    // Track this source for cleanup on pause/stop
-                    scheduledSources.push(source);
+                    // Track this source and its viz timeout for cleanup
+                    const scheduledItem = { source: source, timeoutId: null };
+                    scheduledSources.push(scheduledItem);
+
                     source.onended = () => {
-                        const idx = scheduledSources.indexOf(source);
+                        const idx = scheduledSources.indexOf(scheduledItem);
                         if (idx !== -1) scheduledSources.splice(idx, 1);
                     };
 
@@ -672,7 +686,7 @@
 
                     // Update viz state when this chunk actually plays
                     const delay = Math.max(0, (nextPlayTime - audioContext.currentTime) * 1000);
-                    setTimeout(() => {
+                    scheduledItem.timeoutId = setTimeout(() => {
                         activeBeatIndex = chunk.beatId;
                         activeSegmentIndex = chunk.segId;
                         currentSeqPos = chunk.seqPos;
@@ -700,16 +714,21 @@
         }
 
         /**
-         * Stop all scheduled audio sources.
+         * Stop all scheduled audio sources and clear pending viz updates.
          * Called on pause/stop to cancel already-scheduled playback.
          */
         function stopAllScheduledSources() {
             while (scheduledSources.length > 0) {
-                const source = scheduledSources.pop();
+                const item = scheduledSources.pop();
                 try {
-                    source.stop();
+                    item.source.stop();
                 } catch (e) {
                     // Ignore errors (source may have already ended)
+                }
+
+                // key fix: clear the associated visualization timeout
+                if (item.timeoutId !== null) {
+                    clearTimeout(item.timeoutId);
                 }
             }
         }
