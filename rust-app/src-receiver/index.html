@@ -710,11 +710,15 @@
                     }
                 })
                 .catch(err => {
-                    console.error('[Audio] Decode error:', err);
+                    console.error('[Audio] Decode error (dropping chunk):', err);
                     isSchedulingChunk = false;
-                    // Try next chunk
-                    if (audioQueue.length > 0) {
-                        scheduleNextChunk();
+
+                    // Do NOT aggressively retry immediately. Drop this chunk.
+                    // The loop will naturally recover when new data arrives.
+
+                    // Safety kick: if we have data but stopped scheduling, wait a bit then retry
+                    if (audioQueue.length > 0 && !isSchedulingChunk) {
+                        setTimeout(scheduleNextChunk, 10);
                     }
                 });
         }
