@@ -1,6 +1,6 @@
 # Remixatron User's Manual
 
-**Version 0.9.1**
+**Version 1.1.0**
 
 ---
 
