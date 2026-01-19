@@ -832,6 +832,7 @@ async fn play_track(
                         stream_time: cumulative_audio_time,
                         stopped: false,
                         paused: false,
+                        shutdown: false,
                     });
 
                     // Update cumulative time AFTER sending (for next beat)
@@ -1001,7 +1002,40 @@ pub fn run() {
             get_local_hostname,
             open_url,
             discover_cast_devices,
-            start_cast_session])
+            discover_cast_devices,
+            start_cast_session,
+            stop_cast_session])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+/// Stops the current Cast session by sending a shutdown signal to the receiver.
+///
+/// This does NOT use the Cast protocol directly (which requires reconnecting).
+/// Instead, it broadcasts a `shutdown: true` message over the existing WebSocket
+/// channel. The receiver (which is listening to this channel) will interpret
+/// this as a command to call `window.close()` or `context.stop()`.
+#[tauri::command]
+async fn stop_cast_session(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    println!("[Cast] Stopping session via WebSocket signal...");
+
+    // Send a VizUpdateData with shutdown=true
+    let shutdown_msg = VizUpdateData {
+        shutdown: true,
+        ..Default::default()
+    };
+
+    // Broadcast to all connected clients (Receiver)
+    match state.viz_update_tx.send(shutdown_msg) {
+        Ok(_) => {
+             println!("[Cast] Shutdown signal sent.");
+             Ok(())
+        },
+        Err(e) => {
+            // It's possible no one is listening (already disconnected), which is fine.
+            println!("[Cast] Failed to send shutdown signal (no listeners?): {}", e);
+            Ok(()) // Treat as success to clear UI
+        }
+    }
 }

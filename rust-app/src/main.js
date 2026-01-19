@@ -64,6 +64,7 @@ let castManualIp;
 let castRefreshBtn;
 let castConnectBtn;
 let castCancelBtn;
+let castStopRemoteBtn;
 let selectedCastDevice = null;  // { ip, port, name }
 let discoveredDevices = [];     // Array of discovered Cast devices
 
@@ -1020,11 +1021,26 @@ function openCastDialog() {
     castDialog = castDialog || document.querySelector("#cast-dialog");
     castDevicesList = castDevicesList || document.querySelector("#cast-devices-list");
     castManualIp = castManualIp || document.querySelector("#cast-manual-ip");
+    // castStopRemoteBtn removed from here, declared globally now
+
     castRefreshBtn = castRefreshBtn || document.querySelector("#cast-refresh-btn");
     castConnectBtn = castConnectBtn || document.querySelector("#cast-connect-btn");
     castCancelBtn = castCancelBtn || document.querySelector("#cast-cancel-btn");
+    castStopRemoteBtn = castStopRemoteBtn || document.querySelector("#cast-stop-remote-btn");
 
     if (!castDialog) return;
+
+    // Determine if we are currently casting (based on UI status)
+    const isCasting = document.querySelector("#cast-btn .material-symbols-outlined").textContent === "cast_connected";
+
+    if (isCasting) {
+        // Show Stop option, Hide others or leave them
+        castStopRemoteBtn.classList.remove("hidden");
+        // Optional: Hide connect since we are already connected?
+        // For now, let's keep it simple.
+    } else {
+        castStopRemoteBtn.classList.add("hidden");
+    }
 
     // Reset state
     selectedCastDevice = null;
@@ -1062,6 +1078,24 @@ function bindCastDialogEvents() {
     // Cancel button
     if (castCancelBtn) {
         castCancelBtn.addEventListener("click", closeCastDialog);
+    }
+
+    // Stop Remote button
+    if (castStopRemoteBtn) {
+        castStopRemoteBtn.addEventListener("click", async () => {
+            // Invoke backend command
+            try {
+                await invoke("stop_cast_session");
+                // Reset UI immediately
+                const castBtn = document.querySelector("#cast-btn .material-symbols-outlined");
+                if (castBtn) castBtn.textContent = "cast";
+                const statusEl = document.querySelector("#status-msg");
+                if (statusEl) statusEl.textContent = "Infinite Walk Active";
+                closeCastDialog();
+            } catch (e) {
+                console.error("Stop casting failed", e);
+            }
+        });
     }
 
     // Refresh button

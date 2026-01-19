@@ -819,7 +819,24 @@
                     break;
 
                 case 'update':
-                    // Check for stop signal
+                    // Check for shutdown signal (from Desktop Stop Casting)
+                    if (msg.shutdown) {
+                        console.log('[Control] Shutdown received');
+                        stopAudioStream();
+
+                        // If running as Cast Receiver, explicit stop
+                        if (isCastMode && window.cast && window.cast.framework) {
+                            console.log('[Cast] Stopping Cast Receiver Context');
+                            const context = window.cast.framework.CastReceiverContext.getInstance();
+                            context.stop();
+                        }
+
+                        // Close window (works for both Cast and simple popups)
+                        window.close();
+                        break;
+                    }
+
+                    // Check for stop signal (Playback Stop)
                     if (msg.stopped) {
                         console.log('[Control] Stop received');
                         stopAudioStream();

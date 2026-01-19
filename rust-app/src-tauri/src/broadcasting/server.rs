@@ -78,6 +78,9 @@ pub struct VizUpdateData {
     /// True when playback is paused.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub paused: bool,
+    /// True when the cast session should be terminated (remote receiver exit).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shutdown: bool,
 }
 
 /// Shared state passed to all request handlers.
@@ -227,7 +230,8 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
                 // - Pause signal (paused = true, active_beat = 0)
                 // - Resume signal (paused = false, stopped = false, active_beat = 0)
                 // Note: Normal beat updates have active_beat > 0
-                let is_control_message = update.stopped || (update.active_beat == 0 && update.active_seg == 0);
+                // - Shutdown signal (shutdown = true)
+                let is_control_message = update.stopped || update.shutdown || (update.active_beat == 0 && update.active_seg == 0);
                 
                 if is_control_message {
                     // Send control message as JSON immediately
@@ -235,6 +239,7 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
                         "type": "update",
                         "paused": update.paused,
                         "stopped": update.stopped,
+                        "shutdown": update.shutdown,
                     });
                     if let Ok(text) = serde_json::to_string(&msg) {
                         if socket.send(Message::Text(text.into())).await.is_err() {
