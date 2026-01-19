@@ -640,6 +640,13 @@
                     if (nextPlayTime < audioContext.currentTime) {
                         nextPlayTime = audioContext.currentTime;
                     }
+
+                    // Force hide overlay now that we are definitely scheduling playback
+                    if (!loadingOverlay.classList.contains('hidden')) {
+                        console.log('[Audio] Scheduling playback, forcing overlay hidden');
+                        loadingOverlay.classList.add('hidden');
+                    }
+
                     source.start(nextPlayTime);
 
                     // Update viz state when this chunk actually plays
