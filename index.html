@@ -756,6 +756,7 @@
             if (audioContext) {
                 audioContext.suspend();
                 audioQueue.length = 0;
+                isStreamingAudio = false; // Force re-buffering on resume
                 isSchedulingChunk = false;
                 console.log('[Audio] Paused, scheduled sources stopped, buffer cleared');
             }
