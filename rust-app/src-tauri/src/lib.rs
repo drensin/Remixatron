@@ -41,7 +41,7 @@ use crossbeam_channel::Sender as CrossbeamSender;
 use tokio::sync::{broadcast, watch};
 use broadcasting::server::{VizInitData, VizUpdateData};
 
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// Global Application State.
 ///
@@ -71,6 +71,10 @@ struct AppState {
     /// Last download metadata (from YouTube). Used to provide metadata to receiver
     /// when the downloaded file doesn't have embedded metadata.
     last_download_metadata: Arc<Mutex<Option<downloader::VideoMetadata>>>,
+    
+    /// Tracks if a Cast session is currently active.
+    /// Used to initialize playback with muted volume if casting is already active.
+    is_casting: Arc<AtomicBool>,
 }
 
 /// The payload returned to the Frontend after a successful analysis.
@@ -302,6 +306,7 @@ async fn discover_cast_devices() -> Vec<CastDevice> {
 /// * `Result<(), String>` - Ok if successful, Err with error message.
 #[tauri::command]
 async fn start_cast_session(
+    state: tauri::State<'_, AppState>,
     device_ip: String,
     device_port: u16,
     host_address: String,
@@ -309,6 +314,7 @@ async fn start_cast_session(
     use rust_cast::CastDevice as RustCastDevice;
     use rust_cast::channels::receiver::CastDeviceApp;
     use std::time::Duration;
+    use crate::playback_engine::PlaybackCommand;
 
     eprintln!("[Cast] Starting session to {}:{}", device_ip, device_port);
 
@@ -318,7 +324,9 @@ async fn start_cast_session(
     // rust_cast is synchronous and not Send/Sync, so we need spawn_blocking
     let ip = device_ip.clone();
     let port = device_port;
+
     let host = host_address.clone();
+    let app_state = state.inner().clone();
 
     // Wrap in a 30-second timeout so we don't hang forever
     let timeout_result = tokio::time::timeout(
@@ -364,6 +372,9 @@ async fn start_cast_session(
 
             eprintln!("[Cast] Session established successfully!");
 
+            // Mark casting as active
+            app_state.is_casting.store(true, Ordering::Relaxed);
+            
             // Disconnect from the Cast device - we don't need to maintain the connection
             // The receiver will handle playback autonomously via WebSocket
             eprintln!("[Cast] Disconnecting from Cast device...");
@@ -376,7 +387,17 @@ async fn start_cast_session(
 
     match timeout_result {
         Ok(join_result) => {
-            join_result.map_err(|e| format!("Task panicked: {:?}", e))?
+            join_result.map_err(|e| format!("Task panicked: {:?}", e))??;
+            
+            // Success! Now mute the local playback since we are casting
+            eprintln!("[Cast] Muting local playback.");
+            if let Ok(mut tx_guard) = state.playback_tx.lock() {
+                if let Some(tx) = tx_guard.as_mut() {
+                    let _ = tx.send(PlaybackCommand::SetVolume(0.0));
+                }
+            }
+
+            Ok(())
         }
         Err(_) => {
             Err("Connection timed out after 30 seconds".to_string())
@@ -790,11 +811,18 @@ async fn play_track(
     // 1. Create Control Channel
     let (tx, rx) = mpsc::channel();
     
-    // 2. Store Sender in State (overwrite previous if any)
     {
         let mut tx_guard = state.playback_tx.lock().map_err(|_| "Failed to lock playback_tx".to_string())?;
-        *tx_guard = Some(tx);
+        *tx_guard = Some(tx.clone());
     } // Drop lock immediately
+
+    // CHECK FOR ACTIVE CAST SESSION
+    // If we are already casting, mute the audio engine immediately on startup.
+    if state.is_casting.load(Ordering::Relaxed) {
+        println!("[Playback] Cast session active. Initializing Muted.");
+        // Note: We use 0.0 here, the engine converts to -80dB
+        let _ = tx.send(PlaybackCommand::SetVolume(0.0));
+    }
 
     // Spawn a blocking thread for the heavy audio loop.
     tauri::async_runtime::spawn_blocking(move || {
@@ -979,6 +1007,7 @@ pub fn run() {
                 viz_init_tx,
                 viz_update_tx,
                 last_download_metadata: Arc::new(Mutex::new(None)),
+                is_casting: Arc::new(AtomicBool::new(false)),
             });
 
             // NOTE: No downloader init here - frontend checks dependencies on startup
@@ -1018,7 +1047,11 @@ pub fn run() {
 async fn stop_cast_session(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    use crate::playback_engine::PlaybackCommand;
     println!("[Cast] Stopping session via WebSocket signal...");
+    
+    // Mark casting as inactive
+    state.is_casting.store(false, Ordering::Relaxed);
 
     // Send a VizUpdateData with shutdown=true
     let shutdown_msg = VizUpdateData {
@@ -1030,11 +1063,26 @@ async fn stop_cast_session(
     match state.viz_update_tx.send(shutdown_msg) {
         Ok(_) => {
              println!("[Cast] Shutdown signal sent.");
+             // Unmute local playback when casting stops
+             println!("[Cast] Unmuting local playback.");
+             if let Ok(mut tx_guard) = state.playback_tx.lock() {
+                if let Some(tx) = tx_guard.as_mut() {
+                    let _ = tx.send(PlaybackCommand::SetVolume(1.0));
+                }
+             }
              Ok(())
         },
         Err(e) => {
             // It's possible no one is listening (already disconnected), which is fine.
             println!("[Cast] Failed to send shutdown signal (no listeners?): {}", e);
+            
+            // Still unmute local playback even if signal failed
+             if let Ok(mut tx_guard) = state.playback_tx.lock() {
+                if let Some(tx) = tx_guard.as_mut() {
+                    let _ = tx.send(PlaybackCommand::SetVolume(1.0));
+                }
+             }
+
             Ok(()) // Treat as success to clear UI
         }
     }

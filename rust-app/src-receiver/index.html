@@ -700,7 +700,8 @@
                     }, delay);
 
                     // Advance time, but subtract overlap so next chunk starts slightly early
-                    nextPlayTime += buffer.duration - CHUNK_OVERLAP_SEC;
+                    // Clamp to 0 to prevent time moving backwards on tiny chunks (fixes Double Audio)
+                    nextPlayTime += Math.max(0, buffer.duration - CHUNK_OVERLAP_SEC);
 
                     // Release guard and schedule next chunk if available
                     isSchedulingChunk = false;

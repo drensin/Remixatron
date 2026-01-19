@@ -55,6 +55,8 @@ pub enum PlaybackCommand {
     Pause,
     /// Resume the clock.
     Resume,
+    /// Set the master volume (0.0 to 1.0).
+    SetVolume(f64),
 }
 
 /// A single musical beat with metadata for graph traversal.
@@ -511,6 +513,7 @@ impl JukeboxEngine {
         let mut active_handles: VecDeque<(u64, u64, StaticSoundHandle)> = VecDeque::new();
 
         let mut paused = false;
+        let mut current_volume = 1.0; // Default: Full Volume
 
         // Loop Indefinitely (until Stop command or error)
         loop {
@@ -581,6 +584,16 @@ impl JukeboxEngine {
                                 }
                             }
                             paused = false;
+                        }
+                    },
+                    PlaybackCommand::SetVolume(vol) => {
+                        println!("CMD: SetVolume({:.2})", vol);
+                        current_volume = vol;
+                        
+                        // Apply to ALL active handles immediately
+                        let db = if current_volume <= 0.001 { -80.0 } else { 20.0 * current_volume.log10() };
+                        for (_, _, handle) in active_handles.iter_mut() {
+                            let _ = handle.set_volume(db as f32, Tween::default());
                         }
                     }
                 }
@@ -674,6 +687,9 @@ impl JukeboxEngine {
                    StaticSoundSettings::new()
                        .start_time(StartTime::ClockTime(start_time))
                        .start_position(beat.start as f64)
+                       .volume({
+                           if current_volume <= 0.001 { -80.0 } else { 20.0 * current_volume.log10() }
+                       } as f32)
                 )
             ) {
                 Ok(mut handle) => {
