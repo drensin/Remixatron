@@ -398,6 +398,27 @@
                 options.customNamespaces = {};
                 options.customNamespaces[CAST_NAMESPACE] = cast.framework.system.MessageType.JSON;
 
+                // Handle system shutdown (Back button, Voice command, etc.)
+                context.addEventListener(cast.framework.system.EventType.SHUTDOWN, (event) => {
+                    console.log('[Cast] System SHUTDOWN event received', event);
+                    stopAllScheduledSources(); // Kill audio immediately
+
+                    if (audioContext) {
+                        try {
+                            audioContext.close();
+                        } catch (e) { /* ignore */ }
+                    }
+
+                    if (ws) {
+                        try {
+                            ws.close();
+                        } catch (e) { /* ignore */ }
+                    }
+
+                    // Explicitly stop the receiver context
+                    context.stop();
+                });
+
                 // Start the Cast receiver
                 context.start(options);
                 console.log('[Cast] Receiver started, waiting for CONFIG message');
