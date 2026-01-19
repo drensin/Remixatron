@@ -130,6 +130,260 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+/// Returns the local hostname for use in receiver URLs.
+///
+/// This is used by the Cast button to generate a URL that remote devices
+/// can use to connect back to this machine. Prefers Tailscale hostname
+/// if available, otherwise falls back to the system hostname.
+///
+/// # Returns
+/// * `String` - The hostname to use in receiver URLs.
+#[tauri::command]
+fn get_local_hostname() -> String {
+    // Try to get the system hostname
+    hostname::get()
+        .ok()
+        .and_then(|h| h.into_string().ok())
+        .unwrap_or_else(|| "localhost".to_string())
+}
+
+/// Opens a URL in the default system browser.
+///
+/// Used by the Cast button to open the receiver URL for testing.
+///
+/// # Arguments
+/// * `url` - The URL to open.
+///
+/// # Returns
+/// * `Result<(), String>` - Ok if successful, Err with message if failed.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| format!("Failed to open URL: {}", e))
+}
+
+/// Represents a discovered Chromecast device.
+#[derive(Clone, Debug, serde::Serialize)]
+struct CastDevice {
+    /// The IP address of the device.
+    ip: String,
+    /// The Cast port (usually 8009).
+    port: u16,
+    /// The friendly name of the device.
+    name: String,
+    /// The device model (e.g., "Chromecast", "Google Home").
+    model: String,
+}
+
+/// Discovers Chromecast devices on the local network using mDNS.
+///
+/// Searches for devices advertising the `_googlecast._tcp.local` service
+/// for a short duration and returns any found devices.
+///
+/// # Returns
+/// * `Vec<CastDevice>` - List of discovered devices (may be empty).
+#[tauri::command]
+async fn discover_cast_devices() -> Vec<CastDevice> {
+    use mdns_sd::{ServiceDaemon, ServiceEvent};
+    use std::time::Duration;
+    use std::collections::HashMap;
+
+    eprintln!("[Cast Discovery] Starting mDNS-SD discovery...");
+
+    let mut devices: HashMap<String, CastDevice> = HashMap::new();
+
+    // Create the mDNS service daemon
+    let mdns = match ServiceDaemon::new() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("[Cast Discovery] Failed to create mDNS daemon: {:?}", e);
+            return Vec::new();
+        }
+    };
+
+    // Browse for Chromecast devices
+    let service_type = "_googlecast._tcp.local.";
+    let receiver = match mdns.browse(service_type) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[Cast Discovery] Failed to browse for {}: {:?}", service_type, e);
+            let _ = mdns.shutdown();
+            return Vec::new();
+        }
+    };
+
+    eprintln!("[Cast Discovery] Browsing for {} (3 second timeout)...", service_type);
+
+    // Collect events for 3 seconds using async receiver
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            eprintln!("[Cast Discovery] Timeout reached");
+            break;
+        }
+
+        // Use tokio timeout with the async receiver
+        match tokio::time::timeout(remaining, receiver.recv_async()).await {
+            Ok(Ok(event)) => {
+                match event {
+                    ServiceEvent::ServiceResolved(info) => {
+                        eprintln!("[Cast Discovery] Resolved: {}", info.get_fullname());
+
+                        // Get first IPv4 address
+                        let ip = info.get_addresses().iter()
+                            .find(|a| a.is_ipv4())
+                            .or_else(|| info.get_addresses().iter().next())
+                            .map(|a| a.to_string());
+
+                        if let Some(ip) = ip {
+                            // Extract friendly name from properties
+                            let name = info.get_properties()
+                                .get("fn")
+                                .map(|v| v.val_str().to_string())
+                                .unwrap_or_else(|| info.get_fullname().to_string());
+
+                            let model = info.get_properties()
+                                .get("md")
+                                .map(|v| v.val_str().to_string())
+                                .unwrap_or_else(|| "Chromecast".to_string());
+
+                            eprintln!("[Cast Discovery] Found: {} ({}) at {}", name, model, ip);
+
+                            devices.insert(ip.clone(), CastDevice {
+                                ip,
+                                port: info.get_port(),
+                                name,
+                                model,
+                            });
+                        }
+                    }
+                    ServiceEvent::SearchStarted(svc) => {
+                        eprintln!("[Cast Discovery] Search started for {}", svc);
+                    }
+                    other => {
+                        eprintln!("[Cast Discovery] Event: {:?}", other);
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                eprintln!("[Cast Discovery] Receiver error: {:?}", e);
+                break;
+            }
+            Err(_) => {
+                // Timeout on this recv, check if we've hit our overall deadline
+                continue;
+            }
+        }
+    }
+
+    // Shutdown the daemon
+    if let Err(e) = mdns.shutdown() {
+        eprintln!("[Cast Discovery] Shutdown error: {:?}", e);
+    }
+
+    let result: Vec<CastDevice> = devices.into_values().collect();
+    eprintln!("[Cast Discovery] Found {} devices", result.len());
+    result
+}
+
+/// Starts a Cast session on a Chromecast device.
+///
+/// Connects to the Chromecast, launches our custom receiver application,
+/// and sends a CONFIG message with our hostname so the receiver knows
+/// where to connect for audio and visualization data.
+///
+/// # Arguments
+/// * `device_ip` - The IP address of the Chromecast device.
+/// * `device_port` - The Cast port (usually 8009).
+/// * `host_address` - The hostname/IP of this machine for the receiver to connect back to.
+///
+/// # Returns
+/// * `Result<(), String>` - Ok if successful, Err with error message.
+#[tauri::command]
+async fn start_cast_session(
+    device_ip: String,
+    device_port: u16,
+    host_address: String,
+) -> Result<(), String> {
+    use rust_cast::CastDevice as RustCastDevice;
+    use rust_cast::channels::receiver::CastDeviceApp;
+    use std::time::Duration;
+
+    eprintln!("[Cast] Starting session to {}:{}", device_ip, device_port);
+
+    // Our registered Cast app ID
+    const REMIXATRON_APP_ID: &str = "EE59C2BB";
+
+    // rust_cast is synchronous and not Send/Sync, so we need spawn_blocking
+    let ip = device_ip.clone();
+    let port = device_port;
+    let host = host_address.clone();
+
+    // Wrap in a 30-second timeout so we don't hang forever
+    let timeout_result = tokio::time::timeout(
+        Duration::from_secs(30),
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            // Connect to the Chromecast (skip TLS host verification for local devices)
+            eprintln!("[Cast] Connecting to {}:{} ...", ip, port);
+            let device = RustCastDevice::connect_without_host_verification(&ip, port)
+                .map_err(|e| format!("Failed to connect: {:?}", e))?;
+
+            eprintln!("[Cast] Connected! Establishing connection channel...");
+
+            // Connect to the receiver (required before launching app)
+            device.connection.connect("receiver-0")
+                .map_err(|e| format!("Failed to establish connection: {:?}", e))?;
+
+            eprintln!("[Cast] Launching app {} ...", REMIXATRON_APP_ID);
+
+            // Launch our custom receiver app
+            let app = CastDeviceApp::Custom(REMIXATRON_APP_ID.to_string());
+            let application = device.receiver.launch_app(&app)
+                .map_err(|e| format!("Failed to launch app: {:?}", e))?;
+
+            eprintln!("[Cast] App launched! Transport ID: {}", application.transport_id);
+
+            // Connect to the app's transport
+            device.connection.connect(&application.transport_id)
+                .map_err(|e| format!("Failed to connect to app: {:?}", e))?;
+
+            // Send our CONFIG message with the hostname
+            // The receiver listens on namespace "urn:x-cast:com.remixatron"
+            let config_message = serde_json::json!({
+                "type": "CONFIG",
+                "host": host
+            });
+
+            eprintln!("[Cast] Sending CONFIG message: {:?}", config_message);
+
+            device.receiver.broadcast_message(
+                "urn:x-cast:com.remixatron",
+                &config_message
+            ).map_err(|e| format!("Failed to send CONFIG: {:?}", e))?;
+
+            eprintln!("[Cast] Session established successfully!");
+
+            // Disconnect from the Cast device - we don't need to maintain the connection
+            // The receiver will handle playback autonomously via WebSocket
+            eprintln!("[Cast] Disconnecting from Cast device...");
+            device.connection.disconnect("receiver-0")
+                .map_err(|e| format!("Failed to disconnect: {:?}", e))?;
+
+            Ok(())
+        })
+    ).await;
+
+    match timeout_result {
+        Ok(join_result) => {
+            join_result.map_err(|e| format!("Task panicked: {:?}", e))?
+        }
+        Err(_) => {
+            Err("Connection timed out after 30 seconds".to_string())
+        }
+    }
+}
+
 /// Analyzes an audio file and initializes the Jukebox Engine.
 ///
 /// This is a heavy operation that runs the entire ML pipeline:
@@ -705,11 +959,14 @@ pub fn run() {
             let mp3_tx_clone = mp3_tx.clone();
             let viz_init_rx_clone = viz_init_rx.clone();
             let viz_update_tx_clone = viz_update_tx.clone();
+            let app_handle = app.handle().clone(); // Clone handle for server thread
+
             tauri::async_runtime::spawn(async move {
                 broadcasting::server::start_server(
                     mp3_tx_clone,
                     viz_init_rx_clone,
                     viz_update_tx_clone,
+                    app_handle,
                 ).await;
             });
 
@@ -740,7 +997,11 @@ pub fn run() {
             list_favorites,
             add_favorite,
             remove_favorite,
-            check_is_favorite])
+            check_is_favorite,
+            get_local_hostname,
+            open_url,
+            discover_cast_devices,
+            start_cast_session])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

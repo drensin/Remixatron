@@ -826,3 +826,166 @@ body {
     font-family: monospace;
     color: var(--md-sys-color-on-surface);
 }
+
+/* =============================================================================
+ * Cast Device Picker Dialog
+ * ============================================================================= */
+
+.cast-dialog h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cast-dialog h2 .material-symbols-outlined {
+    font-size: 28px;
+    color: var(--md-sys-color-primary);
+}
+
+.cast-devices-container {
+    background: var(--md-sys-color-surface-container-high);
+    border-radius: var(--md-sys-shape-corner-medium);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.cast-devices-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--md-sys-color-outline);
+    font-size: var(--md-sys-typescale-body-medium);
+    color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-icon-btn-small {
+    background: transparent;
+    border: none;
+    color: var(--md-sys-color-on-surface-variant);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.m3-icon-btn-small:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--md-sys-color-primary);
+}
+
+.m3-icon-btn-small .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.m3-icon-btn-small.spinning .material-symbols-outlined {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.cast-devices-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.cast-devices-list li {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cast-devices-list li:last-child {
+    border-bottom: none;
+}
+
+.cast-devices-list li:hover {
+    background: rgba(170, 204, 255, 0.1);
+}
+
+.cast-devices-list li.selected {
+    background: rgba(170, 204, 255, 0.2);
+}
+
+.cast-devices-list li .material-symbols-outlined {
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 24px;
+}
+
+.cast-devices-list li.selected .material-symbols-outlined {
+    color: var(--md-sys-color-primary);
+}
+
+.cast-device-placeholder {
+    color: var(--md-sys-color-on-surface-variant);
+    font-style: italic;
+    cursor: default !important;
+}
+
+.cast-device-placeholder:hover {
+    background: transparent !important;
+}
+
+.cast-device-name {
+    flex-grow: 1;
+    color: var(--md-sys-color-on-surface);
+}
+
+.cast-device-type {
+    font-size: 12px;
+    color: var(--md-sys-color-on-surface-variant);
+    opacity: 0.7;
+}
+
+.cast-manual-section {
+    margin-bottom: 20px;
+}
+
+.cast-manual-section label {
+    display: block;
+    font-size: var(--md-sys-typescale-body-medium);
+    color: var(--md-sys-color-on-surface-variant);
+    margin-bottom: 8px;
+}
+
+.cast-manual-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cast-manual-input-row .m3-input {
+    flex-grow: 1;
+    margin-bottom: 0;
+}
+
+.cast-port-label {
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.cast-dialog .m3-fab-extended:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.cast-dialog .m3-fab-extended:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}

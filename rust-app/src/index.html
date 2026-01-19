@@ -83,6 +83,9 @@
                 <button id="stop-btn" class="m3-icon-btn" title="Stop Playback">
                     <span class="material-symbols-outlined">stop_circle</span>
                 </button>
+                <button id="cast-btn" class="m3-icon-btn" title="Cast to TV">
+                    <span class="material-symbols-outlined">cast</span>
+                </button>
                 <button id="favorite-btn" class="m3-icon-btn" title="Add to Favorites">
                     <span class="material-symbols-outlined">favorite_border</span>
                 </button>
@@ -149,8 +152,51 @@
                 </div>
             </div>
         </div>
-
     </div>
+
+    <!-- Cast Device Picker Dialog -->
+    <div id="cast-dialog" class="dialog-overlay hidden">
+        <div class="dialog interactive cast-dialog">
+            <h2>
+                <span class="material-symbols-outlined">cast</span>
+                Cast to Device
+            </h2>
+
+            <!-- Discovered Devices List -->
+            <div id="cast-devices-container" class="cast-devices-container">
+                <div class="cast-devices-header">
+                    <span>Available Devices</span>
+                    <button id="cast-refresh-btn" class="m3-icon-btn-small" title="Refresh">
+                        <span class="material-symbols-outlined">refresh</span>
+                    </button>
+                </div>
+                <ul id="cast-devices-list" class="cast-devices-list">
+                    <!-- Populated by JavaScript -->
+                    <li class="cast-device-placeholder">Searching for devices...</li>
+                </ul>
+            </div>
+
+            <!-- Manual IP Input -->
+            <div class="cast-manual-section">
+                <label for="cast-manual-ip">Or enter IP/hostname manually:</label>
+                <div class="cast-manual-input-row">
+                    <input id="cast-manual-ip" type="text" class="m3-input"
+                        placeholder="e.g., 192.168.1.100 or tv.local">
+                    <span class="cast-port-label">:8009</span>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="dialog-actions">
+                <button id="cast-cancel-btn" class="m3-text-btn">Cancel</button>
+                <button id="cast-connect-btn" class="m3-fab-extended" disabled>
+                    <span class="material-symbols-outlined">cast</span>
+                    Cast
+                </button>
+            </div>
+        </div>
+    </div>
+
 
 </body>
 

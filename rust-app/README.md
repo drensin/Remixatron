@@ -24,7 +24,7 @@ It exists to:
 *   **Load Local Audio**: Drag and drop your favorite MP3, WAV, or FLAC files.
 *   **Stream from the Web**: Paste a YouTube or SoundCloud URL, and Remixatron will automatically download the highest quality audio for analysis.
 *   **Visualize the Walk**: Watch the dazzling real-time visualization that maps every beat, segment, and jump decision as it happens.
-*   **Cast to Any Screen**: Stream the visualization to any device on your network. Open `http://<your-ip>:3030/receiver/` on your TV, tablet, or phone.
+*   **Cast to Any Screen**: Use the built-in **Cast button** to stream natively to Chromecast, or open `http://<your-ip>:3030/receiver/` on any device with a browser.
 *   **Control the Vibes**: Play, Pause, and Resume the infinite walk with zero latency.
 
 ---

@@ -160,43 +160,33 @@ This approach has significant advantages:
 │  │  (PCM→MP3)   │          │  (watch::Tx) │          │  (broadcast) │       │
 │  └──────┬───────┘          └──────┬───────┘          └──────┬───────┘       │
 │         │                         │                         │                │
-└─────────┼─────────────────────────┼─────────────────────────┼────────────────┘
-          │                         │                         │
-          ▼                         ▼                         ▼
+│         │                         ▼                         ▼                │
+│         └────────────────────► ┌──────────────────────────────────┐          │
+│                                │      WEBSOCKET DISPATCHER        │          │
+│                                └────────────────┬─────────────────┘          │
+│                                                 │                            │
+│                                                 ▼                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                                  │
+                                                  │ WebSocket (Port 3030)
+                                                  │ (Binary: Audio + Metadata)
+                                                  │ (Text: Init + Control)
+                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           AXUM HTTP SERVER (:3030)                           │
+│                           WEB RECEIVER (Browser/Cast)                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  GET /stream.mp3          GET /viz (WebSocket)       GET /receiver/*        │
-│  ┌──────────────┐         ┌──────────────────┐       ┌──────────────────┐   │
-│  │ Chunked MP3  │         │ JSON Messages:   │       │ Static Files:    │   │
-│  │ Audio Stream │         │ - init (beats,   │       │ - index.html     │   │
-│  │ (infinite)   │         │   segments, etc) │       │ (self-contained) │   │
-│  │              │         │ - update (beat,  │       │                  │   │
-│  │              │         │   seq_pos, etc)  │       │                  │   │
-│  └──────────────┘         └──────────────────┘       └──────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ HTTP / WebSocket
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           WEB RECEIVER (Browser)                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────┐         ┌──────────────────┐       ┌──────────────────┐   │
-│  │ <audio> Tag  │         │ WebSocket Client │       │ Canvas Renderer  │   │
-│  │ (MP3 Stream) │         │ (Sync Table)     │       │ (60fps Viz)      │   │
-│  └──────┬───────┘         └────────┬─────────┘       └────────▲─────────┘   │
-│         │                          │                          │              │
-│         │                          │                          │              │
-│         ▼                          ▼                          │              │
-│  ┌──────────────────────────────────────────────────────────┐ │              │
-│  │                    SYNC ENGINE                            │ │              │
-│  │  audio.currentTime + streamOffset = cumulative_audio_time ├─┘              │
-│  │  Lookup beat in sync table → render correct state         │               │
-│  └───────────────────────────────────────────────────────────┘               │
+│  ┌──────────────────┐                               ┌──────────────────┐    │
+│  │ Audio Context    │◄──────(Binary: MP3)───────────┤ WebSocket Client │    │
+│  │ (Web Audio API)  │                               │ (Parser)         │    │
+│  └──────────────────┘                               └───────┬──────────┘    │
+│                                                             │               │
+│                                                             │ (JSON: Meta)  │
+│                                                             ▼               │
+│  ┌──────────────────┐     ┌──────────────────┐      ┌──────────────────┐    │
+│  │ Playback Sched.  │────►│   Sync Engine    │─────►│ Canvas Renderer  │    │
+│  │ (Buffer/Time)    │     │   (Ref Clock)    │      │ (60fps Viz)      │    │
+│  └──────────────────┘     └──────────────────┘      └──────────────────┘    │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -238,7 +228,8 @@ The transcoder runs in a dedicated background thread:
 pub struct Transcoder {
     audio_rx: crossbeam_channel::Receiver<Vec<f32>>,
     sample_rate: Arc<AtomicU32>,
-    broadcast_tx: broadcast::Sender<Bytes>,
+    // This sender now sends to the WebSocket dispatcher
+    ws_audio_tx: mpsc::Sender<Bytes>, 
 }
 ```
 
@@ -247,7 +238,7 @@ pub struct Transcoder {
 1. Receive PCM samples from `audio_rx`
 2. Buffer samples until we have enough for an MP3 frame (1152 samples)
 3. Encode using LAME (`mp3lame-encoder`)
-4. Broadcast encoded bytes to all connected clients via `tokio::sync::broadcast`
+4. Send encoded bytes to the `ws_audio_tx` for dispatch via WebSocket.
 
 **Sample Rate Handling**:
 
@@ -264,53 +255,39 @@ if self.current_sample_rate != new_rate {
 
 #### 3. HTTP Server (server.rs)
 
-The Axum server exposes three endpoints:
+The Axum server exposes two endpoints:
 
-##### `/stream.mp3` - Chunked Audio Stream
+##### `/viz` - WebSocket Data & Audio
 
-```rust
-async fn handle_audio_stream(State(state): State<AppState>) -> impl IntoResponse {
-    let rx = state.audio_broadcast_rx.resubscribe();
-    let stream = BroadcastStream::new(rx)
-        .filter_map(|result| ready(result.ok()));
-    
-    Response::builder()
-        .header("Content-Type", "audio/mpeg")
-        .header("Cache-Control", "no-cache")
-        .body(Body::from_stream(stream))
+Clients connect via WebSocket and receive a mix of Text (JSON) and Binary frames.
+
+**1. Init Message (Text/JSON)**
+Sent once on connection. Contains the full remix graph structure.
+```json
+{
+  "type": "init",
+  "beats": [...],
+  "segments": [...],
+  "waveform": [...],
+  "title": "...",
+  "artist": "..."
 }
 ```
 
-This creates an infinite HTTP response that streams MP3 chunks as they become available.
+**2. Update Frames (Binary)**
+Sent continuously (approx. every beat). Contains 16 bytes of metadata followed by the MP3 audio chunk for that beat. This ensures metadata and audio are perfectly coupled.
+```text
+[Byte 0-3]   beat_id (u32, little-endian)
+[Byte 4-7]   seg_id  (u32, little-endian)
+[Byte 8-11]  seq_pos (u32, little-endian)
+[Byte 12-15] seq_len (u32, little-endian)
+[Byte 16+]   MP3 Audio Data...
+```
 
-##### `/viz` - WebSocket Visualization Data
-
-Clients connect via WebSocket and receive:
-
-1. **Init Message** (once, on connect):
-   ```json
-   {
-     "type": "init",
-     "beats": [...],      // Array of beat timing/segment data
-     "segments": [...],   // Array of segment boundaries
-     "waveform": [...],   // Amplitude envelope for waveform ring
-     "title": "...",
-     "artist": "...",
-     "thumbnail": "..."
-   }
-   ```
-
-2. **Update Messages** (continuous):
-   ```json
-   {
-     "type": "update",
-     "beat_id": 42,
-     "segment_id": 3,
-     "seq_pos": 5,
-     "seq_len": 8,
-     "stream_time": 123.456
-   }
-   ```
+**3. Control Messages (Text/JSON)**
+```json
+{ "type": "update", "paused": true, "stopped": false }
+```
 
 ##### `/receiver/` - Static Files
 
@@ -324,9 +301,11 @@ The receiver is a self-contained HTML file with embedded CSS and JavaScript. Key
 
 ##### Audio Playback
 
+The receiver uses the **Web Audio API** to decode and play MP3 audio chunks received via WebSocket. This allows for precise scheduling and synchronization.
+
 ```javascript
-const audio = new Audio(`http://${host}:3030/stream.mp3`);
-audio.play();
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let currentAudioTime = 0; // Tracks the playback time of the Web Audio API
 ```
 
 ##### Sync Table
@@ -336,9 +315,9 @@ The receiver maintains a "sync table" mapping `stream_time` to visualization sta
 ```javascript
 const syncTable = [];
 
-// On each WebSocket update:
+// On each WebSocket update (after parsing binary frame):
 syncTable.push({
-    streamTime: msg.stream_time,
+    streamTime: msg.stream_time, // This is derived from the scheduled audio buffer
     beatId: msg.beat_id,
     segId: msg.segment_id,
     seqPos: msg.seq_pos,
@@ -348,13 +327,12 @@ syncTable.push({
 
 ##### Offset Calibration
 
-When audio first starts playing, we calculate the offset between `audio.currentTime` and `stream_time`:
+When audio first starts playing, we calculate the offset between `audioContext.currentTime` and `stream_time`. This `streamOffset` represents the `stream_time` at which the local `audioContext.currentTime` was 0.
 
 ```javascript
-audio.addEventListener('playing', () => {
-    streamOffset = bufferStartStreamTime - audio.currentTime;
-    console.log(`Calibrated: offset=${streamOffset.toFixed(2)}s`);
-});
+// When the first audio buffer is scheduled to play at a specific stream_time:
+streamOffset = bufferStartStreamTime - audioContext.currentTime;
+console.log(`Calibrated: offset=${streamOffset.toFixed(2)}s`);
 ```
 
 ##### Render Loop
@@ -362,7 +340,7 @@ audio.addEventListener('playing', () => {
 ```javascript
 function renderLoop() {
     // Calculate which stream_time we're hearing right now
-    const audioStreamPosition = audio.currentTime + streamOffset;
+    const audioStreamPosition = audioContext.currentTime + streamOffset;
     
     // Find the matching sync entry
     const entry = syncTable.find(e => e.streamTime <= audioStreamPosition);
@@ -392,7 +370,7 @@ function renderLoop() {
                            │
                            ▼
                     ┌──────────────┐
-                    │  viz_init_tx │───► WebSocket clients receive init data
+                    │  viz_init_tx │───► WebSocket Dispatcher → WebSocket clients receive init data
                     └──────────────┘
 ```
 
@@ -400,15 +378,27 @@ function renderLoop() {
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   Playback   │───►│  Beat Event  │───►│ viz_update_  │───► WebSocket clients
-│   Engine     │    │  Callback    │    │     tx       │    receive updates
+│   Playback   │───►│  Beat Event  │───►│ viz_update_  │───► WebSocket Dispatcher
+│   Engine     │    │  Callback    │    │     tx       │    (metadata)
 └──────────────┘    └──────────────┘    └──────────────┘
+       │                                       ▲
+       ▼                                       │
+┌──────────────┐    ┌──────────────┐           │
+│   Sample     │───►│  Transcoder  │───────────┘
+│   Buffer     │    │  (LAME enc)  │           (MP3 audio)
+└──────────────┘    └──────────────┘
        │
        ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   Sample     │───►│  Transcoder  │───►│  Broadcast   │───► HTTP clients
-│   Buffer     │    │  (LAME enc)  │    │  Channel Rx  │    receive MP3
-└──────────────┘    └──────────────┘    └──────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           WEBSOCKET DISPATCHER                               │
+│ (Combines metadata from viz_update_tx and MP3 audio from Transcoder)        │
+└─────────────────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           WEBSOCKET CLIENTS (RECEIVER)                       │
+│ (Receive combined binary frames: metadata + MP3)                            │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -417,42 +407,39 @@ function renderLoop() {
 
 The core challenge is keeping the receiver's visualization in sync with its audio playback. Here's how we solve it:
 
-#### Problem: Network Latency
+#### Solution: Unified Binary Stream
 
-The receiver's `<audio>` element buffers several seconds of MP3 data before playback starts. The WebSocket messages, however, arrive in real-time. If we show beat 100 on the viz while the audio is still playing beat 95, it looks wrong.
+Instead of juggling two streams (HTTP Audio + WebSocket Metadata) and fighting drift, we bundle them.
 
-#### Solution: Cumulative Stream Time
+Every WebSocket "Update" message is a **Binary Frame** containing:
+1.  **Metadata Headers**: `beat_id`, `seg_id`, etc. (16 bytes)
+2.  **Audio Payload**: The specific MP3 bytes generated for that beat.
 
-The playback engine tracks `cumulative_audio_time`—the total seconds of audio that have been "streamed" (sent to clients) since playback started:
+The Receiver parses this frame:
+1.  Extracts the MP3 data and decodes it using the **Web Audio API** (`audioContext.decodeAudioData`).
+2.  Schedules the decoded audio buffer to play at a precise future time using `audioContext.createBufferSource().start(time)`.
+3.  Extracts the metadata and associates it with the scheduled audio buffer's playback time.
 
-```rust
-// When a beat plays
-stream_time += beat.duration;
-viz_update_tx.send(VizUpdateData {
-    beat_id: beat.id,
-    stream_time: stream_time,
-    // ...
-});
-```
+This guarantees perfect AV sync because the metadata *is* the wrapper for the audio. They cannot drift apart. The Web Audio API's precise scheduling ensures that the visualization updates exactly when the corresponding audio is heard.
 
-The receiver's `<audio>` element also tracks `currentTime`—how many seconds of audio have been played locally.
+The receiver's `audioContext.currentTime` serves as the high-resolution reference clock for local playback.
 
 #### Calibration
 
 When audio starts playing, we know the head of the audio buffer corresponds to `bufferStartStreamTime` (the `stream_time` from when buffering began). We calculate:
 
-```
-streamOffset = bufferStartStreamTime - audio.currentTime
+```javascript
+streamOffset = bufferStartStreamTime - audioContext.currentTime
 ```
 
 For example:
-- `audio.currentTime = 0` (just started playing)
+- `audioContext.currentTime = 0` (just started playing)
 - `bufferStartStreamTime = 123.456` (we buffered starting at second 123.456)
 - `streamOffset = 123.456`
 
 Now, at any moment:
-```
-audioStreamPosition = audio.currentTime + streamOffset
+```javascript
+audioStreamPosition = audioContext.currentTime + streamOffset
 ```
 
 This tells us "what stream_time is the user hearing right now?" We look up that time in the sync table to get the correct beat/segment to display.
@@ -465,7 +452,7 @@ Over long playback sessions, small timing drifts can accumulate. We handle this 
 
 2. **Using reverse iteration** to find the most recent entry with `streamTime <= audioStreamPosition`. This is faster than binary search for typical cases where we're looking for recent entries.
 
-3. **Periodically pruning entries older than the retention window** to prevent unbounded memory growth during long playback sessions (which can run for hours). Entries far in the past will never be looked up again since `audio.currentTime` only moves forward.
+3. **Periodically pruning entries older than the retention window** to prevent unbounded memory growth during long playback sessions (which can run for hours). Entries far in the past will never be looked up again since `audioContext.currentTime` only moves forward.
 
 > **Note**: We keep entries for a time *window*, not the *entire* sync history. This balances memory efficiency with the need to handle audio buffering delays.
 
@@ -503,30 +490,25 @@ interface Segment {
 }
 ```
 
-##### Update Message (Server → Client)
+##### Update Frame (Binary)
+
+Sent as a WebSocket Binary Message. All integers are **Little-Endian u32** (4 bytes).
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | `beat_id` | u32 | Index of the active beat |
+| 4 | `seg_id` | u32 | Index of the active segment |
+| 8 | `seq_pos` | u32 | Position in current sequence |
+| 12 | `seq_len` | u32 | Length of current sequence |
+| 16 | `payload` | bytes | MP3 Audio Frame(s) |
+
+##### Control Messages (Text/JSON)
 
 ```typescript
-interface VizUpdateMessage {
+interface ControlMessage {
   type: "update";
-  beat_id: number;
-  segment_id: number;
-  seq_pos: number;     // Position in current jump sequence
-  seq_len: number;     // Length of current jump sequence
-  stream_time: number; // Cumulative audio seconds
-}
-```
-
-##### Control Messages (Server → Client)
-
-```typescript
-interface PauseMessage {
-  type: "update";
-  paused: boolean;
-}
-
-interface StopMessage {
-  type: "update";
-  stopped: boolean;
+  paused?: boolean;
+  stopped?: boolean;
 }
 ```
 
@@ -546,9 +528,8 @@ interface StopMessage {
 
 ### Future Work
 
-1. **Chromecast Integration**: Use `rust_cast` to discover and launch a custom receiver on Chromecast devices
-2. **Multi-room Audio**: Synchronize playback across multiple receivers
-3. **Quality Settings**: Allow receiver to request different MP3 bitrates
+1.  **Multi-room Audio**: Synchronize playback across multiple receivers (requires NTP-like clock sync).
+2.  **Quality Settings**: Allow receiver to request different MP3 bitrates.
 
 ---
 

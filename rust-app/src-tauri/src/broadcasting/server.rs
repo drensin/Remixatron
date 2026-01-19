@@ -33,6 +33,7 @@ use futures::stream::StreamExt;
 use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::sync::{broadcast, watch};
+use tauri::{AppHandle, Emitter};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
 /// The port on which the broadcast server listens.
@@ -88,6 +89,8 @@ struct AppState {
     viz_init_rx: watch::Receiver<VizInitData>,
     /// Broadcast receiver for dynamic viz updates.
     viz_update_tx: broadcast::Sender<VizUpdateData>,
+    /// Handle to the Tauri app for emitting events.
+    app_handle: AppHandle,
 }
 
 /// Starts the broadcast web server.
@@ -100,6 +103,7 @@ struct AppState {
 /// * `mp3_tx` - Broadcast sender for encoded MP3 audio chunks.
 /// * `viz_init_rx` - Watch receiver for static visualization data.
 /// * `viz_update_tx` - Broadcast sender for dynamic playback updates.
+/// * `app_handle` - Tauri AppHandle for event emission.
 ///
 /// # Panics
 ///
@@ -108,11 +112,13 @@ pub async fn start_server(
     mp3_tx: broadcast::Sender<Bytes>,
     viz_init_rx: watch::Receiver<VizInitData>,
     viz_update_tx: broadcast::Sender<VizUpdateData>,
+    app_handle: AppHandle,
 ) {
     let state = AppState {
         mp3_tx,
         viz_init_rx,
         viz_update_tx,
+        app_handle,
     };
 
     // Build the router with all broadcast endpoints.
@@ -141,6 +147,7 @@ pub async fn start_server(
 ///
 /// Returns a chunked HTTP response that streams live MP3 audio.
 async fn handle_audio_stream(State(state): State<AppState>) -> Response {
+    eprintln!("[Broadcast] Client connected to /stream.mp3");
     let rx = state.mp3_tx.subscribe();
 
     let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|result| async move {
@@ -163,10 +170,25 @@ async fn handle_websocket(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> Response {
+    eprintln!("[Broadcast] Client connected to /viz WebSocket");
     ws.on_upgrade(move |socket| handle_viz_socket(socket, state))
 }
 
-/// Manages a single WebSocket connection for visualization updates.
+/// Manages a single WebSocket connection for visualization and audio streaming.
+///
+/// This function handles three types of messages:
+/// 1. **init (JSON):** Static visualization data sent on connect and track change.
+/// 2. **audio_update (Binary):** Combined viz metadata + MP3 audio chunk sent per beat.
+/// 3. **control (JSON):** Pause/stop signals.
+///
+/// Binary frame format (little-endian):
+/// ```text
+/// [0-3]   beat_id  (u32)
+/// [4-7]   seg_id   (u32)
+/// [8-11]  seq_pos  (u32)
+/// [12-15] seq_len  (u32)
+/// [16+]   MP3 audio data
+/// ```
 async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
     // Helper to build init message from VizInitData
     let build_init_msg = |data: &VizInitData| -> serde_json::Value {
@@ -187,29 +209,63 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
         let _ = socket.send(Message::Text(text.into())).await;
     }
 
-    // 2. Subscribe to updates and forward to client
+    // 2. Subscribe to updates (viz + audio)
     let mut update_rx = state.viz_update_tx.subscribe();
+    let mut mp3_rx = state.mp3_tx.subscribe();
     let mut viz_init_rx = state.viz_init_rx.clone();
+
+    // Buffer to hold the latest viz update until we get the matching MP3 chunk
+    // (Viz update often arrives before transcoding completes)
+    let mut pending_viz: Option<VizUpdateData> = None;
 
     loop {
         tokio::select! {
-            // Forward beat updates to client
+            // Receive viz update - store for pairing with audio
             Ok(update) = update_rx.recv() => {
-                let msg = serde_json::json!({
-                    "type": "update",
-                    "active_beat": update.active_beat,
-                    "active_seg": update.active_seg,
-                    "seq_pos": update.seq_pos,
-                    "seq_len": update.seq_len,
-                    "stream_time": update.stream_time,
-                });
+                // Determine if this is a control-only message:
+                // - Stop signal (stopped = true)
+                // - Pause signal (paused = true, active_beat = 0)
+                // - Resume signal (paused = false, stopped = false, active_beat = 0)
+                // Note: Normal beat updates have active_beat > 0
+                let is_control_message = update.stopped || (update.active_beat == 0 && update.active_seg == 0);
+                
+                if is_control_message {
+                    // Send control message as JSON immediately
+                    let msg = serde_json::json!({
+                        "type": "update",
+                        "paused": update.paused,
+                        "stopped": update.stopped,
+                    });
+                    if let Ok(text) = serde_json::to_string(&msg) {
+                        if socket.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    continue;
+                }
 
-                if let Ok(text) = serde_json::to_string(&msg) {
-                    if socket.send(Message::Text(text.into())).await.is_err() {
+                // Store viz update, waiting for corresponding audio
+                pending_viz = Some(update);
+            }
+
+            // Receive MP3 audio chunk from transcoder - pair with pending viz and send
+            Ok(mp3_chunk) = mp3_rx.recv() => {
+                if let Some(viz) = pending_viz.take() {
+                    // Build binary frame: [beat_id][seg_id][seq_pos][seq_len][mp3_data]
+                    let mut frame = Vec::with_capacity(16 + mp3_chunk.len());
+                    frame.extend_from_slice(&(viz.active_beat as u32).to_le_bytes());
+                    frame.extend_from_slice(&(viz.active_seg as u32).to_le_bytes());
+                    frame.extend_from_slice(&(viz.seq_pos as u32).to_le_bytes());
+                    frame.extend_from_slice(&(viz.seq_len as u32).to_le_bytes());
+                    frame.extend_from_slice(&mp3_chunk);
+
+                    if socket.send(Message::Binary(frame.into())).await.is_err() {
                         break; // Client disconnected
                     }
                 }
+                // If no pending viz, we missed a beat event - rare but possible on startup
             }
+
             // Forward new track init data to client (when user loads a new track)
             Ok(_) = viz_init_rx.changed() => {
                 let new_init = viz_init_rx.borrow().clone();
@@ -222,6 +278,7 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
                     }
                 }
             }
+
             // Handle client messages (ping/pong, close)
             Some(msg) = socket.recv() => {
                 match msg {
@@ -232,4 +289,8 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
             }
         }
     }
+    
+    // Notify Frontend that Receiver has disconnected
+    eprintln!("[Broadcast] WebSocket closed - Receiver disconnected.");
+    let _ = state.app_handle.emit("cast_disconnected", ());
 }

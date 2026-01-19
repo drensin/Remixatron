@@ -10,9 +10,10 @@
 3.  [Getting Started](#getting-started)
 4.  [The Interface](#the-interface)
 5.  [Core Features](#core-features)
-6.  [Network Receiver (Cast to Any Screen)](#network-receiver-cast-to-any-screen)
-7.  [Troubleshooting](#troubleshooting)
-8.  [Frequently Asked Questions](#frequently-asked-questions)
+6.  [Native Casting (Chromecast)](#native-casting-chromecast)
+7.  [Manual Network Receiver (Web Browser)](#manual-network-receiver-web-browser)
+8.  [Troubleshooting](#troubleshooting)
+9.  [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
 
@@ -127,7 +128,25 @@ Click the stop button to end playback entirely and return to the onboarding scre
 
 ---
 
-## Network Receiver (Cast to Any Screen)
+## 6. Native Casting (Chromecast)
+
+Remixatron has built-in support for Google Cast.
+
+### How to Cast
+1.  Click the **Cast** button (top right, near the Stop button).
+2.  A dialog will appear searching for available devices on your local network.
+3.  Select your TV or speaker from the list.
+4.  The application will connect, launch the Remixatron Receiver on your TV, and begin streaming.
+
+### Stopping the Cast
+1.  Click the Cast icon (which will be solid/filled when active).
+2.  Or simply press the **Back** button on your TV remote to disconnect.
+
+---
+
+## 7. Manual Network Receiver (Web Browser)
+
+If you don't have a Chromecast, you can still stream to **any device with a web browser** (Smart TV, Tablet, Phone, Laptop).
 
 Remixatron can stream its visualization and audio to **any device on your local network**. Watch the infinite remix on your TV, tablet, or phone—no special hardware required.
 
@@ -207,7 +226,7 @@ A: Remixatron downloads the highest-quality audio stream available (usually AAC 
 A: Remixatron uses **BeatThis**, a State-of-the-Art neural network from ISMIR 2024 (a top Music Information Retrieval conference). It runs via the ONNX Runtime for fast, portable inference.
 
 ### Q: Can I watch on my TV?
-A: **Yes!** Open `http://<your-laptop-ip>:3030/receiver/` in any browser on your smart TV or a device connected to your TV. See the [Network Receiver](#network-receiver-cast-to-any-screen) section for details.
+A: **Yes!** Open `http://<your-laptop-ip>:3030/receiver/` in any browser on your smart TV or a device connected to your TV. See the [Native Casting](#native-casting-chromecast) or [Manual Receiver](#manual-network-receiver-web-browser) sections for details.
 
 ### Q: Can I use my own ONNX models?
 A: Not through the UI, but advanced users can replace the `.onnx` files in the application bundle's `models/` directory.

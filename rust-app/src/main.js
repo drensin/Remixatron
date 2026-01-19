@@ -25,6 +25,7 @@ let onboardingCard;
 let floatingPlayer;
 let stopBtn;
 let pauseBtn;
+let castBtn;
 let trackTitleEl;
 let albumArtImg;
 let albumArtPlaceholder;
@@ -55,6 +56,16 @@ let dependencyStatus = null;    // { ytdlp_version, ffmpeg_version }
 let missingDepsDialog;
 let outdatedYtdlpDialog;
 let errorSnackbar;
+
+// Cast Dialog State
+let castDialog;
+let castDevicesList;
+let castManualIp;
+let castRefreshBtn;
+let castConnectBtn;
+let castCancelBtn;
+let selectedCastDevice = null;  // { ip, port, name }
+let discoveredDevices = [];     // Array of discovered Cast devices
 
 /**
  * Initiates the Remixatron workflow.
@@ -654,6 +665,7 @@ window.addEventListener("DOMContentLoaded", () => {
     floatingPlayer = document.querySelector("#floating-player");
     stopBtn = document.querySelector("#stop-btn");
     pauseBtn = document.querySelector("#pause-btn");
+    castBtn = document.querySelector("#cast-btn");
     trackTitleEl = document.querySelector(".track-title");
     albumArtImg = document.querySelector("#album-art-img");
     albumArtPlaceholder = document.querySelector("#album-art-placeholder");
@@ -686,6 +698,13 @@ window.addEventListener("DOMContentLoaded", () => {
             } catch (e) {
                 console.error("Pause toggle failed:", e);
             }
+        });
+    }
+
+    // Bind Cast Button - opens device picker modal
+    if (castBtn) {
+        castBtn.addEventListener("click", () => {
+            openCastDialog();
         });
     }
 
@@ -989,8 +1008,259 @@ function hideErrorSnackbar() {
     }, 400);
 }
 
+// =============================================================================
+// Cast Dialog Functions
+// =============================================================================
+
+/**
+ * Opens the Cast device picker dialog.
+ * Triggers mDNS discovery to find available Chromecast devices.
+ */
+function openCastDialog() {
+    castDialog = castDialog || document.querySelector("#cast-dialog");
+    castDevicesList = castDevicesList || document.querySelector("#cast-devices-list");
+    castManualIp = castManualIp || document.querySelector("#cast-manual-ip");
+    castRefreshBtn = castRefreshBtn || document.querySelector("#cast-refresh-btn");
+    castConnectBtn = castConnectBtn || document.querySelector("#cast-connect-btn");
+    castCancelBtn = castCancelBtn || document.querySelector("#cast-cancel-btn");
+
+    if (!castDialog) return;
+
+    // Reset state
+    selectedCastDevice = null;
+    castManualIp.value = "";
+    updateCastConnectButton();
+
+    // Show dialog
+    castDialog.classList.remove("hidden");
+
+    // Bind events if not already bound
+    bindCastDialogEvents();
+
+    // Start device discovery
+    refreshCastDevices();
+}
+
+/**
+ * Closes the Cast device picker dialog.
+ */
+function closeCastDialog() {
+    if (castDialog) {
+        castDialog.classList.add("hidden");
+    }
+}
+
+/**
+ * Binds event listeners for the Cast dialog.
+ * Only binds once (using a flag).
+ */
+let castDialogEventsBound = false;
+function bindCastDialogEvents() {
+    if (castDialogEventsBound) return;
+    castDialogEventsBound = true;
+
+    // Cancel button
+    if (castCancelBtn) {
+        castCancelBtn.addEventListener("click", closeCastDialog);
+    }
+
+    // Refresh button
+    if (castRefreshBtn) {
+        castRefreshBtn.addEventListener("click", refreshCastDevices);
+    }
+
+    // Manual IP input - enable Cast button when typing
+    if (castManualIp) {
+        castManualIp.addEventListener("input", () => {
+            // If user types manual IP, deselect any discovered device
+            if (castManualIp.value.trim()) {
+                deselectAllDevices();
+                selectedCastDevice = null;
+            }
+            updateCastConnectButton();
+        });
+    }
+
+    // Cast/Connect button
+    if (castConnectBtn) {
+        castConnectBtn.addEventListener("click", startCasting);
+    }
+
+    // Click on dialog overlay to close
+    if (castDialog) {
+        castDialog.addEventListener("click", (e) => {
+            if (e.target === castDialog) {
+                closeCastDialog();
+            }
+        });
+    }
+}
+
+/**
+ * Refreshes the list of discovered Cast devices using mDNS.
+ */
+async function refreshCastDevices() {
+    if (!castDevicesList || !castRefreshBtn) return;
+
+    // Show loading state
+    castRefreshBtn.classList.add("spinning");
+    castDevicesList.innerHTML = '<li class="cast-device-placeholder">Searching for devices...</li>';
+
+    try {
+        // Call Rust backend to discover devices via mDNS
+        const devices = await invoke("discover_cast_devices");
+        discoveredDevices = devices || [];
+        updateCastDevicesList();
+    } catch (e) {
+        console.error("Cast discovery failed:", e);
+        castDevicesList.innerHTML = '<li class="cast-device-placeholder">Discovery failed - use manual IP</li>';
+    } finally {
+        castRefreshBtn.classList.remove("spinning");
+    }
+}
+
+/**
+ * Updates the devices list UI with discovered devices.
+ */
+function updateCastDevicesList() {
+    if (!castDevicesList) return;
+
+    if (discoveredDevices.length === 0) {
+        castDevicesList.innerHTML = '<li class="cast-device-placeholder">No devices found - use manual IP below</li>';
+        return;
+    }
+
+    castDevicesList.innerHTML = discoveredDevices.map((device, index) => `
+        <li data-index="${index}">
+            <span class="material-symbols-outlined">tv</span>
+            <span class="cast-device-name">${device.name || device.ip}</span>
+            <span class="cast-device-type">${device.model || "Chromecast"}</span>
+        </li>
+    `).join("");
+
+    // Add click handlers to each device
+    castDevicesList.querySelectorAll("li").forEach((li) => {
+        li.addEventListener("click", () => {
+            const index = parseInt(li.dataset.index, 10);
+            selectCastDevice(index);
+        });
+    });
+}
+
+/**
+ * Selects a discovered device for casting.
+ */
+function selectCastDevice(index) {
+    if (index < 0 || index >= discoveredDevices.length) return;
+
+    selectedCastDevice = discoveredDevices[index];
+
+    // Clear manual IP when selecting discovered device
+    if (castManualIp) {
+        castManualIp.value = "";
+    }
+
+    // Update UI
+    deselectAllDevices();
+    const li = castDevicesList.querySelector(`li[data-index="${index}"]`);
+    if (li) {
+        li.classList.add("selected");
+    }
+
+    updateCastConnectButton();
+}
+
+/**
+ * Removes selection from all devices.
+ */
+function deselectAllDevices() {
+    if (!castDevicesList) return;
+    castDevicesList.querySelectorAll("li").forEach(li => li.classList.remove("selected"));
+}
+
+/**
+ * Updates the Cast button enabled state based on selection.
+ */
+function updateCastConnectButton() {
+    if (!castConnectBtn) return;
+
+    const hasSelection = selectedCastDevice !== null;
+    const hasManualIp = castManualIp && castManualIp.value.trim().length > 0;
+
+    castConnectBtn.disabled = !(hasSelection || hasManualIp);
+}
+
+/**
+ * Initiates casting to the selected device or manual IP.
+ */
+async function startCasting() {
+    let targetIp, targetPort, targetName;
+
+    if (selectedCastDevice) {
+        targetIp = selectedCastDevice.ip;
+        targetPort = selectedCastDevice.port || 8009;
+        targetName = selectedCastDevice.name || targetIp;
+    } else if (castManualIp && castManualIp.value.trim()) {
+        targetIp = castManualIp.value.trim();
+        targetPort = 8009;
+        targetName = targetIp;
+    } else {
+        return;
+    }
+
+    closeCastDialog();
+
+    // Update UI to show casting in progress
+    statusEl.textContent = `Casting to ${targetName}...`;
+    const icon = castBtn.querySelector(".material-symbols-outlined");
+    if (icon) {
+        icon.textContent = "cast_connected";
+    }
+
+    try {
+        // Get our hostname for the receiver to connect back to
+        const hostname = await invoke("get_local_hostname").catch(() => "localhost");
+
+        // Start the Cast session
+        await invoke("start_cast_session", {
+            deviceIp: targetIp,
+            devicePort: targetPort,
+            hostAddress: hostname
+        });
+
+        statusEl.textContent = `Casting to ${targetName}`;
+    } catch (e) {
+        console.error("Cast session failed:", e);
+        statusEl.textContent = "Cast failed: " + e;
+        if (icon) {
+            icon.textContent = "cast";
+        }
+    }
+}
+
+// Listen for Cast Disconnected Event (from Backend)
+// Fired when the receiver WebSocket closes (e.g., user exits app on TV)
+listen('cast_disconnected', () => {
+    console.log('[Cast] Receiver disconnected (session ended)');
+    const castBtn = document.querySelector("#cast-btn");
+    const statusEl = document.querySelector("#status-msg");
+
+    // Reset Icon
+    if (castBtn) {
+        const icon = castBtn.querySelector(".material-symbols-outlined");
+        if (icon) icon.textContent = "cast";
+        // Do not disable the button, just reset icon
+    }
+
+    // Reset Status (optional)
+    if (statusEl && statusEl.textContent.startsWith("Casting to")) {
+        statusEl.textContent = "Infinite Walk Active";
+    }
+});
+
 // Global Error Handler
 window.addEventListener('error', (event) => {
     const status = document.getElementById("status-msg");
     if (status) status.textContent = "JS Error: " + event.message;
 });
+
