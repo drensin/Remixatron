@@ -309,7 +309,7 @@ async fn start_cast_session(
     state: tauri::State<'_, AppState>,
     device_ip: String,
     device_port: u16,
-    host_address: String,
+    _host_address: String,
 ) -> Result<(), String> {
     use rust_cast::CastDevice as RustCastDevice;
     use rust_cast::channels::receiver::CastDeviceApp;
@@ -325,7 +325,11 @@ async fn start_cast_session(
     let ip = device_ip.clone();
     let port = device_port;
 
-    let host = host_address.clone();
+    // Ignore the passed host_address - we calculate the real LAN IP to ensure 
+    // the Cast device can connect (avoiding mDNS/localhost issues).
+    let host = local_ip_address::local_ip()
+        .map_err(|e| format!("Failed to get local IP: {}", e))?
+        .to_string();
     let app_state = state.inner().clone();
 
     // Wrap in a 30-second timeout so we don't hang forever

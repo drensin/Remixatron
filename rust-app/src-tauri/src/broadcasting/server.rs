@@ -34,10 +34,16 @@ use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::sync::{broadcast, watch};
 use tauri::{AppHandle, Emitter};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::cors::CorsLayer;
 
 /// The port on which the broadcast server listens.
 const SERVER_PORT: u16 = 3030;
+
+use include_dir::{include_dir, Dir};
+use axum::http::{StatusCode, header, Uri};
+
+/// Embedded static assets for the receiver.
+static RECEIVER_ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../src-receiver");
 
 /// Static visualization data sent once when a client connects.
 ///
@@ -129,7 +135,9 @@ pub async fn start_server(
     let app = Router::new()
         .route("/stream.mp3", get(handle_audio_stream))
         .route("/viz", get(handle_websocket))
-        .nest_service("/receiver", ServeDir::new("../src-receiver"))
+        // Serve embedded assets instead of local filesystem
+        .route("/receiver", get(serve_static_asset))
+        .route("/receiver/*path", get(serve_static_asset))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -298,4 +306,18 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
     // Notify Frontend that Receiver has disconnected
     eprintln!("[Broadcast] WebSocket closed - Receiver disconnected.");
     let _ = state.app_handle.emit("cast_disconnected", ());
+}
+
+/// Helper to serve embedded static files
+async fn serve_static_asset(uri: Uri) -> impl IntoResponse {
+    let path = uri.path().strip_prefix("/receiver/").unwrap_or(uri.path());
+    let path = if path.is_empty() || path == "/" { "index.html" } else { path.trim_start_matches('/') };
+
+    match RECEIVER_ASSETS.get_file(path) {
+        Some(file) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            ([(header::CONTENT_TYPE, mime.as_ref())], file.contents()).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
