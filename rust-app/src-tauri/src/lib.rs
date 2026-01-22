@@ -75,6 +75,10 @@ struct AppState {
     /// Tracks if a Cast session is currently active.
     /// Used to initialize playback with muted volume if casting is already active.
     is_casting: Arc<AtomicBool>,
+    
+    /// IP address of the currently active Cast device.
+    /// Used to reconnect and send a STOP command when session ends.
+    cast_device_ip: Arc<Mutex<Option<String>>>,
 }
 
 /// The payload returned to the Frontend after a successful analysis.
@@ -345,6 +349,11 @@ async fn start_cast_session(
         .map_err(|e| format!("Failed to get local IP: {}", e))?
         .to_string();
     let app_state = state.inner().clone();
+    
+    // Store the IP in AppState for the Stop command later
+    if let Ok(mut lock) = state.cast_device_ip.lock() {
+        *lock = Some(device_ip.clone());
+    }
 
     // Wrap in a 30-second timeout so we don't hang forever
     let timeout_result = tokio::time::timeout(
@@ -1068,6 +1077,7 @@ pub fn run() {
                 viz_update_tx,
                 last_download_metadata: Arc::new(Mutex::new(None)),
                 is_casting: Arc::new(AtomicBool::new(false)),
+                cast_device_ip: Arc::new(Mutex::new(None)),
             });
 
             // NOTE: No downloader init here - frontend checks dependencies on startup
@@ -1108,6 +1118,8 @@ async fn stop_cast_session(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     use crate::playback_engine::PlaybackCommand;
+    use rust_cast::CastDevice as RustCastDevice;
+    use rust_cast::channels::receiver::Status as ReceiverStatus;
     println!("[Cast] Stopping session via WebSocket signal...");
     
     // Mark casting as inactive
@@ -1119,31 +1131,67 @@ async fn stop_cast_session(
         ..Default::default()
     };
 
-    // Broadcast to all connected clients (Receiver)
+    // Broadcast WebSocket signal (Handles Custom Receiver)
     match state.viz_update_tx.send(shutdown_msg) {
         Ok(_) => {
-             println!("[Cast] Shutdown signal sent.");
-             // Unmute local playback when casting stops
-             println!("[Cast] Unmuting local playback.");
-             if let Ok(mut tx_guard) = state.playback_tx.lock() {
-                if let Some(tx) = tx_guard.as_mut() {
-                    let _ = tx.send(PlaybackCommand::SetVolume(1.0));
-                }
-             }
-             Ok(())
+             println!("[Cast] Shutdown signal sent via WebSocket.");
         },
         Err(e) => {
-            // It's possible no one is listening (already disconnected), which is fine.
-            println!("[Cast] Failed to send shutdown signal (no listeners?): {}", e);
-            
-            // Still unmute local playback even if signal failed
-             if let Ok(mut tx_guard) = state.playback_tx.lock() {
-                if let Some(tx) = tx_guard.as_mut() {
-                    let _ = tx.send(PlaybackCommand::SetVolume(1.0));
-                }
-             }
-
-            Ok(()) // Treat as success to clear UI
+            println!("[Cast] Failed to send WebSocket shutdown (no listeners?): {}", e);
         }
     }
+
+    // --- HARD STOP (Handles Audio-Only / Default Media Receiver) ---
+    // We must reconnect to the device and send a STOP command to the active app.
+    // This requires the IP we stored in start_cast_session.
+    
+    let target_ip_opt = {
+        let mut lock = state.cast_device_ip.lock().unwrap();
+        lock.take() // Take the IP (and clear it)
+    };
+
+    if let Some(ip_str) = target_ip_opt {
+        println!("[Cast] Initiating Hard Stop for device at {}", ip_str);
+        
+        // Spawn a background task to perform the stop logic to avoid blocking the main thread
+        // (though we are already in an async command, connecting can take a moment)
+        let _ = std::thread::spawn(move || {
+             if let Ok(ip_addr) = ip_str.parse::<std::net::Ipv4Addr>() {
+                 let port = 8009;
+                 // Connect
+                 if let Ok(device) = RustCastDevice::connect_without_host_verification(ip_addr.to_string(), port) {
+                     println!("[Cast] Hard Stop: Connected to device.");
+                     
+                     // Identify the active application and send a STOP command if it matches
+                     // either our Custom Receiver or the Default Media Receiver.
+                     
+                     if let Ok(_) = device.connection.connect("receiver-0") {
+                         let status_result: Result<ReceiverStatus, _> = device.receiver.get_status();
+                         if let Ok(status) = status_result {
+                             // Find the active application
+                             for app in status.applications {
+                                 println!("[Cast] Hard Stop: Found active app {} (Session: {})", app.app_id, app.session_id);
+                                 if app.app_id == "EE59C2BB" || app.app_id == "CC1AD845" { // Custom or DMR
+                                     println!("[Cast] Stopping session {}", app.session_id);
+                                     let _ = device.receiver.stop_app(&app.session_id);
+                                 }
+                             }
+                         }
+                     }
+                 } else {
+                     println!("[Cast] Hard Stop: Connection failed.");
+                 }
+             }
+        });
+    }
+
+    // Unmute local playback
+    println!("[Cast] Unmuting local playback.");
+    if let Ok(mut tx_guard) = state.playback_tx.lock() {
+        if let Some(tx) = tx_guard.as_mut() {
+            let _ = tx.send(PlaybackCommand::SetVolume(1.0));
+        }
+    }
+
+    Ok(())
 }
