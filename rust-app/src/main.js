@@ -1170,13 +1170,16 @@ function updateCastDevicesList() {
         return;
     }
 
-    castDevicesList.innerHTML = discoveredDevices.map((device, index) => `
+    castDevicesList.innerHTML = discoveredDevices.map((device, index) => {
+        const icon = device.has_video ? "tv" : "speaker";
+        return `
         <li data-index="${index}">
-            <span class="material-symbols-outlined">tv</span>
+            <span class="material-symbols-outlined">${icon}</span>
             <span class="cast-device-name">${device.name || device.ip}</span>
             <span class="cast-device-type">${device.model || "Chromecast"}</span>
         </li>
-    `).join("");
+    `;
+    }).join("");
 
     // Add click handlers to each device
     castDevicesList.querySelectorAll("li").forEach((li) => {
@@ -1235,15 +1238,20 @@ function updateCastConnectButton() {
  */
 async function startCasting() {
     let targetIp, targetPort, targetName;
+    let hasVideo = true; // Default to video (Custom App)
 
     if (selectedCastDevice) {
         targetIp = selectedCastDevice.ip;
         targetPort = selectedCastDevice.port || 8009;
         targetName = selectedCastDevice.name || targetIp;
+        if (selectedCastDevice.has_video !== undefined) {
+            hasVideo = selectedCastDevice.has_video;
+        }
     } else if (castManualIp && castManualIp.value.trim()) {
         targetIp = castManualIp.value.trim();
         targetPort = 8009;
         targetName = targetIp;
+        hasVideo = true; // Manual IP assumed to be video capable
     } else {
         return;
     }
@@ -1265,6 +1273,7 @@ async function startCasting() {
         await invoke("start_cast_session", {
             deviceIp: targetIp,
             devicePort: targetPort,
+            hasVideo: hasVideo,
             hostAddress: hostname
         });
 

@@ -176,6 +176,8 @@ struct CastDevice {
     name: String,
     /// The device model (e.g., "Chromecast", "Google Home").
     model: String,
+    /// Whether the device supports video output (false = audio only).
+    has_video: bool,
 }
 
 /// Discovers Chromecast devices on the local network using mDNS.
@@ -252,6 +254,15 @@ async fn discover_cast_devices() -> Vec<CastDevice> {
                                 .map(|v| v.val_str().to_string())
                                 .unwrap_or_else(|| "Chromecast".to_string());
 
+                            // Parse capability capabilities (bitfield)
+                            // Bit 0: Video Out, Bit 2: Audio Out
+                            let ca_flags = info.get_properties()
+                                .get("ca")
+                                .and_then(|v| v.val_str().parse::<u32>().ok())
+                                .unwrap_or(0); // Default to 0 if missing
+                            
+                            let has_video = (ca_flags & 1) != 0;
+
                             eprintln!("[Cast Discovery] Found: {} ({}) at {}", name, model, ip);
 
                             devices.insert(ip.clone(), CastDevice {
@@ -259,6 +270,7 @@ async fn discover_cast_devices() -> Vec<CastDevice> {
                                 port: info.get_port(),
                                 name,
                                 model,
+                                has_video,
                             });
                         }
                     }
@@ -309,10 +321,12 @@ async fn start_cast_session(
     state: tauri::State<'_, AppState>,
     device_ip: String,
     device_port: u16,
+    has_video: bool,
     _host_address: String,
 ) -> Result<(), String> {
     use rust_cast::CastDevice as RustCastDevice;
     use rust_cast::channels::receiver::CastDeviceApp;
+    use rust_cast::channels::media::{Media, StreamType};
     use std::time::Duration;
     use crate::playback_engine::PlaybackCommand;
 
@@ -343,36 +357,78 @@ async fn start_cast_session(
 
             eprintln!("[Cast] Connected! Establishing connection channel...");
 
-            // Connect to the receiver (required before launching app)
-            device.connection.connect("receiver-0")
-                .map_err(|e| format!("Failed to establish connection: {:?}", e))?;
+            if has_video {
+                // Video Device: Use our Custom Receiver (Viz + Audio)
+                eprintln!("[Cast] Video device detected. Launching Custom Receiver {} ...", REMIXATRON_APP_ID);
 
-            eprintln!("[Cast] Launching app {} ...", REMIXATRON_APP_ID);
+                // Connect to the receiver (required before launching app)
+                device.connection.connect("receiver-0")
+                    .map_err(|e| format!("Failed to establish connection: {:?}", e))?;
 
-            // Launch our custom receiver app
-            let app = CastDeviceApp::Custom(REMIXATRON_APP_ID.to_string());
-            let application = device.receiver.launch_app(&app)
-                .map_err(|e| format!("Failed to launch app: {:?}", e))?;
+                // Launch our custom receiver app
+                let app = CastDeviceApp::Custom(REMIXATRON_APP_ID.to_string());
+                let application = device.receiver.launch_app(&app)
+                    .map_err(|e| format!("Failed to launch app: {:?}", e))?;
 
-            eprintln!("[Cast] App launched! Transport ID: {}", application.transport_id);
+                eprintln!("[Cast] App launched! Transport ID: {}", application.transport_id);
 
-            // Connect to the app's transport
-            device.connection.connect(&application.transport_id)
-                .map_err(|e| format!("Failed to connect to app: {:?}", e))?;
+                // Connect to the app's transport
+                device.connection.connect(&application.transport_id)
+                    .map_err(|e| format!("Failed to connect to app: {:?}", e))?;
 
-            // Send our CONFIG message with the hostname
-            // The receiver listens on namespace "urn:x-cast:com.remixatron"
-            let config_message = serde_json::json!({
-                "type": "CONFIG",
-                "host": host
-            });
+                // Send our CONFIG message with the hostname
+                let config_message = serde_json::json!({
+                    "type": "CONFIG",
+                    "host": host
+                });
 
-            eprintln!("[Cast] Sending CONFIG message: {:?}", config_message);
+                eprintln!("[Cast] Sending CONFIG message: {:?}", config_message);
 
-            device.receiver.broadcast_message(
-                "urn:x-cast:com.remixatron",
-                &config_message
-            ).map_err(|e| format!("Failed to send CONFIG: {:?}", e))?;
+                device.receiver.broadcast_message(
+                    "urn:x-cast:com.remixatron",
+                    &config_message
+                ).map_err(|e| format!("Failed to send CONFIG: {:?}", e))?;
+                
+            } else {
+                // Audio-Only Device: Use Default Media Receiver
+                const DEFAULT_MEDIA_RECEIVER_ID: &str = "CC1AD845";
+                eprintln!("[Cast] Audio-only device detected. Launching Default Media Receiver {} ...", DEFAULT_MEDIA_RECEIVER_ID);
+                
+                device.connection.connect("receiver-0")
+                    .map_err(|e| format!("Failed to connect to receiver: {:?}", e))?;
+                    
+                let app = CastDeviceApp::DefaultMediaReceiver;
+                let application = device.receiver.launch_app(&app)
+                    .map_err(|e| format!("Failed to launch DMR: {:?}", e))?;
+                    
+                eprintln!("[Cast] DMR launched! Transport ID: {}", application.transport_id);
+                
+                device.connection.connect(&application.transport_id)
+                    .map_err(|e| format!("Failed to connect to app transport: {:?}", e))?;
+
+                // Construct Media Load Request
+                // Use the calculated host IP (port 3030) and /stream.mp3 endpoint
+                // Construct Media Object (Typed)
+                let media = Media {
+                    content_id: format!("http://{}:3030/stream.mp3", host),
+                    stream_type: StreamType::Live,
+                    content_type: "audio/mpeg".to_string(),
+                    metadata: None,
+                    duration: None,
+
+                };
+                
+                eprintln!("[Cast] Sending LOAD to DMR: {:?}", media);
+                
+
+
+                // Send LOAD command to the Default Media Receiver (DMR)
+                let _req_id = device.media.load(
+                    &application.transport_id,
+                    &application.transport_id, 
+                    &media
+                ).map_err(|e| format!("Failed to send LOAD command: {:?}", e))?;
+            }
 
             eprintln!("[Cast] Session established successfully!");
 
