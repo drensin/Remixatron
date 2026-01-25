@@ -188,6 +188,7 @@ impl StructureAnalyzer {
             let mut other_clusters_dist = vec![0.0; k];
             let mut other_clusters_count = vec![0; k];
             
+            #[allow(clippy::needless_range_loop)]  // j indexes points rows and labels; complex multi-array access
             for j in 0..n {
                 if i == j { continue; }
                 
@@ -538,6 +539,7 @@ fn smooth_curve(input: &[f32], sigma: f32) -> Vec<f32> {
     // Create Kernel
     let mut kernel = vec![0.0; kernel_width];
     let mut sum = 0.0;
+    #[allow(clippy::needless_range_loop)]  // i used for x calculation and kernel[i] write
     for i in 0..kernel_width {
         let x = (i as f32) - (kernel_radius as f32);
         let val = (-x*x / (2.0 * sigma * sigma)).exp();
@@ -549,8 +551,10 @@ fn smooth_curve(input: &[f32], sigma: f32) -> Vec<f32> {
     
     // Convolve
     let mut output = vec![0.0; n];
+    #[allow(clippy::needless_range_loop)]  // i used for offset calculation with output[i]
     for i in 0..n {
         let mut acc = 0.0;
+        #[allow(clippy::needless_range_loop)]  // k used for kernel index and offset calculation
         for k in 0..kernel_width {
             let offset = (k as isize) - (kernel_radius as isize);
             let idx = (i as isize) + offset;
@@ -813,6 +817,7 @@ fn cumulative_normalize_eigenvectors(
         // ascending eigenvalue (smoothest to most oscillatory).
         let mut cumsum = 0.0_f32;
         
+        #[allow(clippy::needless_range_loop)]  // j indexes sorted_indices then evecs column
         for j in 0..k {
             let eig_idx = sorted_indices[j];
             let val = evecs[[i, eig_idx]];
@@ -1442,6 +1447,7 @@ impl StructureAnalyzer {
         let mut all_candidates: Vec<Vec<(usize, f32)>> = vec![Vec::new(); n_beats];
         let mut max_sim_overall = 0.0f32;
 
+        #[allow(clippy::needless_range_loop)]  // i indexes all_candidates and features
         for i in 0..n_beats {
             let target = features.row(i);
             let mut candidates = Vec::new();
@@ -1877,9 +1883,9 @@ impl StructureAnalyzer {
             use std::io::Write;
             use std::fs::OpenOptions;
             if let Ok(mut file) = OpenOptions::new().append(true).open("remixatron_debug.log") {
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 let _ = writeln!(file, "K_recurrence: {}", k_recurrence);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // CQT features stats
                 let cqt_min = cqt.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -1888,7 +1894,7 @@ impl StructureAnalyzer {
                 let _ = writeln!(file, "=== CQT FEATURES (dB-scaled) ===");
                 let _ = writeln!(file, "Shape: {:?}", cqt.dim());
                 let _ = writeln!(file, "Min: {:.4}, Max: {:.4}, Mean: {:.4}", cqt_min, cqt_max, cqt_mean);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // Recurrence matrix stats (raw)
                 let rec_min = recurrence_raw.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -1900,7 +1906,7 @@ impl StructureAnalyzer {
                 let _ = writeln!(file, "Shape: {:?}", recurrence_raw.dim());
                 let _ = writeln!(file, "Min: {:.6}, Max: {:.6}, Mean: {:.6}", rec_min, rec_max, rec_mean);
                 let _ = writeln!(file, "Non-zero entries: {} / {} ({:.2}%)", rec_nonzero, rec_total, 100.0 * rec_nonzero as f32 / rec_total as f32);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // Recurrence matrix stats (filtered)
                 let recf_min = recurrence_filtered.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -1910,7 +1916,7 @@ impl StructureAnalyzer {
                 let _ = writeln!(file, "=== RECURRENCE MATRIX (filtered) ===");
                 let _ = writeln!(file, "Min: {:.6}, Max: {:.6}, Mean: {:.6}", recf_min, recf_max, recf_mean);
                 let _ = writeln!(file, "Non-zero entries: {} / {} ({:.2}%)", recf_nonzero, rec_total, 100.0 * recf_nonzero as f32 / rec_total as f32);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // MFCC features stats
                 let mfcc_min = mfcc.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -1919,7 +1925,7 @@ impl StructureAnalyzer {
                 let _ = writeln!(file, "=== MFCC FEATURES ===");
                 let _ = writeln!(file, "Shape: {:?}", mfcc.dim());
                 let _ = writeln!(file, "Min: {:.4}, Max: {:.4}, Mean: {:.4}", mfcc_min, mfcc_max, mfcc_mean);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // Path matrix stats
                 let path_min = path_matrix.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -1930,7 +1936,7 @@ impl StructureAnalyzer {
                 let _ = writeln!(file, "=== PATH MATRIX ===");
                 let _ = writeln!(file, "Min: {:.6}, Max: {:.6}, Mean: {:.6}", path_min, path_max, path_mean);
                 let _ = writeln!(file, "Non-zero entries: {} / {} ({:.2}%)", path_nonzero, path_total, 100.0 * path_nonzero as f32 / path_total as f32);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // Degree vectors
                 let path_deg_min = path_degrees.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -1939,7 +1945,7 @@ impl StructureAnalyzer {
                 let path_deg_sum = path_degrees.iter().sum::<f32>();
                 let _ = writeln!(file, "=== PATH DEGREES ===");
                 let _ = writeln!(file, "Min: {:.4}, Max: {:.4}, Mean: {:.4}, Sum: {:.4}", path_deg_min, path_deg_max, path_deg_mean, path_deg_sum);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 let rec_deg_min = rec_degrees.iter().cloned().fold(f32::INFINITY, f32::min);
                 let rec_deg_max = rec_degrees.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
@@ -1947,14 +1953,14 @@ impl StructureAnalyzer {
                 let rec_deg_sum = rec_degrees.iter().sum::<f32>();
                 let _ = writeln!(file, "=== RECURRENCE DEGREES ===");
                 let _ = writeln!(file, "Min: {:.4}, Max: {:.4}, Mean: {:.4}, Sum: {:.4}", rec_deg_min, rec_deg_max, rec_deg_mean, rec_deg_sum);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // μ calculation details
                 let _ = writeln!(file, "=== MU CALCULATION ===");
                 let _ = writeln!(file, "μ (Eq. 7): {:.6}", mu);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 let _ = writeln!(file, "Ratio path_deg_sum / rec_deg_sum = {:.4}", path_deg_sum / rec_deg_sum);
-                let _ = writeln!(file, "");
+                let _ = writeln!(file);
                 
                 // Sample of recurrence degrees (first 20)
                 let _ = writeln!(file, "=== SAMPLE DEGREE VALUES (first 20 beats) ===");
@@ -2066,6 +2072,7 @@ impl StructureAnalyzer {
                 
                 // First 10 eigenvalues (should be near 0 for connected components)
                 let _ = writeln!(file, "First 10 eigenvalues (sorted ascending):");
+                #[allow(clippy::needless_range_loop)]  // i used for sorted_indices[i] and formatting
                 for i in 0..10.min(n_beats) {
                     let idx = sorted_indices[i];
                     let _ = writeln!(file, "  λ_{}: {:.6}", i, eigs[idx]);
@@ -2073,6 +2080,7 @@ impl StructureAnalyzer {
                 
                 // Check eigenvector variance for first few eigenvectors
                 let _ = writeln!(file, "\nEigenvector statistics (variance across beats):");
+                #[allow(clippy::needless_range_loop)]  // i used for sorted_indices[i] and formatting
                 for i in 1..5.min(n_beats) {  // Skip eigenvector 0 (constant)
                     let idx = sorted_indices[i];
                     let col: Vec<f32> = (0..n_beats).map(|row| evecs[[row, idx]]).collect();
@@ -2593,9 +2601,9 @@ impl StructureAnalyzer {
         // beat-level recurrence between segments. This captures rhythmic/harmonic
         // patterns that pooled features miss in homogeneous productions.
         
-        let best_labels_seg: Vec<usize>;
-        let k_final;
-        let _best_stats;
+        
+        
+        
 
         println!("    Computing Segment Affinity (Recurrence-Based)...");
         
@@ -2732,11 +2740,11 @@ impl StructureAnalyzer {
         // The "don't jump to same segment" rule prevents micro-loops.
         // =====================================================================
         
-        k_final = n_segments;
+        let k_final = n_segments;
         
         // Each segment is its own "cluster" - segment index = label
-        best_labels_seg = (0..n_segments).collect();
-        _best_stats = format!("NoCluster (K=n_segments={})", n_segments);
+        let best_labels_seg: Vec<usize> = (0..n_segments).collect();
+        let _best_stats = format!("NoCluster (K=n_segments={})", n_segments);
         
         // DEBUG: Log that clustering was skipped
         {
@@ -2757,7 +2765,8 @@ impl StructureAnalyzer {
         for i in 0..n_segments {
             let start = boundaries[i];
             let end = boundaries[i+1];
-            for t in start..end {
+        #[allow(clippy::needless_range_loop)]  // t used for final_labels[t] assignment
+        for t in start..end {
                 final_labels[t] = i;  // Segment index IS the label
             }
         }

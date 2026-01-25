@@ -9,9 +9,12 @@
  * - Jump arc rendering
  * - Countdown pulse ring for branches
  * - Debug overlay for Novelty Curve
+ * - WebGL Mood Shader background
  * 
  * @author Remixatron Team
  */
+
+import { MoodShader } from './MoodShader.js';
 
 /**
  * Manages the HTML5 Canvas rendering context for the musical visualization.
@@ -40,6 +43,49 @@ export class InfiniteJukeboxViz {
         this.WAVEFORM_MIN_AMPLITUDE = 0.1; // Floor for quiet sections
         this.WAVEFORM_OPACITY = 0.4;       // Base opacity for non-active segments
         this.WAVEFORM_ACTIVE_OPACITY = 0.7; // Opacity for current segment
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MOOD SHADER STATE (Phase 4: WebGL Background)
+        // ─────────────────────────────────────────────────────────────────────
+
+        // RGB color palette for mood shader (matches segment colors but as floats)
+        this.moodPalette = [
+            [1.0, 0.0, 0.33],  // #FF0055
+            [0.0, 1.0, 0.6],   // #00FF99
+            [0.0, 0.8, 1.0],   // #00CCFF
+            [1.0, 0.67, 0.0],  // #FFAA00
+            [0.8, 0.0, 1.0],   // #CC00FF
+            [1.0, 0.2, 0.0],   // #FF3300
+            [0.67, 1.0, 0.0],  // #AAFF00
+            [0.0, 0.33, 1.0],  // #0055FF
+            [1.0, 0.0, 0.67],  // #FF00AA
+            [0.0, 1.0, 0.33]   // #00FF55
+        ];
+
+        // Lag smoothing state (for silky transitions)
+        this.activeBeatIndex = -1;        // Current beat for animation loop access
+        this.smoothedEnergy = 0.5;        // Lag-smoothed RMS energy
+        this.smoothedCentroid = 0.5;      // Lag-smoothed spectral centroid
+        this.currentMoodColor = [0.3, 0.3, 0.3];  // Current interpolated color
+
+        // Tick timing state (for inter-beat interpolation)
+        this.tickReceivedAt = 0;          // performance.now() when playback_tick arrived
+        this.currentBeatStart = 0;        // beat.start time of the current beat
+        this.currentBeatDuration = 0.5;   // Duration of current beat (fallback 0.5s)
+
+        // Initialize WebGL Mood Shader
+        const bgCanvas = document.getElementById('bg-shader');
+        if (bgCanvas) {
+            this.moodShader = new MoodShader(bgCanvas);
+            if (this.moodShader.initWebGL()) {
+                this._startMoodAnimationLoop();
+            } else {
+                console.warn('[Viz] MoodShader WebGL init failed, falling back to solid background');
+                this.moodShader = null;
+            }
+        } else {
+            this.moodShader = null;
+        }
     }
 
     updatePlaybackState(seqPos, seqLen) {
@@ -91,6 +137,11 @@ export class InfiniteJukeboxViz {
         this.radius = Math.min(this.width, this.height) / 2.2;
         this.centerX = this.width / 2;
         this.centerY = this.height / 2;
+
+        // Resize MoodShader canvas to match
+        if (this.moodShader) {
+            this.moodShader.resize(rect.width, rect.height, dpr);
+        }
 
         this.draw(); // Redraw on resize
     }
@@ -151,6 +202,18 @@ export class InfiniteJukeboxViz {
      * @param {number} activeSegmentIndex - The segment index to highlight (optional).
      */
     draw(activeBeatIndex = -1, activeSegmentIndex = -1) {
+        // Track active beat for animation loop to access asynchronously
+        this.activeBeatIndex = activeBeatIndex;
+
+        // Record timing for inter-beat interpolation
+        // The animation loop uses this to estimate current audio time
+        this.tickReceivedAt = performance.now();
+        if (activeBeatIndex >= 0 && activeBeatIndex < this.beats.length) {
+            const beat = this.beats[activeBeatIndex];
+            this.currentBeatStart = beat.start;
+            this.currentBeatDuration = beat.duration || 0.5;
+        }
+
         if (!this.beats.length) return;
 
         const ctx = this.ctx;
@@ -162,19 +225,43 @@ export class InfiniteJukeboxViz {
         // 0.5. Draw Waveform Ring (Inner, behind segment ring)
         this.drawWaveformRing(ctx, activeSegmentIndex);
 
-        // 1. Draw Segments (Outer Ring)
-        ctx.lineWidth = 15;
+        // 1. Draw Segments (Outer Ring) - Neon Glow Effect
+        // Three-pass rendering: background glow → medium glow → sharp core
         this.segments.forEach((seg, i) => {
             const startAngle = this.getAngle(seg.start_time);
             const endAngle = this.getAngle(seg.end_time);
+            const color = this.colors[seg.label % this.colors.length];
+            const isActive = (activeSegmentIndex === -1 || activeSegmentIndex === i);
 
-            ctx.beginPath();
-            ctx.arc(this.centerX, this.centerY, this.radius, startAngle, endAngle);
-            ctx.strokeStyle = this.colors[seg.label % this.colors.length];
+            // Path definition (reused for all passes)
+            const drawArc = () => {
+                ctx.beginPath();
+                ctx.arc(this.centerX, this.centerY, this.radius, startAngle, endAngle);
+            };
 
-            // Dim non-active segments?
-            ctx.globalAlpha = (activeSegmentIndex === -1 || activeSegmentIndex === i) ? 1.0 : 0.3;
+            // Pass 1: Large blur (background glow)
+            ctx.lineWidth = 20;
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = color;
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = isActive ? 0.25 : 0.08;
+            drawArc();
             ctx.stroke();
+
+            // Pass 2: Medium blur
+            ctx.lineWidth = 15;
+            ctx.shadowBlur = 10;
+            ctx.globalAlpha = isActive ? 0.5 : 0.15;
+            drawArc();
+            ctx.stroke();
+
+            // Pass 3: Sharp core
+            ctx.lineWidth = 8;
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = isActive ? 1.0 : 0.4;
+            drawArc();
+            ctx.stroke();
+
             ctx.globalAlpha = 1.0;
         });
 
@@ -197,10 +284,10 @@ export class InfiniteJukeboxViz {
 
             ctx.shadowBlur = 0;
 
-            // 3. Draw Jump Connections (Arcs)
-            // Draw lines to all possible jump candidates from this beat
-            // Each arc is colored by its TARGET segment to show where it leads
-            ctx.lineWidth = 1.5;
+            // 3. Draw Jump Connections (Arcs) - Neon Glow with Screen Blend
+            // Screen blend makes arcs additive/glowing against the shader background
+            ctx.globalCompositeOperation = 'screen';
+
             beat.jump_candidates.forEach(targetIdx => {
                 // Skip invalid indices (may occur if beats were truncated)
                 if (targetIdx >= this.beats.length) return;
@@ -220,15 +307,32 @@ export class InfiniteJukeboxViz {
                     ? this.colors[targetSeg.label % this.colors.length]
                     : "#FFFFFF";
 
-                ctx.beginPath();
-                ctx.moveTo(sx, sy);
-                // Bezier curve through center
-                ctx.quadraticCurveTo(this.centerX, this.centerY, tx, ty);
+                // Path definition for arc
+                const drawCurve = () => {
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.quadraticCurveTo(this.centerX, this.centerY, tx, ty);
+                };
+
+                // Pass 1: Glow background
+                ctx.lineWidth = 4;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = targetColor;
                 ctx.strokeStyle = targetColor;
-                ctx.globalAlpha = 0.5;
+                ctx.globalAlpha = 0.3;
+                drawCurve();
                 ctx.stroke();
-                ctx.globalAlpha = 1.0;
+
+                // Pass 2: Sharp core
+                ctx.lineWidth = 1.5;
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 0.7;
+                drawCurve();
+                ctx.stroke();
             });
+
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1.0;
         }
 
         // 4. Draw Countdown Pulse Ring
@@ -454,5 +558,113 @@ export class InfiniteJukeboxViz {
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1.0;
         ctx.lineCap = "butt";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // MOOD SHADER ANIMATION LOOP
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Starts the independent animation loop for the WebGL mood shader.
+     * 
+     * This loop runs at requestAnimationFrame rate (~60fps) independently of
+     * the main `draw()` cycles. It reads the current beat state and applies
+     * lag smoothing for silky visual transitions.
+     * 
+     * @private
+     */
+    _startMoodAnimationLoop() {
+        const SMOOTHING_FACTOR = 0.85;  // Slightly lower for more responsive feel
+        const TARGET_FPS = 30;
+        const FRAME_INTERVAL = 1000 / TARGET_FPS;  // ~33ms between frames
+        let lastFrameTime = 0;
+
+        const loop = () => {
+            const now = performance.now();
+
+            // Throttle to 30fps to reduce CPU usage
+            if (now - lastFrameTime < FRAME_INTERVAL) {
+                requestAnimationFrame(loop);
+                return;
+            }
+            lastFrameTime = now;
+
+            if (!this.moodShader) return;
+
+            // 1. Compute inter-beat progress using tick timing
+            // This estimates where we are within the current beat based on elapsed time
+            const elapsedMs = performance.now() - this.tickReceivedAt;
+            const elapsedSec = elapsedMs / 1000.0;
+            const beatProgress = Math.min(elapsedSec / this.currentBeatDuration, 1.0);
+
+            // 2. Get current and next beat values for interpolation
+            let currentEnergy = 0.5, nextEnergy = 0.5;
+            let currentCentroid = 0.5, nextCentroid = 0.5;
+            let targetNovelty = 0.0;
+            let currentColor = [0.3, 0.3, 0.3];
+            let nextColor = [0.3, 0.3, 0.3];
+
+            if (this.beats.length > 0 && this.activeBeatIndex >= 0 && this.activeBeatIndex < this.beats.length) {
+                const beat = this.beats[this.activeBeatIndex];
+
+                // Current beat values
+                currentEnergy = beat.energy ?? 0.5;
+                currentCentroid = beat.centroid ?? 0.5;
+                targetNovelty = beat.novelty ?? 0.0;
+
+                const cluster = beat.cluster ?? 0;
+                currentColor = this.moodPalette[cluster % this.moodPalette.length];
+
+                // Next beat values (for lerp target)
+                const nextBeatIdx = this.activeBeatIndex + 1;
+                if (nextBeatIdx < this.beats.length) {
+                    const nextBeat = this.beats[nextBeatIdx];
+                    nextEnergy = nextBeat.energy ?? 0.5;
+                    nextCentroid = nextBeat.centroid ?? 0.5;
+                    const nextCluster = nextBeat.cluster ?? 0;
+                    nextColor = this.moodPalette[nextCluster % this.moodPalette.length];
+                } else {
+                    // Last beat - no interpolation target
+                    nextEnergy = currentEnergy;
+                    nextCentroid = currentCentroid;
+                    nextColor = currentColor;
+                }
+            }
+
+            // 3. Lerp between current and next beat based on progress
+            const lerp = (a, b, t) => a + (b - a) * t;
+            const targetEnergy = lerp(currentEnergy, nextEnergy, beatProgress);
+            const targetCentroid = lerp(currentCentroid, nextCentroid, beatProgress);
+            const targetColor = [
+                lerp(currentColor[0], nextColor[0], beatProgress),
+                lerp(currentColor[1], nextColor[1], beatProgress),
+                lerp(currentColor[2], nextColor[2], beatProgress)
+            ];
+
+            // 4. Apply lag smoothing on top of lerped values (optional extra smoothness)
+            this.smoothedEnergy = this.smoothedEnergy * SMOOTHING_FACTOR + targetEnergy * (1 - SMOOTHING_FACTOR);
+            this.smoothedCentroid = this.smoothedCentroid * SMOOTHING_FACTOR + targetCentroid * (1 - SMOOTHING_FACTOR);
+
+            for (let i = 0; i < 3; i++) {
+                this.currentMoodColor[i] = this.currentMoodColor[i] * SMOOTHING_FACTOR + targetColor[i] * (1 - SMOOTHING_FACTOR);
+            }
+
+            // Novelty is NOT smoothed (instant flash on section boundaries)
+
+            // 5. Render shader frame
+            const time = performance.now() / 1000.0;
+            this.moodShader.render(
+                time,
+                this.smoothedEnergy,
+                this.smoothedCentroid,
+                this.currentMoodColor,
+                targetNovelty
+            );
+
+            requestAnimationFrame(loop);
+        };
+
+        loop();
+        console.log('[Viz] MoodShader animation loop started');
     }
 }

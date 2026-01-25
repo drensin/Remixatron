@@ -217,7 +217,7 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
     // 1. Send initial data
     let init_data = state.viz_init_rx.borrow().clone();
     if let Ok(text) = serde_json::to_string(&build_init_msg(&init_data)) {
-        let _ = socket.send(Message::Text(text.into())).await;
+        let _ = socket.send(Message::Text(text)).await;
     }
 
     // 2. Subscribe to updates (viz + audio)
@@ -250,7 +250,7 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
                         "shutdown": update.shutdown,
                     });
                     if let Ok(text) = serde_json::to_string(&msg) {
-                        if socket.send(Message::Text(text.into())).await.is_err() {
+                        if socket.send(Message::Text(text)).await.is_err() {
                             break;
                         }
                     }
@@ -272,7 +272,7 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
                     frame.extend_from_slice(&(viz.seq_len as u32).to_le_bytes());
                     frame.extend_from_slice(&mp3_chunk);
 
-                    if socket.send(Message::Binary(frame.into())).await.is_err() {
+                    if socket.send(Message::Binary(frame)).await.is_err() {
                         break; // Client disconnected
                     }
                 }
@@ -285,7 +285,7 @@ async fn handle_viz_socket(mut socket: WebSocket, state: AppState) {
                 // Only send if there's actual content (not empty default)
                 if !new_init.beats.is_empty() {
                     if let Ok(text) = serde_json::to_string(&build_init_msg(&new_init)) {
-                        if socket.send(Message::Text(text.into())).await.is_err() {
+                        if socket.send(Message::Text(text)).await.is_err() {
                             break; // Client disconnected
                         }
                     }

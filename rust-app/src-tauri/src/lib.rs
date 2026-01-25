@@ -938,7 +938,7 @@ async fn play_track(
                     } else {
                         0.5 // Fallback: typical beat duration
                     };
-                    cumulative_audio_time += beat_duration as f32;
+                    cumulative_audio_time += beat_duration;
                 });
             }
         }
@@ -1165,7 +1165,7 @@ async fn stop_cast_session(
                      // Identify the active application and send a STOP command if it matches
                      // either our Custom Receiver or the Default Media Receiver.
                      
-                     if let Ok(_) = device.connection.connect("receiver-0") {
+                     if device.connection.connect("receiver-0").is_ok() {
                          let status_result: Result<ReceiverStatus, _> = device.receiver.get_status();
                          if let Ok(status) = status_result {
                              // Find the active application

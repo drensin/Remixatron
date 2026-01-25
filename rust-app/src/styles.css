@@ -68,6 +68,27 @@ body {
     /* padding-bottom removed to maximize Viz size */
 }
 
+/* WebGL Mood Shader Background */
+#bg-shader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+/* 2D Canvas Foreground (on top of shader) */
+#jukebox-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: transparent;
+}
+
 /* --- Layer 2: UI Scrim & Controls (Z-10) --- */
 #ui-layer {
     position: relative;

@@ -80,6 +80,12 @@ pub struct Beat {
     pub quartile: usize,
     /// List of valid beat IDs we can seamless jump to from here.
     pub jump_candidates: Vec<usize>,
+    /// Normalized RMS energy (0.0-1.0) for Mood Shader brightness.
+    pub energy: f32,
+    /// Spectral centroid (0.0-1.0) for Mood Shader "sharpness".
+    pub centroid: f32,
+    /// Novelty score (0.0-1.0) for Mood Shader section transition effects.
+    pub novelty: f32,
 }
 
 /// A step in the computed playback plan.
@@ -236,8 +242,8 @@ impl JukeboxEngine {
                 // Count beats by candidate count buckets
                 let zero_cands = candidate_counts.iter().filter(|&&c| c == 0).count();
                 let one_cand = candidate_counts.iter().filter(|&&c| c == 1).count();
-                let two_to_five = candidate_counts.iter().filter(|&&c| c >= 2 && c <= 5).count();
-                let six_to_ten = candidate_counts.iter().filter(|&&c| c >= 6 && c <= 10).count();
+                let two_to_five = candidate_counts.iter().filter(|&&c| (2..=5).contains(&c)).count();
+                let six_to_ten = candidate_counts.iter().filter(|&&c| (6..=10).contains(&c)).count();
                 let over_ten = candidate_counts.iter().filter(|&&c| c > 10).count();
                 
                 let _ = writeln!(file, "\nCandidate Count Statistics:");
@@ -291,7 +297,7 @@ impl JukeboxEngine {
             
             // Constants
             acceptable_jump_amounts,
-            max_beats_between_jumps: max_beats_between_jumps,
+            max_beats_between_jumps,
             
             // Waveform envelope (computed in load_track)
             waveform_envelope: Vec::new(),
@@ -593,7 +599,7 @@ impl JukeboxEngine {
                         // Apply to ALL active handles immediately
                         let db = if current_volume <= 0.001 { -80.0 } else { 20.0 * current_volume.log10() };
                         for (_, _, handle) in active_handles.iter_mut() {
-                            let _ = handle.set_volume(db as f32, Tween::default());
+                            handle.set_volume(db as f32, Tween::default());
                         }
                     }
                 }
@@ -854,7 +860,7 @@ impl JukeboxEngine {
                      
                      println!("[SmartLoop] Wrapped! Found start index: {} (Beat 0 cands: {})", 
                         smart_start, 
-                        self.beats.get(0).map(|b| b.jump_candidates.len()).unwrap_or(0)
+                        self.beats.first().map(|b| b.jump_candidates.len()).unwrap_or(0)
                      );
 
                      self.cursor = smart_start;

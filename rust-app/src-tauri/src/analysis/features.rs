@@ -6,6 +6,7 @@
 //! ## Core Features
 //! *   **MFCC (Mel-Frequency Cepstral Coefficients)**: Captures timbre/texture.
 //! *   **Chroma (CQT)**: Captures harmonic content (chords/notes).
+//! *   **Spectral Centroid**: Captures "brightness" of timbre (used for Mood Shader).
 //! *   **Beat Synchronization**: Aggregates features per beat using Median Pooling to be tempo-invariant.
 
 use crate::analysis::cqt::CQTProcessor;
@@ -60,17 +61,20 @@ impl FeatureExtractor {
     /// *   `fps` - Frame rate of the Mel Spectrogram.
     ///
     /// # Returns
-    /// A tuple `(MFCCs, Chroma, CQT)` where:
+    /// A tuple `(MFCCs, Chroma, CQT, RMS, Centroid)` where:
     /// - MFCCs: `[n_beats, 20]` for timbral similarity
     /// - Chroma: `[n_beats, 12]` for harmonic content  
     /// - CQT: `[n_beats, 252]` for recurrence matrix (like Python)
+    /// - RMS: `Vec<f32>` normalized RMS energy per beat (for Mood Shader)
+    /// - Centroid: `Vec<f32>` spectral centroid per beat, 0.0-1.0 (for Mood Shader)
+    #[allow(clippy::type_complexity)]  // 5-tuple return is intentional; type alias would reduce clarity
     pub fn compute_sync_features(
         &mut self,
         audio: &[f32],
         mel: &Array2<f32>, 
         beats: &[f32], 
         fps: f32
-    ) -> (Array2<f32>, Array2<f32>, Array2<f32>, Vec<f32>) {
+    ) -> (Array2<f32>, Array2<f32>, Array2<f32>, Vec<f32>, Vec<f32>) {
         let (n_time, _) = mel.dim();
         let n_beats = beats.len();
         
@@ -92,6 +96,27 @@ impl FeatureExtractor {
         // Result is [CQT_Time, 252]
         let cqt_spectrogram_raw = self.cqt.process(audio);
         let (n_cqt_frames, n_bins) = cqt_spectrogram_raw.dim();
+        
+        // 2a. Compute Frame-wise Spectral Centroid (from RAW linear magnitude)
+        // CRITICAL: Must use linear magnitude BEFORE dB conversion.
+        // Centroid = Sum(k * Mag[k]) / Sum(Mag[k]), normalized to 0.0-1.0.
+        let mut centroid_frames = Vec::with_capacity(n_cqt_frames);
+        for t in 0..n_cqt_frames {
+            let mut weighted_sum = 0.0_f32;
+            let mut magnitude_sum = 0.0_f32;
+            for k in 0..n_bins {
+                let mag = cqt_spectrogram_raw[[t, k]];
+                weighted_sum += (k as f32) * mag;
+                magnitude_sum += mag;
+            }
+            // Avoid division by zero; normalize to 0.0-1.0 range
+            let centroid = if magnitude_sum > 1e-10 {
+                (weighted_sum / magnitude_sum) / (n_bins as f32)
+            } else {
+                0.5 // Default to middle if silent
+            };
+            centroid_frames.push(centroid);
+        }
         
         // Convert to dB scale like Python: C = librosa.amplitude_to_db(np.abs(cqt), ref=np.max)
         // This normalizes the value range to roughly [-80, 0] dB
@@ -143,6 +168,8 @@ impl FeatureExtractor {
         let mut cqt_sync = Array2::<f32>::zeros((n_beats, n_bins));
         // RMS Amplitude (per beat)
         let mut rms_sync = Vec::with_capacity(n_beats);
+        // Spectral Centroid (per beat)
+        let mut centroid_sync = Vec::with_capacity(n_beats);
         
         // Mel Beats
         let beat_frames_mel: Vec<usize> = beats.iter().map(|&t| (t * fps).round() as usize).collect();
@@ -229,10 +256,29 @@ impl FeatureExtractor {
                     };
                     cqt_sync[[i, k]] = med;
                 }
+                
+                // Centroid (Median pooling)
+                let mut centroid_values: Vec<f32> = (start_qc..end_qc)
+                    .map(|t| centroid_frames[t])
+                    .collect();
+                centroid_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let centroid_med = if centroid_values.is_empty() {
+                    0.5
+                } else if centroid_values.len() % 2 == 1 {
+                    centroid_values[centroid_values.len() / 2]
+                } else {
+                    let mid = centroid_values.len() / 2;
+                    (centroid_values[mid - 1] + centroid_values[mid]) / 2.0
+                };
+                centroid_sync.push(centroid_med);
             } else if start_qc < n_cqt_frames {
                 // Single frame fallback
-                 for k in 0..12 { chroma_sync[[i, k]] = chroma_frames[[start_qc, k]]; }
-                 for k in 0..n_bins { cqt_sync[[i, k]] = cqt_spectrogram[[start_qc, k]]; }
+                for k in 0..12 { chroma_sync[[i, k]] = chroma_frames[[start_qc, k]]; }
+                for k in 0..n_bins { cqt_sync[[i, k]] = cqt_spectrogram[[start_qc, k]]; }
+                centroid_sync.push(centroid_frames[start_qc]);
+            } else {
+                // No valid CQT frames for this beat
+                centroid_sync.push(0.5);
             }
 
             // 4. RMS Amplitude
@@ -268,7 +314,7 @@ impl FeatureExtractor {
             }
         }
         
-        (mfcc_sync, chroma_sync, cqt_sync, rms_sync)
+        (mfcc_sync, chroma_sync, cqt_sync, rms_sync, centroid_sync)
     }
 }
 

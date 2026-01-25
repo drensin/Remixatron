@@ -89,6 +89,7 @@ impl MinimalPostProcessor {
         let mut p = peaks[0] as f32;
         let mut c = 1.0;
 
+        #[allow(clippy::needless_range_loop)]  // i used for peaks[i] in running mean; refactoring reduces clarity
         for i in 1..peaks.len() {
             let p2 = peaks[i] as f32;
             if (p2 - p) <= width as f32 {

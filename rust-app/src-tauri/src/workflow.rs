@@ -128,7 +128,7 @@ impl Remixatron {
         let mut beats_extended = beats.clone();
         beats_extended.push(duration_seconds); // Add end marker to define the last beat's duration
         
-        let (mut mfcc, mut chroma, mut _cqt, mut rms_vec) = feature_ex.compute_sync_features(&audio, &mel_2d, &beats_extended, 50.0);
+        let (mut mfcc, mut chroma, mut _cqt, mut rms_vec, mut centroid_vec) = feature_ex.compute_sync_features(&audio, &mel_2d, &beats_extended, 50.0);
         
         // Remove the feature vector corresponding to the end marker
         // because it has 0 duration and is not a playble unit.
@@ -137,6 +137,7 @@ impl Remixatron {
              chroma = chroma.slice(s![0..chroma.nrows()-1, ..]).to_owned();
              _cqt = _cqt.slice(s![0.._cqt.nrows()-1, ..]).to_owned();
              if !rms_vec.is_empty() { rms_vec.pop(); }
+             if !centroid_vec.is_empty() { centroid_vec.pop(); }
         }
 
         // --- FADE TRUNCATION (Pre-Computation) ---
@@ -182,6 +183,7 @@ impl Remixatron {
                 chroma = chroma.slice(s![0..cutoff_index, ..]).to_owned();
                 _cqt = _cqt.slice(s![0..cutoff_index, ..]).to_owned();
                 rms_vec.truncate(cutoff_index);
+                centroid_vec.truncate(cutoff_index);
                 
                 // Update Duration (Crucial for UI sync)
                 // Use the End Time of the last valid beat
@@ -219,6 +221,7 @@ impl Remixatron {
         let mut bar_positions = Vec::with_capacity(beats_extended.len() - 1);
         let mut bar_pos_counter = 0;
         
+        #[allow(clippy::needless_range_loop)]  // i indexes beats_extended, bar_positions, and is used in downbeat check
         for i in 0..mfcc.nrows() {
              let start_time = beats_extended[i];
              // Simple proximity check: is this beat within 50ms of a known downbeat?
@@ -236,6 +239,23 @@ impl Remixatron {
         // Uses novelty peaks to find boundaries, then clusters segments between boundaries.
         let analyzer = StructureAnalyzer::new();
         let result = analyzer.compute_segments_checkerboard(&mfcc, &chroma, &bar_positions, None); 
+        
+        // 6a. Normalize RMS to 0.0-1.0 range for Mood Shader
+        // Use max RMS as reference to preserve relative dynamics.
+        let max_rms = rms_vec.iter().cloned().fold(0.0_f32, f32::max);
+        if max_rms > 1e-10 {
+            for rms in &mut rms_vec {
+                *rms /= max_rms;
+            }
+        }
+        
+        // 6b. Normalize novelty curve to 0.0-1.0 range for Mood Shader
+        let max_novelty = result.novelty_curve.iter().cloned().fold(0.0_f32, f32::max);
+        let novelty_normalized: Vec<f32> = if max_novelty > 1e-10 {
+            result.novelty_curve.iter().map(|&n| n / max_novelty).collect()
+        } else {
+            result.novelty_curve.clone()
+        };
         
         // 7. Assembly
         // Convert the raw labels and jump graph into the final `Beat` and `Segment` structs.
@@ -255,6 +275,7 @@ impl Remixatron {
             {
                 let mut temp_seg_id = 0;
                 let mut temp_label = result.labels[0];
+                #[allow(clippy::needless_range_loop)]  // i indexes both result.labels and beat_to_segment_id
                 for i in 0..result.labels.len() {
                     if result.labels[i] != temp_label {
                         temp_seg_id += 1;
@@ -340,6 +361,10 @@ impl Remixatron {
                     intra_segment_index,
                     quartile: 0, // Calculated dynamically in playback_engine
                     jump_candidates: candidates,
+                    // Mood Shader data: normalized to 0.0-1.0
+                    energy: rms_vec.get(i).copied().unwrap_or(0.5),
+                    centroid: centroid_vec.get(i).copied().unwrap_or(0.5),
+                    novelty: novelty_normalized.get(i).copied().unwrap_or(0.0),
                 });
                 
                 intra_segment_index += 1;
