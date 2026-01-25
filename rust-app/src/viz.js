@@ -15,6 +15,7 @@
  */
 
 import { MoodShader } from './MoodShader.js';
+import { LavaLampViz } from './LavaLampViz.js';
 
 /**
  * Manages the HTML5 Canvas rendering context for the musical visualization.
@@ -86,11 +87,39 @@ export class InfiniteJukeboxViz {
         } else {
             this.moodShader = null;
         }
+
+        // Initialize Lava Lamp Viz (separate 2D canvas)
+        const lavaCanvas = document.getElementById('lava-lamp');
+        if (lavaCanvas) {
+            this.lavaLamp = new LavaLampViz(lavaCanvas);
+            this.lavaCanvas = lavaCanvas;
+        } else {
+            this.lavaLamp = null;
+            this.lavaCanvas = null;
+        }
+
+        // Visualization mode: 'none' | 'fog' | 'lava'
+        this.vizMode = 'none';  // Default to none
+        this.lavaBeatCounter = 0;  // Counter for lava lamp spawn rate (every 4th beat)
     }
 
     updatePlaybackState(seqPos, seqLen) {
         this.currentSeqPos = seqPos;
         this.currentSeqLen = seqLen;
+    }
+
+    /**
+     * Sets the background visualization mode.
+     * @param {'none' | 'fog' | 'lava'} mode - The visualization mode to switch to.
+     */
+    setVizMode(mode) {
+        this.vizMode = mode;
+        console.log(`[Viz] Background mode set to: ${mode}`);
+
+        // Clear lava lamp blobs when switching away
+        if (mode !== 'lava' && this.lavaLamp) {
+            this.lavaLamp.clear();
+        }
     }
 
     /**
@@ -212,6 +241,19 @@ export class InfiniteJukeboxViz {
             const beat = this.beats[activeBeatIndex];
             this.currentBeatStart = beat.start;
             this.currentBeatDuration = beat.duration || 0.5;
+
+            // Spawn lava lamp blob every 4th beat (if in lava mode)
+            if (this.vizMode === 'lava' && this.lavaLamp) {
+                this.lavaBeatCounter++;
+                if (this.lavaBeatCounter >= 4) {
+                    this.lavaBeatCounter = 0;
+                    const energy = beat.energy ?? 0.5;
+                    // Use segment color (from cluster) instead of centroid for visual consistency
+                    const cluster = beat.cluster ?? 0;
+                    const segmentColor = this.moodPalette[cluster % this.moodPalette.length];
+                    this.lavaLamp.spawnBlob(energy, segmentColor);
+                }
+            }
         }
 
         if (!this.beats.length) return;
@@ -651,15 +693,39 @@ export class InfiniteJukeboxViz {
 
             // Novelty is NOT smoothed (instant flash on section boundaries)
 
-            // 5. Render shader frame
+            // 5. Render based on current viz mode
             const time = performance.now() / 1000.0;
-            this.moodShader.render(
-                time,
-                this.smoothedEnergy,
-                this.smoothedCentroid,
-                this.currentMoodColor,
-                targetNovelty
-            );
+            const dt = FRAME_INTERVAL;  // Delta time for lava lamp update
+
+            if (this.vizMode === 'fog' && this.moodShader) {
+                // Fog mode: render WebGL shader
+                const bgCanvas = document.getElementById('bg-shader');
+                if (bgCanvas) bgCanvas.style.display = 'block';
+
+                this.moodShader.render(
+                    time,
+                    this.smoothedEnergy,
+                    this.smoothedCentroid,
+                    this.currentMoodColor,
+                    targetNovelty
+                );
+                // Hide lava canvas when showing fog
+                if (this.lavaCanvas) this.lavaCanvas.style.display = 'none';
+            } else if (this.vizMode === 'lava' && this.lavaLamp) {
+                // Lava mode: update and render 2D blobs
+                // Show lava canvas, hide WebGL canvas
+                if (this.lavaCanvas) this.lavaCanvas.style.display = 'block';
+                const bgCanvas = document.getElementById('bg-shader');
+                if (bgCanvas) bgCanvas.style.display = 'none';
+
+                this.lavaLamp.update(dt);
+                this.lavaLamp.render();
+            } else if (this.vizMode === 'none') {
+                // None mode: hide both background canvases
+                if (this.lavaCanvas) this.lavaCanvas.style.display = 'none';
+                const bgCanvas = document.getElementById('bg-shader');
+                if (bgCanvas) bgCanvas.style.display = 'none';
+            }
 
             requestAnimationFrame(loop);
         };

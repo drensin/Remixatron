@@ -78,6 +78,17 @@ body {
     z-index: 0;
 }
 
+/* 2D Lava Lamp Background */
+#lava-lamp {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    background: transparent;
+}
+
 /* 2D Canvas Foreground (on top of shader) */
 #jukebox-canvas {
     position: absolute;
@@ -152,13 +163,13 @@ body {
     -webkit-backdrop-filter: blur(20px);
     margin: 0 auto 24px auto;
     /* Center horizontally + Bottom Margin */
-    max-width: 600px;
+    max-width: 700px;
     width: 100%;
     transform: translateY(150%);
     /* Hidden by default */
     transition: transform 0.6s cubic-bezier(0.2, 0.0, 0, 1.0);
-    overflow: hidden;
-    /* Clips progress bar */
+    overflow: visible;
+    /* Allow popup menus to extend outside */
     position: relative;
 }
 
@@ -569,6 +580,65 @@ body {
 
 #favorite-btn:hover .material-symbols-outlined {
     transform: scale(1.1);
+}
+
+/* =============================================================================
+ * Viz Mode Menu (Background Effect Selector)
+ * ============================================================================= */
+
+.viz-mode-container {
+    position: relative;
+    display: inline-block;
+}
+
+.viz-mode-menu {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--md-sys-shape-corner-medium);
+    margin-bottom: 8px;
+    padding: 4px 0;
+    min-width: 120px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    transform: translateY(8px);
+}
+
+.viz-mode-menu.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+}
+
+.viz-mode-menu:not(.hidden) {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.viz-mode-option {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: var(--md-sys-color-on-surface);
+    font-family: inherit;
+    font-size: var(--md-sys-typescale-body-medium);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.viz-mode-option:hover {
+    background: rgba(170, 204, 255, 0.1);
+}
+
+.viz-mode-option.active {
+    color: var(--md-sys-color-primary);
+    font-weight: 500;
 }
 
 /* =============================================================================

@@ -23,6 +23,7 @@
     <!-- Z-0: Visualization Hero -->
     <div id="viz-layer">
         <canvas id="bg-shader"></canvas> <!-- WebGL Mood Shader Background -->
+        <canvas id="lava-lamp"></canvas> <!-- 2D Lava Lamp Background -->
         <canvas id="jukebox-canvas"></canvas> <!-- 2D Beat Graph Foreground -->
     </div>
 
@@ -90,6 +91,16 @@
                 <button id="favorite-btn" class="m3-icon-btn" title="Add to Favorites">
                     <span class="material-symbols-outlined">favorite_border</span>
                 </button>
+                <div id="viz-mode-container" class="viz-mode-container">
+                    <button id="viz-mode-btn" class="m3-icon-btn" title="Background Effect">
+                        <span class="material-symbols-outlined">display_settings</span>
+                    </button>
+                    <div id="viz-mode-menu" class="viz-mode-menu hidden">
+                        <button class="viz-mode-option" data-mode="fog">Fog</button>
+                        <button class="viz-mode-option" data-mode="lava">Lava Lamp</button>
+                        <button class="viz-mode-option active" data-mode="none">None</button>
+                    </div>
+                </div>
             </div>
         </div>
 

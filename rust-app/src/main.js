@@ -734,6 +734,43 @@ window.addEventListener("DOMContentLoaded", () => {
         favoriteBtn.addEventListener("click", toggleFavorite);
     }
 
+    // --- Viz Mode Menu Bindings ---
+    const vizModeBtn = document.querySelector("#viz-mode-btn");
+    const vizModeMenu = document.querySelector("#viz-mode-menu");
+    const vizModeOptions = document.querySelectorAll(".viz-mode-option");
+
+    if (vizModeBtn && vizModeMenu) {
+        // Toggle menu on button click
+        vizModeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            vizModeMenu.classList.toggle("hidden");
+        });
+
+        // Handle option clicks
+        vizModeOptions.forEach(option => {
+            option.addEventListener("click", () => {
+                const mode = option.dataset.mode;
+
+                // Update active state
+                vizModeOptions.forEach(o => o.classList.remove("active"));
+                option.classList.add("active");
+
+                // Set viz mode
+                viz.setVizMode(mode);
+
+                // Close menu
+                vizModeMenu.classList.add("hidden");
+            });
+        });
+
+        // Close menu on outside click
+        document.addEventListener("click", (e) => {
+            if (!vizModeBtn.contains(e.target) && !vizModeMenu.contains(e.target)) {
+                vizModeMenu.classList.add("hidden");
+            }
+        });
+    }
+
     // Bind Favorites Toggle Button (dropdown open/close).
     if (favoritesToggle) {
         favoritesToggle.addEventListener("click", () => {
