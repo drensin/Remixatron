@@ -32,7 +32,7 @@ use std::sync::Arc;
 ///
 /// - **Value: 0.25** means candidates must be in the oldest 75% of the play history
 /// - **Example**: In a 500-beat song, won't jump to beats played in the last 125 beats
-/// - **Bypassed in panic mode** (when stuck for 10%+ of song) to ensure forward progress
+/// - **Lowered in panic mode** (when stuck for 10%+ of song) to 5% to ensure forward progress
 ///
 /// **Tuning Guide**:
 /// - Lower (0.10): More permissive, allows some repetition

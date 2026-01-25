@@ -64,9 +64,9 @@ This approach has significant advantages:
 
 ### Quick Start
 
-1. Start playback in Remixatron
+1. Launch Remixatron
 2. On any device on your local network, open: `http://<your-laptop-ip>:3030/receiver/`
-3. The visualization appears and audio plays in sync
+3. The receiver will connect. Start playback on the laptop to begin the party!
 
 ---
 
@@ -404,61 +404,38 @@ function renderLoop() {
 ---
 
 ### Synchronization Strategy
-
-The core challenge is keeping the receiver's visualization in sync with its audio playback. Here's how we solve it:
-
-#### Solution: Unified Binary Stream
-
-Instead of juggling two streams (HTTP Audio + WebSocket Metadata) and fighting drift, we bundle them.
-
-Every WebSocket "Update" message is a **Binary Frame** containing:
-1.  **Metadata Headers**: `beat_id`, `seg_id`, etc. (16 bytes)
-2.  **Audio Payload**: The specific MP3 bytes generated for that beat.
-
-The Receiver parses this frame:
-1.  Extracts the MP3 data and decodes it using the **Web Audio API** (`audioContext.decodeAudioData`).
-2.  Schedules the decoded audio buffer to play at a precise future time using `audioContext.createBufferSource().start(time)`.
-3.  Extracts the metadata and associates it with the scheduled audio buffer's playback time.
-
-This guarantees perfect AV sync because the metadata *is* the wrapper for the audio. They cannot drift apart. The Web Audio API's precise scheduling ensures that the visualization updates exactly when the corresponding audio is heard.
-
-The receiver's `audioContext.currentTime` serves as the high-resolution reference clock for local playback.
-
-#### Calibration
-
-When audio starts playing, we know the head of the audio buffer corresponds to `bufferStartStreamTime` (the `stream_time` from when buffering began). We calculate:
-
-```javascript
-streamOffset = bufferStartStreamTime - audioContext.currentTime
-```
-
-For example:
-- `audioContext.currentTime = 0` (just started playing)
-- `bufferStartStreamTime = 123.456` (we buffered starting at second 123.456)
-- `streamOffset = 123.456`
-
-Now, at any moment:
-```javascript
-audioStreamPosition = audioContext.currentTime + streamOffset
-```
-
-This tells us "what stream_time is the user hearing right now?" We look up that time in the sync table to get the correct beat/segment to display.
-
-#### Drift Handling
-
-Over long playback sessions, small timing drifts can accumulate. We handle this by:
-
-1. **Retaining a generous time window** of sync entries (e.g., the last 60 seconds of `stream_time`). This ensures we can always find a valid lookup even if the receiver's audio playback lags slightly behind the live stream.
-
-2. **Using reverse iteration** to find the most recent entry with `streamTime <= audioStreamPosition`. This is faster than binary search for typical cases where we're looking for recent entries.
-
-3. **Periodically pruning entries older than the retention window** to prevent unbounded memory growth during long playback sessions (which can run for hours). Entries far in the past will never be looked up again since `audioContext.currentTime` only moves forward.
-
-> **Note**: We keep entries for a time *window*, not the *entire* sync history. This balances memory efficiency with the need to handle audio buffering delays.
-
----
-
-### Protocol Specifications
+ 
+ The core challenge is keeping the receiver's visualization in sync with its audio playback. The code implements a **Direct Scheduling** strategy using the Web Audio API.
+ 
+ #### Solution: Unified Binary Stream + Direct Scheduling
+ 
+ 1.  **Bundled Data**: Every WebSocket message is a **Binary Frame** containing both metadata (16 bytes) and the specific audio chunk for that beat.
+ 2.  **Sequential Scheduling**: The receiver maintains a pointer `nextPlayTime` (AudioContext time). When a new chunk arrives, it is scheduled to play immediately after the previous chunk:
+     ```javascript
+     source.start(nextPlayTime);
+     nextPlayTime += buffer.duration;
+     ```
+ 3.  **Visualization Trigger**: Since we know *exactly* when the audio will start playing (at `nextPlayTime`), we set a standard JavaScript timeout to trigger the visual update at that precise moment:
+     ```javascript
+     const delay = (nextPlayTime - audioContext.currentTime) * 1000;
+     setTimeout(() => {
+         // Update UI for this beat
+         activeBeatIndex = chunk.beatId;
+     }, delay);
+     ```
+ 
+ This forces perfect AV sync. The visualization cannot "drift" because it is triggered by the same clock (AudioContext) that handles the audio playback.
+ 
+ #### Why not a Sync Table?
+ 
+ Earlier prototypes used a global `stream_time` and a lookup table. This was abandoned because:
+ 1.  It required complex clock synchronization between server and client.
+ 2.  It was vulnerable to "spiral of death" drifts if the network lagged.
+ 3.  Direct scheduling is simpler and self-correcting: if the network lags, both audio `nextPlayTime` and the visual timeout shift together effectively pausing until data arrives.
+ 
+ ---
+ 
+ ### Protocol Specifications
 
 #### WebSocket Messages
 

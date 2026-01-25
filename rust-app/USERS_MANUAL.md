@@ -1,6 +1,6 @@
 # Remixatron User's Manual
 
-**Version 1.1.0**
+**Version 1.2.0**
 
 ---
 
@@ -106,6 +106,10 @@ The main area of the screen is a dynamic visualization.
 *   **Jump Arcs**: Curved lines connecting beats that are valid jump targets.
 *   **The Playhead**: A bright highlight indicating the currently playing beat.
 *   **The Pulse Ring**: A central ring that counts down to the next possible jump point.
+*   **Background Effects**: Toggle via the "Display Settings" button:
+    *   **Fog**: Drifting, reactive smoke that glows with the current section's color.
+    *   **Lava Lamp**: Floating bubbles that pulse to the beat and match the musical mood.
+    *   **None**: A clean black background.
 
 ---
 

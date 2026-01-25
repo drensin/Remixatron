@@ -12,6 +12,14 @@ This directory contains the user interface and visualization logic for the Remix
     *   HTML5 Canvas Rendering of the "Infinite Walk"
     *   Dynamic Beat Cursor & Segment Arcs
     *   Jump Prediction Arcs
+*   **`LavaLampViz.js`**: Ambient background effect. Handles:
+    *   Canvas-based floating blob animation
+    *   Radial gradients with drop shadows
+    *   Sinusoidal wobble and "breathing" movement
+*   **`MoodShader.js`**: Reactive WebGL background. Handles:
+    *   Fullscreen GLSL shader rendering behind the main UI
+    *   Simplex noise modulated by spectral centroid and energy
+    *   Reactive "Flashes" on segment changes (Novelty detection)
 *   **`styles.css`**: Material Design 3 (M3) styling implementation.
 *   **`index.html`**: App shell structure.
 

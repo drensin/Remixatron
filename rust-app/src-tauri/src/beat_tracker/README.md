@@ -14,7 +14,7 @@ This directory contains the neural network-based beat detection pipeline using t
     *   Handles windowing and hop-length configuration
 
 *   **`inference.rs`**: ONNX Runtime session management.
-    *   Loads the BeatThis model (`beat_this.onnx`)
+    *   Loads the BeatThis model (`BeatThis_small0.onnx`)
     *   Runs inference on mel spectrograms
     *   Returns raw activation curves for beats and downbeats
 

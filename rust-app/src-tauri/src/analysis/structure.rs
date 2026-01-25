@@ -8,11 +8,12 @@
 //! A **hybrid** approach that combines the strengths of two techniques:
 //!
 //! 1. **Novelty Boundaries**: Checkerboard kernel on SSM detects structural transitions.
-//! 2. **Recurrence Clustering**: Beat-level k-NN similarity aggregated per segment
-//!    captures rhythmic/harmonic patterns that pooled features miss.
-//! 3. **Spectral Embedding**: Normalized Laplacian eigenvectors on segment graph.
-//! 4. **K-Means Clustering**: Groups segments by structural similarity.
-//! 5. **Jump Graph**: Adaptive P75 threshold for quality jump candidates.
+//! 2. **Recurrence Affinity**: (Used for calculation only) Beat-level k-NN similarity.
+//! 3. **Jump Graph**: Adaptive P75 threshold for quality jump candidates.
+//!
+//! **NOTE**: Spectral Clustering (McFee 2014) is currently **DISABLED** in the
+//! code. The system uses raw segments defined by novelty peaks as the "clusters".
+//! This was found to be more robust than forcing segments into K clusters.
 //!
 //! ## Secondary Algorithm (`compute_segments_knn`)
 //!
@@ -2433,14 +2434,14 @@ impl StructureAnalyzer {
     /// 2. **Checkerboard Kernel**: Convolve along diagonal to detect transitions.
     /// 3. **Peak Picking**: Find peaks in the Novelty Curve (boundaries).
     /// 4. **Snap to Downbeat**: Align boundaries to nearest musical downbeat.
-    /// 5. **Recurrence Affinity**: Compute average beat-level similarity between
-    ///    segment pairs (captures rhythmic/harmonic patterns pooling misses).
-    /// 6. **Spectral Clustering**: Laplacian eigenvectors + k-means on segments.
-    /// 7. **Jump Graph**: Adaptive P75 threshold for quality jump candidates.
+    /// 5. **Jump Graph**: Adaptive P75 threshold for quality jump candidates.
+    ///
+    /// **NOTE**: Step 6 (Clustering) is currently disabled. Each segment is treated
+    /// as its own unique label.
     ///
     /// # Why Hybrid?
     /// - Novelty detection excels at finding **boundaries** (structural transitions)
-    /// - Recurrence-based affinity excels at **labeling** (grouping similar sections)
+    /// - Recurrence-based affinity (when enabled) excels at **labeling**
     /// - Pooled features (SSM on medians) collapse on homogeneous productions
     pub fn compute_segments_checkerboard(&self, mfcc: &Array2<f32>, chroma: &Array2<f32>, bar_positions: &[usize], _k_force: Option<usize>) -> SegmentationResult {
         let n_beats = mfcc.nrows();
