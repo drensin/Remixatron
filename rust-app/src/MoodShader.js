@@ -342,11 +342,11 @@ void main() {
     // Combine
     vec3 finalColor = (baseColor + noiseColor) * brightness + vec3(flash);
     
-    // Radial cutout: fade to black in center where rings live
-    // smoothstep(inner, outer, dist) -> 0 at center, 1 at edges
+    // Radial fade: dim fog toward center but don't hide it completely
+    // Allows fog to show behind rings while still being stronger at edges
     float distFromCenter = length(uv - 0.5);
-    float cutout = smoothstep(0.25, 0.6, distFromCenter);
-    finalColor *= cutout;
+    float centerFade = 0.3 + 0.7 * smoothstep(0.0, 0.5, distFromCenter);
+    finalColor *= centerFade;
     
     // Note: Vignette removed — cutout already creates dark center / lit edges.
     // The vignette was darkening edges too, leaving nowhere visible.

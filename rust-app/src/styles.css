@@ -100,6 +100,19 @@ body {
     background: transparent;
 }
 
+/* 2D Sync Overlay (main thread: cursor, countdown, arcs) */
+#sync-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    background: transparent;
+    pointer-events: none;
+    /* Let clicks pass through */
+}
+
 /* --- Layer 2: UI Scrim & Controls (Z-10) --- */
 #ui-layer {
     position: relative;
@@ -350,12 +363,14 @@ body {
 .progress-bar-container {
     height: 4px;
     background: rgba(255, 255, 255, 0.1);
-    width: 100%;
+    /* Inset from edges to avoid rounded corners */
     position: absolute;
     top: 0;
-    left: 0;
+    left: 24px;
+    right: 24px;
     overflow: hidden;
-    border-radius: 4px;
+    /* Match parent's rounded corners at top */
+    border-radius: 2px 2px 0 0;
     display: none;
     /* Hidden unless loading */
 }

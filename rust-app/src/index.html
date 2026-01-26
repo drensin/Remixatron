@@ -24,7 +24,8 @@
     <div id="viz-layer">
         <canvas id="bg-shader"></canvas> <!-- WebGL Mood Shader Background -->
         <canvas id="lava-lamp"></canvas> <!-- 2D Lava Lamp Background -->
-        <canvas id="jukebox-canvas"></canvas> <!-- 2D Beat Graph Foreground -->
+        <canvas id="jukebox-canvas"></canvas> <!-- 2D Beat Graph (Worker: segments, waveform) -->
+        <canvas id="sync-overlay"></canvas> <!-- 2D Sync-Critical (Main: cursor, countdown, arcs) -->
     </div>
 
     <!-- Z-10: UI Layer -->
@@ -97,6 +98,7 @@
                     </button>
                     <div id="viz-mode-menu" class="viz-mode-menu hidden">
                         <button class="viz-mode-option" data-mode="fog">Fog</button>
+                        <button class="viz-mode-option" data-mode="mist">Mist</button>
                         <button class="viz-mode-option" data-mode="lava">Lava Lamp</button>
                         <button class="viz-mode-option active" data-mode="none">None</button>
                     </div>
